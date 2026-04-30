@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "68532369864",
+    "project_id": "cashtrack-c130b",
+    "storage_bucket": "cashtrack-c130b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:68532369864:android:732643e7f759b52dd728fd",
+        "android_client_info": {
+          "package_name": "com.cashtrack.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "68532369864-tv9k9t4r5rpo8de60nm2oshdtgoeqo5i.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cashtrack.app",
+            "certificate_hash": "cf2c91595a559a8c3802e93bf9d86cddfb07472b"
+          }
+        },
+        {
+          "client_id": "68532369864-6lojlju7s64btletch14unoeghpiavm1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBsVfUGlfK3ManVCJh8X9Be7k2IdmDQkZA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "68532369864-6lojlju7s64btletch14unoeghpiavm1.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "68532369864-j7p196lg0a82u9lqcn5jqncd8lqhtel6.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.cashtrack"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,35 @@
+{
+    "name": "CashTrack — Personal Finance Tracker",
+    "short_name": "CashTrack",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#0F1419",
+    "theme_color": "#2D7A7B",
+    "description": "Track income, expenses, budgets & savings. Professional personal finance app designed for Bangladesh.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

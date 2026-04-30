@@ -1,0 +1,6 @@
+{
+  "files.encoding": "utf8",
+  "files.autoGuessEncoding": false,
+  "terminal.integrated.encoding": "utf8",
+  "dart.previewLsp": true
+}

@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+	<dict>
+		<key>CFBundleDevelopmentRegion</key>
+		<string>$(DEVELOPMENT_LANGUAGE)</string>
+		<key>CFBundleDisplayName</key>
+		<string>CashTrack</string>
+		<key>CFBundleExecutable</key>
+		<string>$(EXECUTABLE_NAME)</string>
+		<key>CFBundleIdentifier</key>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+		<key>CFBundleInfoDictionaryVersion</key>
+		<string>6.0</string>
+		<key>CFBundleName</key>
+		<string>CashTrack</string>
+		<key>CFBundlePackageType</key>
+		<string>APPL</string>
+		<key>CFBundleShortVersionString</key>
+		<string>$(FLUTTER_BUILD_NAME)</string>
+		<key>CFBundleSignature</key>
+		<string>????</string>
+		<key>CFBundleVersion</key>
+		<string>$(FLUTTER_BUILD_NUMBER)</string>
+		<key>LSRequiresIPhoneOS</key>
+		<true/>
+		<key>UILaunchStoryboardName</key>
+		<string>LaunchScreen</string>
+		<key>UIMainStoryboardFile</key>
+		<string>Main</string>
+		<key>UISupportedInterfaceOrientations</key>
+		<array>
+			<string>UIInterfaceOrientationPortrait</string>
+			<string>UIInterfaceOrientationLandscapeLeft</string>
+			<string>UIInterfaceOrientationLandscapeRight</string>
+		</array>
+		<key>UISupportedInterfaceOrientations~ipad</key>
+		<array>
+			<string>UIInterfaceOrientationPortrait</string>
+			<string>UIInterfaceOrientationPortraitUpsideDown</string>
+			<string>UIInterfaceOrientationLandscapeLeft</string>
+			<string>UIInterfaceOrientationLandscapeRight</string>
+		</array>
+		<!-- Permissions -->
+		<!-- Camera Permission -->
+		<key>NSCameraUsageDescription</key>
+		<string>CashTrack needs camera access to capture receipt photos for your transactions.</string>
+		<!-- Photo Library Permission -->
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>CashTrack needs access to your photo library to attach receipt images to transactions.</string>
+		<key>NSPhotoLibraryAddUsageDescription</key>
+		<string>CashTrack needs permission to save receipt photos to your photo library.</string>
+		<!-- Microphone Permission (for voice input) -->
+		<key>NSMicrophoneUsageDescription</key>
+		<string>CashTrack needs microphone access for voice-based transaction entry.</string>
+		<key>NSSpeechRecognitionUsageDescription</key>
+		<string>CashTrack uses speech recognition to convert your voice into transaction details.</string>
+		<!-- Face ID / Touch ID Permission -->
+		<key>NSFaceIDUsageDescription</key>
+		<string>CashTrack uses Face ID to secure your financial data and authenticate sensitive actions.</string>
+		<!-- Contacts Permission (optional, for lending/borrowing features) -->
+		<key>NSContactsUsageDescription</key>
+		<string>CashTrack needs access to contacts to help you track money lent to or borrowed from friends.</string>
+		<!-- Calendar Permission (for bill reminders) -->
+		<key>NSCalendarsUsageDescription</key>
+		<string>CashTrack can add bill reminders to your calendar to help you stay on track.</string>
+		<!-- Location Permission (optional, for expense location tracking) -->
+		<key>NSLocationWhenInUseUsageDescription</key>
+		<string>CashTrack can use your location to tag expenses with where they occurred.</string>
+		<!-- Notifications -->
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>fetch</string>
+			<string>remote-notification</string>
+		</array>
+		<!-- App Transport Security -->
+		<key>NSAppTransportSecurity</key>
+		<dict>
+			<key>NSAllowsArbitraryLoads</key>
+			<false/>
+		</dict>
+		<!-- Firebase -->
+		<key>FirebaseAppDelegateProxyEnabled</key>
+		<false/>
+		<!-- Minimum iOS Version -->
+		<key>MinimumOSVersion</key>
+		<string>12.0</string>
+		<!-- Supporting files -->
+		<key>CADisableMinimumFrameDurationOnPhone</key>
+		<true/>
+		<key>UIApplicationSupportsIndirectInputEvents</key>
+		<true/>
+		<key>UIStatusBarHidden</key>
+		<false/>
+	</dict>
+</plist>
