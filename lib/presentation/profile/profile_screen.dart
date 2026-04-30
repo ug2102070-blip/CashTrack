@@ -1153,7 +1153,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       firstDate: DateTime(1920),
       lastDate: DateTime.now(),
     );
-    if (picked == null) return;
+    if (picked == null || !mounted) return;
     final formatted = DateFormat('dd MMM yyyy').format(picked);
     final current = ref.read(userProfileProvider);
     final Map<String, String> updated = {
@@ -1166,16 +1166,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       'dob': formatted,
       'photoBase64': current['photoBase64'] ?? '',
     };
-    await ref.read(userProfileProvider.notifier).updateProfile(
-          fullName: updated['fullName']!,
-          email: updated['email']!,
-          phone: updated['phone']!,
-          address: updated['address']!,
-          occupation: updated['occupation']!,
-          bio: updated['bio']!,
-          dob: updated['dob']!,
-          photoBase64: updated['photoBase64'],
-        );
+    // Defer state update to next frame so the picker animation finishes first
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(userProfileProvider.notifier).updateProfile(
+            fullName: updated['fullName']!,
+            email: updated['email']!,
+            phone: updated['phone']!,
+            address: updated['address']!,
+            occupation: updated['occupation']!,
+            bio: updated['bio']!,
+            dob: updated['dob']!,
+            photoBase64: updated['photoBase64'],
+          );
+    });
   }
 
   Future<void> _editField(BuildContext context, _FieldConfig field) async {
@@ -1183,96 +1187,97 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final focusNode = FocusNode();
     String? result;
 
-    try {
-      result = await showModalBottomSheet<String>(
-        context: context,
-        backgroundColor: Colors.transparent,
-        isScrollControlled: true,
-        builder: (ctx) => Padding(
-          padding:
-              EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Theme.of(ctx).colorScheme.surface,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                    child: Container(
-                        width: 36,
-                        height: 4,
-                        decoration: BoxDecoration(
-                            color: Theme.of(ctx).dividerColor,
-                            borderRadius: BorderRadius.circular(2)))),
-                const SizedBox(height: 20),
-                Text(ctx.t('edit_field', params: {'label': field.label}),
-                    style: AppTextStyles.h5),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  keyboardType: field.keyboardType,
-                  maxLines: field.isMultiline ? 4 : 1,
-                  autofocus: false,
-                  decoration: InputDecoration(
-                    labelText: field.label,
-                    prefixIcon: Icon(field.icon),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14)),
+    result = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(ctx).colorScheme.surface,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                  child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                          color: Theme.of(ctx).dividerColor,
+                          borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 20),
+              Text(ctx.t('edit_field', params: {'label': field.label}),
+                  style: AppTextStyles.h5),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                focusNode: focusNode,
+                keyboardType: field.keyboardType,
+                maxLines: field.isMultiline ? 4 : 1,
+                autofocus: false,
+                decoration: InputDecoration(
+                  labelText: field.label,
+                  prefixIcon: Icon(field.icon),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        focusNode.unfocus();
+                        Navigator.pop(ctx);
+                      },
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text(ctx.t('cancel')),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () {
-                          focusNode.unfocus();
-                          Navigator.pop(ctx);
-                        },
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: Text(ctx.t('cancel')),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        focusNode.unfocus();
+                        Navigator.pop(ctx, controller.text.trim());
+                      },
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
                       ),
+                      child: Text(ctx.t('save_changes')),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          focusNode.unfocus();
-                          Navigator.pop(ctx, controller.text.trim());
-                        },
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: Text(ctx.t('save_changes')),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
-      );
-    } finally {
-      focusNode.dispose();
-      controller.dispose();
-    }
+      ),
+    );
 
-    if (result == null) return;
+    // Dispose after the bottom sheet has fully closed
+    // (awaiting showModalBottomSheet ensures the route exit animation is done)
+    focusNode.dispose();
+    controller.dispose();
 
+    if (result == null || !mounted) return;
+
+    // Capture the values we need before any async gap
     final current = ref.read(userProfileProvider);
     final Map<String, String> updated = {
       'fullName': current['fullName'] ?? '',
@@ -1286,27 +1291,35 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     };
     updated[field.fieldKey] = result;
 
-    await ref.read(userProfileProvider.notifier).updateProfile(
-          fullName: updated['fullName']!,
-          email: updated['email']!,
-          phone: updated['phone']!,
-          address: updated['address']!,
-          occupation: updated['occupation']!,
-          bio: updated['bio']!,
-          dob: updated['dob']!,
-          photoBase64: updated['photoBase64'],
-        );
+    final fieldLabel = field.label;
 
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content:
-            Text(context.t('field_updated', params: {'label': field.label})),
-        duration: const Duration(seconds: 1),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+    // Defer the state update to the next frame so the bottom sheet
+    // exit animation and any remaining dependents are fully cleaned up.
+    // This prevents the '_dependents.isEmpty' assertion.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(userProfileProvider.notifier).updateProfile(
+            fullName: updated['fullName']!,
+            email: updated['email']!,
+            phone: updated['phone']!,
+            address: updated['address']!,
+            occupation: updated['occupation']!,
+            bio: updated['bio']!,
+            dob: updated['dob']!,
+            photoBase64: updated['photoBase64'],
+          );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text(context.t('field_updated', params: {'label': fieldLabel})),
+          duration: const Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    });
   }
 
   String _initials(BuildContext context, String name) {
