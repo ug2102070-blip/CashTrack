@@ -26,6 +26,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   late AnimationController _avatarCtrl;
   late final List<Animation<double>> _fadeAnimations;
   late final List<Animation<Offset>> _slideAnimations;
+  late final Animation<double> _avatarScale;
   late final DateTime _analyticsMonth;
 
   static const List<int> _animationDelays = [
@@ -53,6 +54,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       ..forward();
     _fadeAnimations = _animationDelays.map(_createFadeAnimation).toList();
     _slideAnimations = _animationDelays.map(_createSlideAnimation).toList();
+    _avatarScale = CurvedAnimation(
+        parent: _avatarCtrl, curve: Curves.elasticOut);
   }
 
   @override
@@ -229,9 +232,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                 onTap: () =>
                                     _showPhotoOptions(context, photoBase64),
                                 child: ScaleTransition(
-                                  scale: CurvedAnimation(
-                                      parent: _avatarCtrl,
-                                      curve: Curves.elasticOut),
+                                  scale: _avatarScale,
                                   child: Stack(
                                     children: [
                                       Container(

@@ -48,6 +48,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
   String? _receiptPath;
 
   late AnimationController _entryCtrl;
+  late final Animation<double> _entryFade;
 
   bool get _isEditMode => widget.transactionToEdit != null;
 
@@ -71,6 +72,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
       vsync: this,
       duration: const Duration(milliseconds: 500),
     )..forward();
+    _entryFade = CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOut);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _ensureDefaultAccounts();
@@ -143,7 +145,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
     _syncDefaultSelections(accounts);
 
     final body = FadeTransition(
-      opacity: CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOut),
+      opacity: _entryFade,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

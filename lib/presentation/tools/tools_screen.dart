@@ -21,12 +21,31 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
     with TickerProviderStateMixin {
   late AnimationController _animCtrl;
 
+  // Pre-created animations to avoid CurvedAnimation leak in build().
+  static const List<int> _animDelays = [0, 60, 130, 200];
+  late final List<Animation<double>> _fadeAnims;
+  late final List<Animation<Offset>> _slideAnims;
+
   @override
   void initState() {
     super.initState();
     _animCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 800))
       ..forward();
+    _fadeAnims = _animDelays.map((ms) {
+      final s = (ms / 700).clamp(0.0, 1.0);
+      final e = ((ms + 260) / 700).clamp(0.0, 1.0);
+      return CurvedAnimation(
+          parent: _animCtrl, curve: Interval(s, e, curve: Curves.easeOut));
+    }).toList();
+    _slideAnims = _animDelays.map((ms) {
+      final s = (ms / 700).clamp(0.0, 1.0);
+      final e = ((ms + 260) / 700).clamp(0.0, 1.0);
+      return Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero)
+          .animate(CurvedAnimation(
+              parent: _animCtrl,
+              curve: Interval(s, e, curve: Curves.easeOutCubic)));
+    }).toList();
   }
 
   @override
@@ -35,17 +54,11 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
     super.dispose();
   }
 
-  Widget _anim({required int ms, required Widget child}) {
-    final s = (ms / 700).clamp(0.0, 1.0);
-    final e = ((ms + 260) / 700).clamp(0.0, 1.0);
+  Widget _anim({required int index, required Widget child}) {
     return FadeTransition(
-      opacity: CurvedAnimation(
-          parent: _animCtrl, curve: Interval(s, e, curve: Curves.easeOut)),
+      opacity: _fadeAnims[index],
       child: SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero)
-            .animate(CurvedAnimation(
-                parent: _animCtrl,
-                curve: Interval(s, e, curve: Curves.easeOutCubic))),
+        position: _slideAnims[index],
         child: child,
       ),
     );
@@ -114,13 +127,13 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
           slivers: [
             // ── Header ────────────────────────────────────────────────
             SliverToBoxAdapter(
-              child: _anim(ms: 0, child: _header(context, isDark)),
+              child: _anim(index: 0, child: _header(context, isDark)),
             ),
 
             // ── BUDGET — main hero ────────────────────────────────────
             SliverToBoxAdapter(
               child: _anim(
-                ms: 60,
+                index: 1,
                 child: _budgetHero(
                     context,
                     currency,
@@ -138,7 +151,7 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
             // ── GOALS — second hero ───────────────────────────────────
             SliverToBoxAdapter(
               child: _anim(
-                ms: 130,
+                index: 2,
                 child: _goalsHero(
                     context,
                     currency,
@@ -153,7 +166,7 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
             // ── Debts strip ───────────────────────────────────────────
             SliverToBoxAdapter(
               child: _anim(
-                ms: 200,
+                index: 3,
                 child: _debtStrip(
                     context, currency, lent, borrowed, dueSoon, isDark),
               ),

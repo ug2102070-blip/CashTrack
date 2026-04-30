@@ -25,6 +25,11 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   DateTime _calendarMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
   late AnimationController _animCtrl;
 
+  // Pre-created animations to avoid CurvedAnimation leak in build().
+  static const List<int> _animDelays = [0, 80, 160, 320];
+  late final List<Animation<double>> _fadeAnims;
+  late final List<Animation<Offset>> _slideAnims;
+
   @override
   void initState() {
     super.initState();
@@ -32,6 +37,20 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     )..forward();
+    _fadeAnims = _animDelays.map((ms) {
+      final s = (ms / 800).clamp(0.0, 1.0);
+      final e = ((ms + 320) / 800).clamp(0.0, 1.0);
+      return CurvedAnimation(
+          parent: _animCtrl, curve: Interval(s, e, curve: Curves.easeOut));
+    }).toList();
+    _slideAnims = _animDelays.map((ms) {
+      final s = (ms / 800).clamp(0.0, 1.0);
+      final e = ((ms + 320) / 800).clamp(0.0, 1.0);
+      return Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
+          .animate(CurvedAnimation(
+              parent: _animCtrl,
+              curve: Interval(s, e, curve: Curves.easeOutCubic)));
+    }).toList();
   }
 
   @override
@@ -40,17 +59,11 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     super.dispose();
   }
 
-  Widget _anim({required int ms, required Widget child}) {
-    final s = (ms / 800).clamp(0.0, 1.0);
-    final e = ((ms + 320) / 800).clamp(0.0, 1.0);
+  Widget _anim({required int index, required Widget child}) {
     return FadeTransition(
-      opacity: CurvedAnimation(
-          parent: _animCtrl, curve: Interval(s, e, curve: Curves.easeOut)),
+      opacity: _fadeAnims[index],
       child: SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
-            .animate(CurvedAnimation(
-                parent: _animCtrl,
-                curve: Interval(s, e, curve: Curves.easeOutCubic))),
+        position: _slideAnims[index],
         child: child,
       ),
     );
@@ -81,7 +94,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
           slivers: [
             SliverToBoxAdapter(
               child: _anim(
-                  ms: 0,
+                  index: 0,
                   child: _buildHeader(
                       context,
                       analytics,
@@ -95,19 +108,19 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
             ),
             SliverToBoxAdapter(
               child: _anim(
-                  ms: 80,
+                  index: 1,
                   child: _buildSummaryCards(analytics, currency, effectiveHide,
                       toggleReveal, isDark, primary)),
             ),
             SliverToBoxAdapter(
               child: _anim(
-                  ms: 160,
+                  index: 2,
                   child: _buildCategoryBreakdown(
                       analytics, categories, isDark, primary)),
             ),
             SliverToBoxAdapter(
               child: _anim(
-                  ms: 320,
+                  index: 3,
                   child: _buildLineTrend(
                       analytics, currency, effectiveHide, isDark, primary)),
             ),
