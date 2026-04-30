@@ -7,11 +7,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
-import '../../core/utils/amount_mask.dart';
+
 import '../../core/l10n/app_l10n.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/app_providers.dart';
-import '../../data/models/transaction_model.dart';
+
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -27,25 +27,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   late final List<Animation<double>> _fadeAnimations;
   late final List<Animation<Offset>> _slideAnimations;
   late final Animation<double> _avatarScale;
-  late final DateTime _analyticsMonth;
 
   static const List<int> _animationDelays = [
-    0,
-    80,
-    120,
-    140,
-    180,
-    200,
-    260,
-    280,
-    320,
-    340,
+    0, 80, 120, 160, 200, 240, 280,
   ];
 
   @override
   void initState() {
     super.initState();
-    _analyticsMonth = DateTime.now();
     _animCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 800))
       ..forward();
@@ -106,11 +95,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(userProfileProvider);
-    final settings = ref.watch(settingsProvider);
     final transactions = ref.watch(transactionsProvider);
-    final accounts = ref.watch(accountsProvider);
-    final categories = ref.watch(categoriesProvider);
-    final analytics = ref.watch(monthlyAnalyticsProvider(_analyticsMonth));
 
     final fullName = (profile['fullName'] ?? '').trim();
     final email = (profile['email'] ?? '').trim();
@@ -122,31 +107,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final photoBase64 = (profile['photoBase64'] ?? '').trim();
     final profilePhotoBytes = _decodePhotoBytes(photoBase64);
     final displayName = fullName.isEmpty ? context.t('your_name') : fullName;
-    final rawCurrency = (settings['currency'] as String?)?.trim();
-    final currency = (rawCurrency == null ||
-            rawCurrency.isEmpty ||
-            rawCurrency == '?' ||
-            rawCurrency == 'à§³')
-        ? '৳'
-        : rawCurrency;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primary = Theme.of(context).colorScheme.primary;
-    final categoryMap = {
-      for (final category in categories) category.id: category.name,
-    };
-
-    final totalBalance = accounts.fold(0.0, (sum, a) => sum + a.balance);
-    final totalIncome = analytics.totalIncome;
-    final totalExpense = analytics.totalExpense;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          // ── Custom App Bar with gradient ──────────────────────────────
+          // ── Header ────────────────────────────────────────────────────
           SliverAppBar(
-            expandedHeight: 240,
+            expandedHeight: 280,
             pinned: true,
             backgroundColor: primary,
             leading: Padding(
@@ -186,7 +157,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   gradient: LinearGradient(
                     colors: [
                       primary,
-                      Color.lerp(primary, Colors.indigo.shade800, 0.5)!
+                      Color.lerp(primary, Colors.indigo.shade900, 0.6)!,
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -352,23 +323,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             ),
           ),
 
-          // ── Bio / About ───────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: _anim(
-              index: 1,
-              child: _buildBioSection(context, bio, isDark, primary),
-            ),
-          ),
 
           // ── Personal Info ─────────────────────────────────────────────
           SliverToBoxAdapter(
             child: _anim(
-                index: 2,
+                index: 1,
                 child: _sectionLabel(context, context.t('personal_info'))),
           ),
           SliverToBoxAdapter(
             child: _anim(
-              index: 3,
+              index: 2,
               child: _buildInfoGroup(context, isDark, primary, [
                 _FieldConfig(
                     icon: Icons.person_rounded,
@@ -406,12 +370,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           // ── Additional Info ───────────────────────────────────────────
           SliverToBoxAdapter(
             child: _anim(
-                index: 4,
+                index: 3,
                 child: _sectionLabel(context, context.t('additional_info'))),
           ),
           SliverToBoxAdapter(
             child: _anim(
-              index: 5,
+              index: 4,
               child: _buildInfoGroup(context, isDark, primary, [
                 _FieldConfig(
                     icon: Icons.location_on_rounded,
@@ -440,57 +404,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             ),
           ),
 
-          // ── Financial summary (monthly) ───────────────────────────────
-          SliverToBoxAdapter(
-            child: _anim(
-              index: 6,
-              child: _sectionLabel(context, context.t('monthly_summary')),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: _anim(
-              index: 6,
-              child: _buildFinancialSummary(
-                context,
-                currency,
-                totalBalance,
-                totalIncome,
-                totalExpense,
-                isDark,
-                primary,
-              ),
-            ),
-          ),
-
-          // ── Recent activity ───────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: _anim(
-              index: 7,
-              child: _sectionLabel(context, context.t('recent_activity')),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: _anim(
-              index: 7,
-              child: _buildRecentActivity(
-                context,
-                isDark,
-                primary,
-                transactions,
-                currency,
-                categoryMap,
-              ),
-            ),
-          ),
 
           // ── Achievements ──────────────────────────────────────────────
           SliverToBoxAdapter(
             child:
-                _anim(index: 8, child: _sectionLabel(context, 'ACHIEVEMENTS')),
+                _anim(index: 5, child: _sectionLabel(context, context.t('achievements'))),
           ),
           SliverToBoxAdapter(
             child: _anim(
-              index: 9,
+              index: 6,
               child: _buildAchievements(
                   context, transactions.length, isDark, primary),
             ),
@@ -502,191 +424,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
-  // ── Financial Summary ─────────────────────────────────────────────────────
-
-  Widget _buildFinancialSummary(
-      BuildContext context,
-      String currency,
-      double totalBalance,
-      double totalIncome,
-      double totalExpense,
-      bool isDark,
-      Color primary) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Row(
-        children: [
-          Expanded(
-              child: _summaryCard(
-                  context,
-                  formatAmount(currency, totalBalance, decimals: 0),
-                  context.t('total_balance'),
-                  Icons.account_balance_wallet_rounded,
-                  primary,
-                  isDark)),
-          const SizedBox(width: 8),
-          Expanded(
-              child: _summaryCard(
-                  context,
-                  formatAmount(currency, totalIncome, decimals: 0),
-                  context.t('this_month_income'),
-                  Icons.arrow_downward_rounded,
-                  AppColors.success,
-                  isDark)),
-          const SizedBox(width: 8),
-          Expanded(
-              child: _summaryCard(
-                  context,
-                  formatAmount(currency, totalExpense, decimals: 0),
-                  context.t('expense'),
-                  Icons.arrow_upward_rounded,
-                  AppColors.expense,
-                  isDark)),
-        ],
-      ),
-    );
-  }
-
-  Widget _summaryCard(BuildContext context, String value, String label,
-      IconData icon, Color color, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.06)
-              : Colors.black.withValues(alpha: 0.04),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Icon(icon, color: color, size: 17),
-          ),
-          const SizedBox(height: 8),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: Theme.of(context).colorScheme.onSurface,
-                  letterSpacing: -0.3),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 2),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w500,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.45)),
-              textAlign: TextAlign.center),
-        ],
-      ),
-    );
-  }
-
-  // ── Bio Section ───────────────────────────────────────────────────────────
-
-  Widget _buildBioSection(
-      BuildContext context, String bio, bool isDark, Color primary) {
-    return GestureDetector(
-      onTap: () => _editField(
-        context,
-        _FieldConfig(
-          icon: Icons.info_rounded,
-          label: context.t('bio'),
-          value: bio,
-          fieldKey: 'bio',
-          initialValue: bio,
-          keyboardType: TextInputType.multiline,
-          isMultiline: true,
-        ),
-      ),
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.06)
-                : Colors.black.withValues(alpha: 0.04),
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(Icons.format_quote_rounded, color: primary, size: 18),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(context.t('about_me'),
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.4))),
-                  const SizedBox(height: 4),
-                  Text(
-                    bio.isEmpty ? context.t('tap_add_bio') : bio,
-                    style: TextStyle(
-                      fontSize: 13,
-                      height: 1.5,
-                      color: bio.isEmpty
-                          ? Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.35)
-                          : Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.8),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.edit_rounded,
-                size: 15,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.25)),
-          ],
-        ),
-      ),
-    );
-  }
 
   // ── Info Group ────────────────────────────────────────────────────────────
 
@@ -794,124 +531,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
-  // ── Recent Activity ───────────────────────────────────────────────────────
-
-  Widget _buildRecentActivity(
-    BuildContext context,
-    bool isDark,
-    Color primary,
-    List<TransactionModel> transactions,
-    String currency,
-    Map<String, String> categoryMap,
-  ) {
-    final recent = [...transactions]..sort((a, b) => b.date.compareTo(a.date));
-    final visibleTransactions = recent.take(3).toList();
-
-    if (visibleTransactions.isEmpty) {
-      return Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.06)
-                  : Colors.black.withValues(alpha: 0.04)),
-        ),
-        child: Center(
-          child: Text(context.t('no_transactions_yet'),
-              style: TextStyle(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.4))),
-        ),
-      );
-    }
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.06)
-                : Colors.black.withValues(alpha: 0.04)),
-      ),
-      child: Column(
-        children: visibleTransactions.asMap().entries.map((entry) {
-          final i = entry.key;
-          final t = entry.value;
-          final isIncome = t.type == TransactionType.income;
-          final color = isIncome ? AppColors.success : AppColors.error;
-          final isLast = i == visibleTransactions.length - 1;
-          final categoryName = categoryMap[t.categoryId] ?? t.categoryId;
-          return Column(
-            children: [
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      child: Icon(
-                          isIncome
-                              ? Icons.arrow_downward_rounded
-                              : Icons.arrow_upward_rounded,
-                          color: color,
-                          size: 17),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(categoryName,
-                              style: const TextStyle(
-                                  fontSize: 13, fontWeight: FontWeight.w600)),
-                          Text(DateFormat('MMM dd').format(t.date),
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurface
-                                      .withValues(alpha: 0.4))),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      '${isIncome ? '+' : '-'}$currency ${t.amount.toStringAsFixed(0)}',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: color),
-                    ),
-                  ],
-                ),
-              ),
-              if (!isLast)
-                Padding(
-                  padding: const EdgeInsets.only(left: 66),
-                  child: Divider(
-                      height: 1,
-                      color: Theme.of(context)
-                          .dividerColor
-                          .withValues(alpha: 0.5)),
-                ),
-            ],
-          );
-        }).toList(),
-      ),
-    );
-  }
 
   // ── Achievements ──────────────────────────────────────────────────────────
 
