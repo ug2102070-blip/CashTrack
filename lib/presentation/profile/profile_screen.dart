@@ -1271,10 +1271,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       ),
     );
 
-    // Dispose after the bottom sheet has fully closed
-    // (awaiting showModalBottomSheet ensures the route exit animation is done)
-    focusNode.dispose();
-    controller.dispose();
+    // Do NOT dispose focusNode/controller here — the bottom sheet exit animation
+    // is still running and the TextField will try to use them. Defer disposal
+    // to the next frame when the animation has fully completed.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      focusNode.dispose();
+      controller.dispose();
+    });
 
     if (result == null || !mounted) return;
 
