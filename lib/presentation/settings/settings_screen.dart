@@ -93,6 +93,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     });
   }
 
+  // Pre-created animations — avoids creating new CurvedAnimation objects
+  // on every build(), which leaks InheritedWidget dependents.
+  static const List<int> _animDelays = [
+    0, 50, 110, 130, 160, 180, 195, 205, 210, 230,
+    235, 240, 245, 255, 260, 280, 310, 330, 360, 380, 410,
+  ];
+  late final List<Animation<double>> _fadeAnims;
+  late final Animation<double> _rootFade;
+
   @override
   void initState() {
     super.initState();
@@ -100,6 +109,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       vsync: this,
       duration: const Duration(milliseconds: 700),
     )..forward();
+    _rootFade = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _fadeAnims = _animDelays.map((ms) {
+      final s = (ms / 650).clamp(0.0, 1.0);
+      final e = ((ms + 280) / 650).clamp(0.0, 1.0);
+      return CurvedAnimation(
+          parent: _animCtrl, curve: Interval(s, e, curve: Curves.easeOut));
+    }).toList();
   }
 
   @override
@@ -108,12 +124,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     super.dispose();
   }
 
-  Widget _anim({required int ms, required Widget child}) {
-    final s = (ms / 650).clamp(0.0, 1.0);
-    final e = ((ms + 280) / 650).clamp(0.0, 1.0);
+  Widget _anim({required int index, required Widget child}) {
     return FadeTransition(
-      opacity: CurvedAnimation(
-          parent: _animCtrl, curve: Interval(s, e, curve: Curves.easeOut)),
+      opacity: _fadeAnims[index],
       child: child,
     );
   }
@@ -147,31 +160,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: FadeTransition(
-          opacity: CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut),
+          opacity: _rootFade,
           child: CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
               // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 0, child: _buildPageHeader(context, screenIsDark)),
+                    index: 0, child: _buildPageHeader(context, screenIsDark)),
               ),
 
               // â”€â”€ Profile Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 50, child: _buildProfileCard(context, profile, isDark)),
+                    index: 1, child: _buildProfileCard(context, profile, isDark)),
               ),
 
               // â”€â”€ Appearance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 110,
+                    index: 2,
                     child: _sectionLabel(context, context.t('appearance'))),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                  ms: 130,
+                  index: 3,
                   child: _buildAppearanceSection(context, settings, isDark,
                       currency, hideAmounts, screenIsDark),
                 ),
@@ -180,12 +193,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               // â”€â”€ Notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 160,
+                    index: 4,
                     child: _sectionLabel(context, context.t('notifications'))),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                  ms: 180,
+                  index: 5,
                   child: _buildNotificationsSection(context, notifEnabled,
                       weeklyReport, dailyReminderTime, screenIsDark),
                 ),
@@ -194,12 +207,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               // â”€â”€ Planning & Tools â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 195,
+                    index: 6,
                     child: _sectionLabel(context, context.t('planning_tools'))),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                  ms: 205,
+                  index: 7,
                   child: _buildPlanningSection(
                     context,
                     rolloverBudget,
@@ -211,12 +224,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               // â”€â”€ General â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 210,
+                    index: 8,
                     child: _sectionLabel(context, context.t('general'))),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                  ms: 230,
+                  index: 9,
                   child: _buildGeneralSection(
                       context, smsTrack, smsMode, language, screenIsDark),
                 ),
@@ -224,13 +237,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
               SliverToBoxAdapter(
                 child: _anim(
-                  ms: 235,
+                  index: 10,
                   child: _sectionLabel(context, context.t('transaction_entry')),
                 ),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                  ms: 240,
+                  index: 11,
                   child: _buildTransactionEntrySection(
                     context,
                     voiceTransactionInput,
@@ -243,12 +256,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               // ── AI Assistant ───────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 245,
+                    index: 12,
                     child: _sectionLabel(context, context.t('ai_assistant'))),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                  ms: 255,
+                  index: 13,
                   child: _buildAiSection(context, screenIsDark),
                 ),
               ),
@@ -256,13 +269,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               // â”€â”€ Security â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 260,
+                    index: 14,
                     child:
                         _sectionLabel(context, context.t('security_privacy'))),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                  ms: 280,
+                  index: 15,
                   child: _buildSecuritySection(
                       context,
                       biometricLock,
@@ -277,28 +290,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               // â”€â”€ Data & Sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 310,
+                    index: 16,
                     child: _sectionLabel(context, context.t('data_sync'))),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 330, child: _buildDataSection(context, screenIsDark)),
+                    index: 17, child: _buildDataSection(context, screenIsDark)),
               ),
 
               // â”€â”€ About â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 360, child: _sectionLabel(context, context.t('about'))),
+                    index: 18, child: _sectionLabel(context, context.t('about'))),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 380, child: _buildAboutSection(context, screenIsDark)),
+                    index: 19, child: _buildAboutSection(context, screenIsDark)),
               ),
 
               // â”€â”€ Danger Zone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 410, child: _buildDangerZone(context, screenIsDark)),
+                    index: 20, child: _buildDangerZone(context, screenIsDark)),
               ),
 
               const SliverToBoxAdapter(child: SizedBox(height: 110)),

@@ -1,4 +1,4 @@
-﻿// lib/presentation/dashboard/dashboard_screen.dart
+// lib/presentation/dashboard/dashboard_screen.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,12 +26,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   ImageProvider? _profileImage;
   String? _profileImageCacheKey;
 
+  // Pre-created animations to avoid creating new CurvedAnimation objects
+  // on every build() call — which leaks InheritedWidget dependents and
+  // causes '_dependents.isEmpty' assertion failures.
+  static const List<int> _animDelays = [0, 60, 130, 200, 270];
+  late final List<Animation<double>> _fadeAnims;
+  late final List<Animation<Offset>> _slideAnims;
+
   @override
   void initState() {
     super.initState();
     _animCtrl = AnimationController(
         duration: const Duration(milliseconds: 900), vsync: this)
       ..forward();
+    _fadeAnims = _animDelays.map((ms) {
+      final s = (ms / 750).clamp(0.0, 1.0);
+      final e = ((ms + 280) / 750).clamp(0.0, 1.0);
+      return CurvedAnimation(
+          parent: _animCtrl, curve: Interval(s, e, curve: Curves.easeOutCubic));
+    }).toList();
+    _slideAnims = _animDelays.map((ms) {
+      final s = (ms / 750).clamp(0.0, 1.0);
+      final e = ((ms + 280) / 750).clamp(0.0, 1.0);
+      return Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
+          .animate(CurvedAnimation(
+              parent: _animCtrl,
+              curve: Interval(s, e, curve: Curves.easeOutCubic)));
+    }).toList();
   }
 
   @override
@@ -49,17 +70,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     });
   }
 
-  Widget _anim({required int ms, required Widget child}) {
-    final s = (ms / 750).clamp(0.0, 1.0);
-    final e = ((ms + 280) / 750).clamp(0.0, 1.0);
+  Widget _anim({required int index, required Widget child}) {
     return FadeTransition(
-      opacity: CurvedAnimation(
-          parent: _animCtrl, curve: Interval(s, e, curve: Curves.easeOutCubic)),
+      opacity: _fadeAnims[index],
       child: SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
-            .animate(CurvedAnimation(
-                parent: _animCtrl,
-                curve: Interval(s, e, curve: Curves.easeOutCubic))),
+        position: _slideAnims[index],
         child: child,
       ),
     );
@@ -104,31 +119,31 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             slivers: [
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 0,
+                    index: 0,
                     child: _appBar(
                         context, primary, alertCount, hideAmounts, isDark)),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 60,
+                    index: 1,
                     child: _balanceCard(context, summary, currency,
                         effectiveHide, toggleReveal, primary, isDark)),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 130,
+                    index: 2,
                     child: _accountsDebtRow(context, accounts, debts, currency,
                         effectiveHide, toggleReveal, isDark, primary)),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 200,
+                    index: 3,
                     child: const ExpenseChartDynamic(
                         compact: true, showLegend: true)),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                    ms: 270,
+                    index: 4,
                     child: TransactionListDynamic(
                       transactions: summary.recentTransactions,
                       currency: currency,
