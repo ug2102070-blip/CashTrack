@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
-import 'package:uuid/uuid.dart';
 
 import '../core/utils/logger.dart';
 import '../data/models/account_model.dart';
@@ -21,11 +20,9 @@ class SyncService {
   SyncService._internal();
 
   static const String _settingsBoxName = 'settingsBox';
-  static const String _syncUserKey = 'sync_user_id';
   static const String _lastSyncKey = 'last_sync_at';
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final Uuid _uuid = const Uuid();
 
   Future<void> init() async {
     _setupConnectivityListener();
@@ -44,6 +41,10 @@ class SyncService {
   Future<String> syncData() async {
     try {
       final userId = await _getSyncUserId();
+      if (userId == null) {
+        AppLogger.i('Sync skipped: authenticated user required');
+        return 'Sync skipped: sign in required';
+      }
       final snapshotRef = _firestore
           .collection('users')
           .doc(userId)
@@ -85,6 +86,10 @@ class SyncService {
   Future<String> backupToCloud() async {
     try {
       final userId = await _getSyncUserId();
+      if (userId == null) {
+        AppLogger.i('Backup skipped: authenticated user required');
+        return 'Backup skipped: sign in required';
+      }
       final snapshotRef = _snapshotRef(userId);
       final payload = await _buildLocalPayload();
       final now = DateTime.now().toUtc();
@@ -107,6 +112,10 @@ class SyncService {
   Future<String> restoreLatestBackupFromCloud() async {
     try {
       final userId = await _getSyncUserId();
+      if (userId == null) {
+        AppLogger.i('Restore skipped: authenticated user required');
+        return 'Restore skipped: sign in required';
+      }
       final snapshotRef = _snapshotRef(userId);
       final remoteDoc = await snapshotRef.get();
       if (!remoteDoc.exists || remoteDoc.data() == null) {
@@ -375,21 +384,13 @@ class SyncService {
     }
   }
 
-  Future<String> _getSyncUserId() async {
+  Future<String?> _getSyncUserId() async {
     final firebaseUid = AuthService().currentUser?.uid;
     if (firebaseUid != null && firebaseUid.isNotEmpty) {
       return firebaseUid;
     }
 
-    final box = await _openBox<dynamic>(_settingsBoxName);
-    final existing = box.get(_syncUserKey) as String?;
-    if (existing != null && existing.isNotEmpty) {
-      return existing;
-    }
-
-    final generated = 'guest_${_uuid.v4()}';
-    await box.put(_syncUserKey, generated);
-    return generated;
+    return null;
   }
 
   DocumentReference<Map<String, dynamic>> _snapshotRef(String userId) {

@@ -27,8 +27,7 @@ class TransactionListDynamic extends ConsumerWidget {
     final categories = ref.watch(categoriesProvider);
     final catMap = {for (final c in categories) c.id: c.name};
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final settings = ref.watch(settingsProvider);
-    final compact = false;
+    const compact = false;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -55,15 +54,19 @@ class TransactionListDynamic extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 18, 12, 12),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  context.t('recent_transactions'),
-                  style: AppTextStyles.h5.copyWith(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
+                Expanded(
+                  child: Text(
+                    context.t('recent_transactions'),
+                    style: AppTextStyles.h5.copyWith(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                const SizedBox(width: 8),
                 TextButton(
                   onPressed: () => context.push('/transactions'),
                   style: TextButton.styleFrom(

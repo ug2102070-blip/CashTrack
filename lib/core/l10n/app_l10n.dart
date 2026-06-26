@@ -15,6 +15,7 @@ class AppL10n {
     'good_morning': {'en': 'Good morning', 'bn': 'সুপ্রভাত'},
     'good_afternoon': {'en': 'Good afternoon', 'bn': 'শুভ অপরাহ্ন'},
     'good_evening': {'en': 'Good evening', 'bn': 'শুভ সন্ধ্যা'},
+    'good_night': {'en': 'Good night', 'bn': 'শুভ রাত্রি'},
     'total_balance': {'en': 'Total Balance', 'bn': 'মোট ব্যালেন্স'},
     'income': {'en': 'Income', 'bn': 'আয়'},
     'expense': {'en': 'Expense', 'bn': 'ব্যয়'},
@@ -28,11 +29,11 @@ class AppL10n {
       'en': 'Add your first account',
       'bn': 'প্রথম অ্যাকাউন্ট যোগ করুন'
     },
-    'accounts_count': {
-      'en': '{count} accounts',
-      'bn': '{count} অ্যাকাউন্ট'
-    },
+    'accounts_count': {'en': '{count} accounts', 'bn': '{count} অ্যাকাউন্ট'},
     'cash': {'en': 'Cash', 'bn': 'ক্যাশ'},
+    'bank': {'en': 'Bank', 'bn': 'ব্যাংক'},
+    'mfs': {'en': 'Mobile Wallet', 'bn': 'মোবাইল ওয়ালেট'},
+    'credit_card': {'en': 'Credit Card', 'bn': 'ক্রেডিট কার্ড'},
     'online': {'en': 'Online', 'bn': 'অনলাইন'},
     'transfer': {'en': 'Transfer', 'bn': 'ট্রান্সফার'},
     'debts': {'en': 'Debts', 'bn': 'ঋণ'},
@@ -94,11 +95,79 @@ class AppL10n {
     'data_sync': {'en': 'Data & Sync', 'bn': 'ডেটা ও সিঙ্ক'},
     'about': {'en': 'About', 'bn': 'সম্পর্কে'},
     'planning_tools': {'en': 'Planning & Tools', 'bn': 'পরিকল্পনা ও টুলস'},
-    'manage_categories': {'en': 'Manage Categories', 'bn': 'ক্যাটাগরি ম্যানেজ'},
-    'manage_categories_desc': {
-      'en': 'Edit, reorder and merge categories',
-      'bn': 'ক্যাটাগরি সম্পাদনা, সাজান বা মার্জ করুন'
+    'emi_calculator': {'en': 'EMI Calculator', 'bn': 'ইএমআই ক্যালকুলেটর'},
+    'loan_amount': {'en': 'Loan Amount', 'bn': 'ঋণের ভাড়া'},
+    'interest_rate': {'en': 'Interest Rate (%)', 'bn': 'হারে সুদ (%)'},
+    'tenure_months': {'en': 'Tenure (months)', 'bn': 'মেয়াদ (মাস)'},
+    'monthly_emi': {'en': 'Monthly EMI', 'bn': 'মাসিক ইএমআই'},
+    'total_interest': {'en': 'Total Interest', 'bn': 'মোট সুদ'},
+    'total_payment': {'en': 'Total Payment', 'bn': 'মোট পরিশোধ'},
+    'emi_schedule': {'en': 'EMI Schedule', 'bn': 'ইএমআই সময়সূচী'},
+    'calculate_emi': {'en': 'Calculate EMI', 'bn': 'ইএমআই হিসাব করুন'},
+    'enter_valid_loan_amount': {
+      'en': 'Enter a valid loan amount',
+      'bn': 'সঠিক ঋণের পরিমাণ লিখুন'
     },
+    'enter_valid_interest_rate': {
+      'en': 'Enter a valid interest rate',
+      'bn': 'সঠিক সুদের হার লিখুন'
+    },
+    'enter_valid_tenure': {
+      'en': 'Enter a valid tenure',
+      'bn': 'সঠিক মেয়াদ লিখুন'
+    },
+    'split_expenses': {'en': 'Split Expenses', 'bn': 'বিল ভাগ করুন'},
+    'split_groups': {'en': 'Split Groups', 'bn': 'বিল গ্রুপ'},
+    'group_name': {'en': 'Group Name', 'bn': 'গ্রুপের নাম'},
+    'group_members': {'en': 'Group Members', 'bn': 'গ্রুপ সদস্য'},
+    'add_group': {'en': 'Add Group', 'bn': 'গ্রুপ যোগ করুন'},
+    'create_group': {'en': 'Create Group', 'bn': 'গ্রুপ তৈরি করুন'},
+    'members_comma_hint': {
+      'en': 'Separate names with commas',
+      'bn': 'নাম কমা দিয়ে আলাদা করুন'
+    },
+    'expense_description': {'en': 'Expense Description', 'bn': 'ব্যয়ের বিবরণ'},
+    'paid_by': {'en': 'Paid by', 'bn': 'পরিশোধ করেছেন'},
+    'split_among': {'en': 'Split among', 'bn': 'ভাগ করুন'},
+    'add_expense': {'en': 'Add Expense', 'bn': 'ব্যয় যোগ করুন'},
+    'total_spent': {'en': 'Total Spent', 'bn': 'মোট ব্যয়'},
+    'your_share': {'en': 'Your Share', 'bn': 'আপনার ভাগ'},
+    'settlement_summary': {
+      'en': 'Settlement Summary',
+      'bn': 'বিরাম সংক্ষিপ্তসার'
+    },
+    'owes': {'en': '{from} owes {to}', 'bn': '{from} দেবে {to}'},
+    'you_owe': {'en': 'You owe {to}', 'bn': 'আপনি দেন {to}'},
+    'owes_you': {'en': '{from} owes you', 'bn': '{from} আপনাকে দেয়'},
+    'no_split_groups': {
+      'en': 'No split groups yet',
+      'bn': 'এখনো কোনো বিল গ্রুপ নেই'
+    },
+    'split_group_empty': {
+      'en': 'Create a group to start splitting expenses',
+      'bn': 'ব্যয় ভাগ করার জন্য একটি গ্রুপ তৈরি করুন'
+    },
+    'detected_subscriptions': {
+      'en': 'Detected Subscriptions',
+      'bn': 'সনাক্ত সাবস্ক্রিপশন'
+    },
+    'mark_as_recurring': {
+      'en': 'Mark as recurring',
+      'bn': 'পুনরাবৃত্তি হিসেবে চিহ্নিত করুন'
+    },
+    'detected_subscriptions_description': {
+      'en': 'Auto-detected recurring payments from your transactions',
+      'bn': 'আপনার লেনদেন থেকে স্বয়ংক্রিয়ভাবে সনাক্ত recurring পেমেন্ট'
+    },
+    'no_detected_subscriptions': {
+      'en': 'No recurring subscriptions detected yet',
+      'bn': 'এখনো কোনো recurring সাবস্ক্রিপশন সনাক্ত করা হয়নি'
+    },
+    'subscription_next_expected': {
+      'en': 'Next expected',
+      'bn': 'পরবর্তী প্রত্যাশিত'
+    },
+    'suscription_amount': {'en': 'Amount', 'bn': 'পরিমাণ'},
     'manage_budgets': {'en': 'Manage Budgets', 'bn': 'বাজেট ম্যানেজ'},
     'manage_budgets_desc': {
       'en': 'Create and adjust monthly budgets',
@@ -241,7 +310,10 @@ class AppL10n {
     },
     'backup_complete': {'en': 'Backup complete!', 'bn': 'ব্যাকআপ সম্পন্ন!'},
     'restore_cloud': {'en': 'Restore from Cloud', 'bn': 'ক্লাউড থেকে রিস্টোর'},
-    'restore_data': {'en': 'Restore your data', 'bn': 'আপনার ডেটা রিস্টোর করুন'},
+    'restore_data': {
+      'en': 'Restore your data',
+      'bn': 'আপনার ডেটা রিস্টোর করুন'
+    },
     'export_data': {'en': 'Export Data', 'bn': 'ডেটা এক্সপোর্ট'},
     'export_csv_json': {
       'en': 'Export as CSV or JSON',
@@ -304,10 +376,7 @@ class AppL10n {
       'bn': 'CashTrack ভালো লাগে? রেট দিন!'
     },
     'report_bug': {'en': 'Report a Bug', 'bn': 'বাগ রিপোর্ট করুন'},
-    'help_improve': {
-      'en': 'Help us improve',
-      'bn': 'উন্নত করতে সাহায্য করুন'
-    },
+    'help_improve': {'en': 'Help us improve', 'bn': 'উন্নত করতে সাহায্য করুন'},
     'link_open_failed': {'en': 'Couldn\'t open link', 'bn': 'লিংক খোলা যায়নি'},
     'feature_not_supported_web': {
       'en': 'This feature is not supported on web',
@@ -358,6 +427,18 @@ class AppL10n {
     'thirty_minutes': {'en': '30 minutes', 'bn': '৩০ মিনিট'},
     'never': {'en': 'Never', 'bn': 'কখনও নয়'},
     'planning': {'en': 'Planning', 'bn': 'পরিকল্পনা'},
+    'of': {'en': 'of', 'bn': 'এর'},
+    'financial_plans': {'en': 'Financial Plans', 'bn': 'আর্থিক পরিকল্পনা'},
+    'tools_utilities': {'en': 'Tools & Utilities', 'bn': 'টুলস ও ইউটিলিটি'},
+    'active_goals_short': {'en': 'active', 'bn': 'সক্রিয়'},
+    'total_saved': {'en': 'Total Saved', 'bn': 'মোট সঞ্চয়'},
+    'track_recurring': {'en': 'Track recurring', 'bn': 'পুনরাবৃত্ত খরচ ট্র্যাক'},
+    'customize_categories': {'en': 'Customize categories', 'bn': 'ক্যাটাগরি কাস্টমাইজ করুন'},
+    'download_reports': {'en': 'Download reports', 'bn': 'রিপোর্ট ডাউনলোড করুন'},
+    'personal_notes': {'en': 'Personal notes', 'bn': 'ব্যক্তিগত নোট'},
+    'net_balance': {'en': 'Net Balance', 'bn': 'নিট ব্যালেন্স'},
+    'view': {'en': 'View', 'bn': 'দেখুন'},
+    'manage_categories': {'en': 'Manage Categories', 'bn': 'ক্যাটাগরি পরিচালনা'},
     'calculator': {'en': 'Calculator', 'bn': 'ক্যালকুলেটর'},
     'notes': {'en': 'Notes', 'bn': 'নোটস'},
     'monthly_budget': {'en': 'Monthly Budget', 'bn': 'মাসিক বাজেট'},
@@ -401,10 +482,7 @@ class AppL10n {
     'goals': {'en': 'Goals', 'bn': 'লক্ষ্যসমূহ'},
     'days_left': {'en': '{count} days left', 'bn': '{count} দিন বাকি'},
     'completed': {'en': 'Completed', 'bn': 'সম্পন্ন'},
-    'percent_completed': {
-      'en': '{value}% completed',
-      'bn': '{value}% সম্পন্ন'
-    },
+    'percent_completed': {'en': '{value}% completed', 'bn': '{value}% সম্পন্ন'},
     'to_go_amount': {'en': '{amount} to go', 'bn': '{amount} বাকি'},
     'add_money': {'en': 'Add Money', 'bn': 'টাকা যোগ করুন'},
     'details': {'en': 'Details', 'bn': 'বিস্তারিত'},
@@ -428,7 +506,10 @@ class AppL10n {
       'bn': 'ডেডলাইন সেট করুন (ঐচ্ছিক)'
     },
     'create': {'en': 'Create', 'bn': 'তৈরি করুন'},
-    'edit_savings_goal': {'en': 'Edit Savings Goal', 'bn': 'সেভিংস লক্ষ্য সম্পাদনা'},
+    'edit_savings_goal': {
+      'en': 'Edit Savings Goal',
+      'bn': 'সেভিংস লক্ষ্য সম্পাদনা'
+    },
     'goal_created_success': {
       'en': 'Goal created successfully!',
       'bn': 'লক্ষ্য সফলভাবে তৈরি হয়েছে!'
@@ -438,7 +519,10 @@ class AppL10n {
       'bn': 'লক্ষ্য সফলভাবে আপডেট হয়েছে!'
     },
     'update': {'en': 'Update', 'bn': 'আপডেট'},
-    'add_money_to': {'en': 'Add Money to {name}', 'bn': '{name}-এ টাকা যোগ করুন'},
+    'add_money_to': {
+      'en': 'Add Money to {name}',
+      'bn': '{name}-এ টাকা যোগ করুন'
+    },
     'add': {'en': 'Add', 'bn': 'যোগ করুন'},
     'added_amount_to_goal': {
       'en': 'Added {amount} to {name}',
@@ -455,6 +539,7 @@ class AppL10n {
     'type': {'en': 'Type', 'bn': 'ধরন'},
     'name_english': {'en': 'Name (English)', 'bn': 'নাম (ইংরেজি)'},
     'name_bangla': {'en': 'Name (Bangla)', 'bn': 'নাম (বাংলা)'},
+    'nickname_optional': {'en': 'Nickname (Optional)', 'bn': 'ডাকনাম (ঐচ্ছিক)'},
     'initial_balance': {'en': 'Initial Balance', 'bn': 'প্রাথমিক ব্যালেন্স'},
     'edit_account': {'en': 'Edit Account', 'bn': 'অ্যাকাউন্ট সম্পাদনা'},
     'delete_account': {'en': 'Delete Account', 'bn': 'অ্যাকাউন্ট মুছুন'},
@@ -462,13 +547,14 @@ class AppL10n {
       'en': 'Are you sure you want to delete "{name}"?',
       'bn': 'আপনি কি নিশ্চিত "{name}" মুছতে চান?'
     },
-    'account_deleted': {'en': 'Account deleted', 'bn': 'অ্যাকাউন্ট মুছে ফেলা হয়েছে'},
+    'account_deleted': {
+      'en': 'Account deleted',
+      'bn': 'অ্যাকাউন্ট মুছে ফেলা হয়েছে'
+    },
     'balance': {'en': 'Balance', 'bn': 'ব্যালেন্স'},
     'edit': {'en': 'Edit', 'bn': 'সম্পাদনা'},
     'delete': {'en': 'Delete', 'bn': 'মুছুন'},
     'close': {'en': 'Close', 'bn': 'বন্ধ'},
-    'bank': {'en': 'Bank', 'bn': 'ব্যাংক'},
-    'mfs': {'en': 'MFS', 'bn': 'এমএফএস'},
     'total_budget': {'en': 'Total Budget', 'bn': 'মোট বাজেট'},
     'over': {'en': 'Over', 'bn': 'অতিরিক্ত'},
     'no_budgets_month': {
@@ -510,6 +596,7 @@ class AppL10n {
     },
     'budget_deleted': {'en': 'Budget deleted', 'bn': 'বাজেট মুছে ফেলা হয়েছে'},
     'your_name': {'en': 'Your Name', 'bn': 'আপনার নাম'},
+    'account_info': {'en': 'Account Info', 'bn': 'অ্যাকাউন্ট তথ্য'},
     'personal_info': {'en': 'Personal Info', 'bn': 'ব্যক্তিগত তথ্য'},
     'additional_info': {'en': 'Additional Info', 'bn': 'অতিরিক্ত তথ্য'},
     'recent_activity': {'en': 'Recent Activity', 'bn': 'সাম্প্রতিক কার্যকলাপ'},
@@ -547,8 +634,14 @@ class AppL10n {
     'note': {'en': 'Note', 'bn': 'নোট'},
     'add_note': {'en': 'Add note...', 'bn': 'নোট যোগ করুন'},
     'select': {'en': 'Select', 'bn': 'নির্বাচন করুন'},
-    'select_category': {'en': 'Select Category', 'bn': 'ক্যাটাগরি নির্বাচন করুন'},
-    'select_account': {'en': 'Select Account', 'bn': 'অ্যাকাউন্ট নির্বাচন করুন'},
+    'select_category': {
+      'en': 'Select Category',
+      'bn': 'ক্যাটাগরি নির্বাচন করুন'
+    },
+    'select_account': {
+      'en': 'Select Account',
+      'bn': 'অ্যাকাউন্ট নির্বাচন করুন'
+    },
     'select_category_prompt': {
       'en': 'Select a category',
       'bn': 'ক্যাটাগরি নির্বাচন করুন'
@@ -557,6 +650,44 @@ class AppL10n {
       'en': 'Select an account',
       'bn': 'অ্যাকাউন্ট নির্বাচন করুন'
     },
+    'recurring_payment': {
+      'en': 'Recurring payment',
+      'bn': 'পুনরাবৃত্তি লেনদেন'
+    },
+    'default_recurring_payment': {
+      'en': 'Default Recurring Payment',
+      'bn': 'ডিফল্ট পুনরাবৃত্তি লেনদেন'
+    },
+    'recurring_frequency': {
+      'en': 'Payment frequency',
+      'bn': 'পেমেন্ট ফ্রিকোয়েন্সি'
+    },
+    'default_recurring_frequency': {
+      'en': 'Default Recurring Frequency',
+      'bn': 'ডিফল্ট পেমেন্ট ফ্রিকোয়েন্সি'
+    },
+    'on': {'en': 'On', 'bn': 'চালু'},
+    'off': {'en': 'Off', 'bn': 'বন্ধ'},
+    'daily': {'en': 'Daily', 'bn': 'দৈনিক'},
+    'weekly': {'en': 'Weekly', 'bn': 'সাপ্তাহিক'},
+    'monthly': {'en': 'Monthly', 'bn': 'মাসিক'},
+    'yearly': {'en': 'Yearly', 'bn': 'বার্ষিক'},
+    'subscription_calendar': {
+      'en': 'Subscription Calendar',
+      'bn': 'সাবস্ক্রিপশন ক্যালেন্ডার'
+    },
+    'upcoming_recurring_payments': {
+      'en': 'Upcoming recurring payments',
+      'bn': 'নির্ধারিত পুনরাবৃত্তি লেনদেন'
+    },
+    'recurring_payments_no_data': {
+      'en': 'No recurring payments scheduled for this day.',
+      'bn': 'এই দিনে কোনো পুনরাবৃত্তি লেনদেন নির্ধারিত নেই।'
+    },
+    'pin_category': {'en': 'Pin Category', 'bn': 'ক্যাটাগরি পিন করুন'},
+    'unpin_category': {'en': 'Unpin Category', 'bn': 'ক্যাটাগরি আনপিন করুন'},
+    'pin_account': {'en': 'Pin Account', 'bn': 'অ্যাকাউন্ট পিন করুন'},
+    'unpin_account': {'en': 'Unpin Account', 'bn': 'অ্যাকাউন্ট আনপিন করুন'},
     'updated': {'en': 'Updated!', 'bn': 'আপডেট হয়েছে!'},
     'error_with_detail': {'en': 'Error: {error}', 'bn': 'ত্রুটি: {error}'},
     'no_transactions_yet': {
@@ -614,13 +745,22 @@ class AppL10n {
     },
     'filter': {'en': 'Filter', 'bn': 'ফিল্টার'},
     'date_range': {'en': 'Date Range', 'bn': 'তারিখ পরিসর'},
-    'select_date_range': {'en': 'Select date range', 'bn': 'তারিখ পরিসর নির্বাচন করুন'},
-    'clear_date_filter': {'en': 'Clear date filter', 'bn': 'তারিখ ফিল্টার মুছুন'},
+    'select_date_range': {
+      'en': 'Select date range',
+      'bn': 'তারিখ পরিসর নির্বাচন করুন'
+    },
+    'clear_date_filter': {
+      'en': 'Clear date filter',
+      'bn': 'তারিখ ফিল্টার মুছুন'
+    },
     'transaction_deleted': {
       'en': 'Transaction deleted',
       'bn': 'লেনদেন মুছে ফেলা হয়েছে'
     },
-    'add_new_category': {'en': 'Add New Category', 'bn': 'নতুন ক্যাটাগরি যোগ করুন'},
+    'add_new_category': {
+      'en': 'Add New Category',
+      'bn': 'নতুন ক্যাটাগরি যোগ করুন'
+    },
     'add_category_type': {
       'en': 'Add {type} Category',
       'bn': '{type} ক্যাটাগরি যোগ করুন'
@@ -649,7 +789,10 @@ class AppL10n {
       'en': 'Are you sure you want to delete "{name}"?',
       'bn': 'আপনি কি নিশ্চিত "{name}" মুছতে চান?'
     },
-    'category_deleted': {'en': 'Category deleted', 'bn': 'ক্যাটাগরি মুছে ফেলা হয়েছে'},
+    'category_deleted': {
+      'en': 'Category deleted',
+      'bn': 'ক্যাটাগরি মুছে ফেলা হয়েছে'
+    },
     'debt_added_success': {
       'en': 'Debt added successfully',
       'bn': 'ঋণ সফলভাবে যোগ হয়েছে'
@@ -898,11 +1041,14 @@ class AppL10n {
       'en': 'Investment Portfolio Desc',
       'bn': 'বিনিয়োগের সারাংশ'
     },
-    'login_failed': {'en': 'Login failed: {error}', 'bn': 'লগইন ব্যর্থ: {error}'},
+    'login_failed': {
+      'en': 'Login failed: {error}',
+      'bn': 'লগইন ব্যর্থ: {error}'
+    },
     'low_balance': {'en': 'Low Balance', 'bn': 'কম ব্যালেন্স'},
     'low_balance_body': {
-      'en': 'Low Balance Body',
-      'bn': 'আপনার ব্যালেন্স কমে যাচ্ছে। খরচ নিয়ন্ত্রণ করুন।'
+      'en': 'Your balance is {amount}. Consider controlling your expenses.',
+      'bn': 'আপনার ব্যালেন্স {amount}। খরচ নিয়ন্ত্রণ করুন।'
     },
     'month': {'en': 'Month', 'bn': 'মাস'},
     'monthly_summary': {'en': 'Monthly Summary', 'bn': 'মাসিক সারাংশ'},
@@ -941,7 +1087,10 @@ class AppL10n {
     'on_track': {'en': 'On Track', 'bn': 'ঠিক পথে'},
     'over_budget': {'en': 'Over Budget', 'bn': 'বাজেটের বেশি'},
     'paid': {'en': 'Paid', 'bn': 'পরিশোধিত'},
-    'paid_of_total': {'en': '{paid} / {total} paid', 'bn': '{paid} / {total} পরিশোধিত'},
+    'paid_of_total': {
+      'en': '{paid} / {total} paid',
+      'bn': '{paid} / {total} পরিশোধিত'
+    },
     'payment': {'en': 'Payment', 'bn': 'পরিশোধ'},
     'period_range': {'en': 'Period Range', 'bn': '{start} - {end}'},
     'person': {'en': 'Person', 'bn': 'ব্যক্তি'},
@@ -1149,18 +1298,9 @@ class AppL10n {
       'en': 'Amounts are now visible across the app',
       'bn': 'অ্যাপ জুড়ে পরিমাণ এখন দৃশ্যমান'
     },
-    'voice_transaction_input': {
-      'en': 'Voice Input',
-      'bn': 'ভয়েস ইনপুট'
-    },
-    'receipt_photo_option': {
-      'en': 'Receipt Photo',
-      'bn': 'রিসিপ্ট ছবি'
-    },
-    'gemini_api_key': {
-      'en': 'Gemini API Key',
-      'bn': 'জেমিনি এপিআই কী'
-    },
+    'voice_transaction_input': {'en': 'Voice Input', 'bn': 'ভয়েস ইনপুট'},
+    'receipt_photo_option': {'en': 'Receipt Photo', 'bn': 'রিসিপ্ট ছবি'},
+    'gemini_api_key': {'en': 'Gemini API Key', 'bn': 'জেমিনি এপিআই কী'},
     'gemini_key_desc': {
       'en': 'Configure AI assistant',
       'bn': 'এআই সহকারী কনফিগার করুন'
@@ -1169,10 +1309,7 @@ class AppL10n {
       'en': 'Enter your Gemini API key to enable the AI assistant feature.',
       'bn': 'এআই সহকারী ফিচার চালু করতে আপনার জেমিনি এপিআই কী দিন।'
     },
-    'api_key_saved': {
-      'en': 'API key saved',
-      'bn': 'এপিআই কী সেভ হয়েছে'
-    },
+    'api_key_saved': {'en': 'API key saved', 'bn': 'এপিআই কী সেভ হয়েছে'},
     'login_tagline': {
       'en': 'Your personal finance companion\nfor smart money management',
       'bn': 'আপনার ব্যক্তিগত অর্থ ব্যবস্থাপনার\nস্মার্ট সহচর'
@@ -1186,30 +1323,338 @@ class AppL10n {
       'bn': 'গেস্ট হিসেবে চালিয়ে যান'
     },
     'login_terms_hint': {
-      'en': 'By continuing, you agree to our Terms of Service\nand Privacy Policy',
-      'bn': 'চালিয়ে যাওয়ার মানে আপনি আমাদের সেবার শর্তাবলী\nও গোপনীয়তা নীতি মেনে নিচ্ছেন'
+      'en':
+          'By continuing, you agree to our Terms of Service\nand Privacy Policy',
+      'bn':
+          'চালিয়ে যাওয়ার মানে আপনি আমাদের সেবার শর্তাবলী\nও গোপনীয়তা নীতি মেনে নিচ্ছেন'
     },
-    'continue_with_email': {'en': 'Continue with Email', 'bn': 'ইমেইল দিয়ে চালিয়ে যান'},
-    'continue_with_phone': {'en': 'Continue with Phone', 'bn': 'ফোন দিয়ে চালিয়ে যান'},
+    'continue_with_email': {
+      'en': 'Continue with Email',
+      'bn': 'ইমেইল দিয়ে চালিয়ে যান'
+    },
+    'continue_with_phone': {
+      'en': 'Continue with Phone',
+      'bn': 'ফোন দিয়ে চালিয়ে যান'
+    },
     'or': {'en': 'or', 'bn': 'অথবা'},
+    'password_strength_weak': {'en': 'Weak', 'bn': 'দুর্বল'},
+    'password_strength_fair': {'en': 'Fair', 'bn': 'মোটামুটি'},
+    'password_strength_good': {'en': 'Good', 'bn': 'ভালো'},
+    'password_strength_strong': {'en': 'Strong', 'bn': 'শক্তিশালী'},
+    'create_your_account': {
+      'en': 'Create your account to get started',
+      'bn': 'শুরু করতে অ্যাকাউন্ট তৈরি করুন'
+    },
+    'welcome_back': {
+      'en': 'Welcome back! Sign in to continue',
+      'bn': 'স্বাগতম! চালিয়ে যেতে সাইন ইন করুন'
+    },
+    'confirm_password': {
+      'en': 'Confirm Password',
+      'bn': 'পাসওয়ার্ড নিশ্চিত করুন'
+    },
+    'invalid_email': {
+      'en': 'Please enter a valid email address',
+      'bn': 'একটি সঠিক ইমেইল দিন'
+    },
+    'reset_link_sent': {
+      'en': 'Password reset link sent! Check your email.',
+      'bn': 'পাসওয়ার্ড রিসেট লিঙ্ক পাঠানো হয়েছে! ইমেইল চেক করুন।'
+    },
+    'forgot_password': {
+      'en': 'Forgot Password?',
+      'bn': 'পাসওয়ার্ড ভুলে গেছেন?'
+    },
+    'password_too_short': {
+      'en': 'Password must be at least 6 characters',
+      'bn': 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষর হতে হবে'
+    },
+    'passwords_dont_match': {
+      'en': 'Passwords do not match',
+      'bn': 'পাসওয়ার্ড মিলছে না'
+    },
+    'phone_not_available_web': {
+      'en':
+          'Phone sign-in is not available on web. Please use Email or Guest sign-in.',
+      'bn':
+          'ওয়েবে ফোন সাইন-ইন পাওয়া যায় না। অনুগ্রহ করে ইমেইল বা গেস্ট সাইন-ইন ব্যবহার করুন।'
+    },
     'email_sign_in': {'en': 'Sign in with Email', 'bn': 'ইমেইল দিয়ে সাইন ইন'},
     'create_account': {'en': 'Create Account', 'bn': 'অ্যাকাউন্ট তৈরি করুন'},
     'password': {'en': 'Password', 'bn': 'পাসওয়ার্ড'},
     'sign_in': {'en': 'Sign In', 'bn': 'সাইন ইন'},
     'sign_up': {'en': 'Sign Up', 'bn': 'সাইন আপ'},
-    'already_have_account': {'en': 'Already have an account? Sign in', 'bn': 'অ্যাকাউন্ট আছে? সাইন ইন করুন'},
-    'create_new_account': {'en': "Don't have an account? Sign up", 'bn': 'অ্যাকাউন্ট নেই? সাইন আপ করুন'},
-    'fill_all_fields': {'en': 'Please fill all fields', 'bn': 'সব ফিল্ড পূরণ করুন'},
+    'already_have_account': {
+      'en': 'Already have an account? Sign in',
+      'bn': 'অ্যাকাউন্ট আছে? সাইন ইন করুন'
+    },
+    'create_new_account': {
+      'en': "Don't have an account? Sign up",
+      'bn': 'অ্যাকাউন্ট নেই? সাইন আপ করুন'
+    },
+    'fill_all_fields': {
+      'en': 'Please fill all fields',
+      'bn': 'সব ফিল্ড পূরণ করুন'
+    },
     'phone_sign_in': {'en': 'Sign in with Phone', 'bn': 'ফোন দিয়ে সাইন ইন'},
     'phone_number': {'en': 'Phone Number', 'bn': 'ফোন নম্বর'},
     'send_otp': {'en': 'Send OTP', 'bn': 'OTP পাঠান'},
-    'enter_valid_phone': {'en': 'Enter a valid phone number', 'bn': 'সঠিক ফোন নম্বর দিন'},
-    'otp_sent_to': {'en': 'OTP sent to {phone}', 'bn': '{phone} এ OTP পাঠানো হয়েছে'},
+    'enter_valid_phone': {
+      'en': 'Enter a valid phone number',
+      'bn': 'সঠিক ফোন নম্বর দিন'
+    },
+    'otp_sent_to': {
+      'en': 'OTP sent to {phone}',
+      'bn': '{phone} এ OTP পাঠানো হয়েছে'
+    },
     'enter_otp': {'en': 'Enter OTP', 'bn': 'OTP দিন'},
     'verify_otp': {'en': 'Verify OTP', 'bn': 'OTP যাচাই করুন'},
-    'enter_valid_otp': {'en': 'Enter valid 6-digit OTP', 'bn': 'সঠিক ৬ সংখ্যার OTP দিন'},
+    'enter_valid_otp': {
+      'en': 'Enter valid 6-digit OTP',
+      'bn': 'সঠিক ৬ সংখ্যার OTP দিন'
+    },
+    // Google Sign-In
+    'continue_with_google': {
+      'en': 'Continue with Google',
+      'bn': 'Google দিয়ে চালিয়ে যান'
+    },
+    // Investments
+    'investments': {'en': 'Investments', 'bn': 'বিনিয়োগ'},
+    'add_investment': {'en': 'Add Investment', 'bn': 'বিনিয়োগ যোগ করুন'},
+    'edit_investment': {'en': 'Edit Investment', 'bn': 'বিনিয়োগ সম্পাদনা'},
+    'investment_name': {'en': 'Investment Name', 'bn': 'বিনিয়োগের নাম'},
+    'total_invested': {'en': 'Invested', 'bn': 'বিনিয়োগ'},
+    'total_returns': {'en': 'Returns', 'bn': 'রিটার্ন'},
+    'mutual_fund': {'en': 'Mutual Fund', 'bn': 'মিউচুয়াল ফান্ড'},
+    'stock': {'en': 'Stock', 'bn': 'শেয়ার'},
+    'fixed_deposit': {'en': 'Fixed Deposit', 'bn': 'ফিক্সড ডিপোজিট'},
+    'gold_inv': {'en': 'Gold', 'bn': 'সোনা'},
+    'dps': {'en': 'DPS', 'bn': 'ডিপিএস'},
+    'others_type': {'en': 'Others', 'bn': 'অন্যান্য'},
+    'expected_return': {
+      'en': 'Expected Return (%)',
+      'bn': 'প্রত্যাশিত রিটার্ন (%)'
+    },
+    'start_date': {'en': 'Start Date', 'bn': 'শুরুর তারিখ'},
+    'maturity_date': {'en': 'Maturity Date', 'bn': 'মেয়াদ শেষ'},
+    'no_investments_yet': {
+      'en': 'No investments yet',
+      'bn': 'এখনো কোনো বিনিয়োগ নেই'
+    },
+    'add_first_investment': {
+      'en': 'Track your investments here',
+      'bn': 'আপনার বিনিয়োগ এখানে ট্র্যাক করুন'
+    },
+    'delete_investment': {'en': 'Delete Investment', 'bn': 'বিনিয়োগ মুছুন'},
+    'delete_investment_confirm': {
+      'en': 'Are you sure you want to delete this investment?',
+      'bn': 'আপনি কি নিশ্চিত এই বিনিয়োগ মুছতে চান?'
+    },
+    // Assets
+    'assets_title': {'en': 'Assets', 'bn': 'সম্পদ'},
+    'add_asset': {'en': 'Add Asset', 'bn': 'সম্পদ যোগ করুন'},
+    'edit_asset': {'en': 'Edit Asset', 'bn': 'সম্পদ সম্পাদনা'},
+    'asset_name': {'en': 'Asset Name', 'bn': 'সম্পদের নাম'},
+    'asset_category': {'en': 'Category', 'bn': 'ক্যাটাগরি'},
+    'asset_tracker': {'en': 'Asset Tracker', 'bn': 'সম্পদ ট্র্যাকার'},
+    'purchase_price': {'en': 'Purchase Price', 'bn': 'ক্রয়মূল্য'},
+    'purchase_value': {'en': 'Purchase', 'bn': 'ক্রয়মূল্য'},
+    'appreciation': {'en': 'Growth', 'bn': 'মূল্যবৃদ্ধি'},
+    'purchase_date': {'en': 'Purchase Date', 'bn': 'ক্রয়ের তারিখ'},
+    'warranty_expiry': {'en': 'Warranty', 'bn': 'ওয়ারেন্টি'},
+    'warranty_active': {'en': 'Warranty Active', 'bn': 'ওয়ারেন্টি আছে'},
+    'no_assets_yet': {'en': 'No assets yet', 'bn': 'এখনো কোনো সম্পদ নেই'},
+    'add_first_asset': {
+      'en': 'Track your valuable assets',
+      'bn': 'আপনার মূল্যবান সম্পদ ট্র্যাক করুন'
+    },
+    'total_asset_value': {'en': 'Total Value', 'bn': 'মোট মূল্য'},
+    'delete_asset': {'en': 'Delete Asset', 'bn': 'সম্পদ মুছুন'},
+    'delete_asset_confirm': {
+      'en': 'Are you sure you want to delete this asset?',
+      'bn': 'আপনি কি নিশ্চিত এই সম্পদ মুছতে চান?'
+    },
+    // ── Smart Debt Agreement System ──────────────────────
+    'smart_agreements': {'en': 'Smart Agreements', 'bn': 'স্মার্ট চুক্তি'},
+    'debt_agreements': {'en': 'Debt Agreements', 'bn': 'ঋণ চুক্তি'},
+    'create_agreement': {'en': 'Create Agreement', 'bn': 'চুক্তি তৈরি করুন'},
+    'agreement_details': {'en': 'Agreement Details', 'bn': 'চুক্তির বিবরণ'},
+    'agreement_terms': {'en': 'Agreement Terms', 'bn': 'চুক্তির শর্তাবলী'},
+    'agreement_terms_hint': {
+      'en': 'e.g. Must repay within deadline, 2% daily penalty applies...',
+      'bn': 'যেমন: ডেডলাইনের মধ্যে ফেরত দিতে হবে, ২% দৈনিক জরিমানা...'
+    },
+    'penalty_rate': {
+      'en': 'Daily Penalty Rate (%)',
+      'bn': 'দৈনিক জরিমানা হার (%)'
+    },
+    'penalty_amount': {'en': 'Penalty Amount', 'bn': 'জরিমানার পরিমাণ'},
+    'no_penalty': {'en': 'No penalty', 'bn': 'কোনো জরিমানা নেই'},
+    'phone_number_optional': {
+      'en': 'Phone Number (Optional)',
+      'bn': 'ফোন নম্বর (ঐচ্ছিক)'
+    },
+    'payment_method': {'en': 'Payment Method', 'bn': 'পেমেন্ট পদ্ধতি'},
+    'select_payment_method': {
+      'en': 'Select Payment Method',
+      'bn': 'পেমেন্ট পদ্ধতি নির্বাচন করুন'
+    },
+    'enable_agreement': {
+      'en': 'Enable Smart Agreement',
+      'bn': 'স্মার্ট চুক্তি সক্রিয় করুন'
+    },
+    'agreement_enabled': {
+      'en': 'Digital contract with terms',
+      'bn': 'শর্তসহ ডিজিটাল চুক্তি'
+    },
+    // Agreement Status
+    'status_pending': {'en': 'Pending', 'bn': 'অপেক্ষমাণ'},
+    'status_accepted': {'en': 'Accepted', 'bn': 'গৃহীত'},
+    'status_rejected': {'en': 'Rejected', 'bn': 'প্রত্যাখ্যাত'},
+    'status_expired': {'en': 'Overdue', 'bn': 'মেয়াদোত্তীর্ণ'},
+    'status_completed': {'en': 'Completed', 'bn': 'সম্পন্ন'},
+    // Trust Score
+    'trust_score': {'en': 'Trust Score', 'bn': 'বিশ্বাস স্কোর'},
+    'trust_excellent': {'en': 'Excellent', 'bn': 'চমৎকার'},
+    'trust_good': {'en': 'Good', 'bn': 'ভালো'},
+    'trust_average': {'en': 'Average', 'bn': 'মোটামুটি'},
+    'trust_poor': {'en': 'Poor', 'bn': 'খারাপ'},
+    'trust_very_poor': {'en': 'Very Poor', 'bn': 'অত্যন্ত খারাপ'},
+    // Countdown & Deadline
+    'days_remaining': {
+      'en': '{count} days remaining',
+      'bn': '{count} দিন বাকি'
+    },
+    'hours_remaining': {
+      'en': '{count} hours remaining',
+      'bn': '{count} ঘণ্টা বাকি'
+    },
+    'overdue_days': {
+      'en': 'Overdue by {count} days',
+      'bn': '{count} দিন অতিক্রান্ত'
+    },
+    'deadline_today': {'en': 'Deadline is today!', 'bn': 'আজ ডেডলাইন!'},
+    'no_deadline': {'en': 'No deadline set', 'bn': 'কোনো ডেডলাইন নেই'},
+    // Actions
+    'send_reminder': {'en': 'Send Reminder', 'bn': 'রিমাইন্ডার পাঠান'},
+    'reminder_sent': {
+      'en': 'Reminder sent!',
+      'bn': 'রিমাইন্ডার পাঠানো হয়েছে!'
+    },
+    'reminders_sent_count': {
+      'en': '{count} reminders sent',
+      'bn': '{count}টি রিমাইন্ডার পাঠানো হয়েছে'
+    },
+    'view_agreement': {'en': 'View Agreement', 'bn': 'চুক্তি দেখুন'},
+    'mark_as_paid': {'en': 'Mark as Paid', 'bn': 'পরিশোধিত হিসেবে চিহ্নিত'},
+    'generate_payment_link': {'en': 'Payment Link', 'bn': 'পেমেন্ট লিঙ্ক'},
+    'payment_link_copied': {
+      'en': 'Payment link copied!',
+      'bn': 'পেমেন্ট লিঙ্ক কপি হয়েছে!'
+    },
+    'calculate_penalty': {'en': 'Calculate Penalty', 'bn': 'জরিমানা গণনা'},
+    // Summary
+    'active_agreements': {'en': 'Active Agreements', 'bn': 'সক্রিয় চুক্তি'},
+    'total_lent': {'en': 'Total Lent', 'bn': 'মোট ধার দেওয়া'},
+    'total_borrowed': {'en': 'Total Borrowed', 'bn': 'মোট ধার নেওয়া'},
+    'total_penalty': {'en': 'Total Penalty', 'bn': 'মোট জরিমানা'},
+    'overdue_count': {
+      'en': '{count} overdue',
+      'bn': '{count}টি মেয়াদোত্তীর্ণ'
+    },
+    // Agreement View
+    'agreement_contract': {
+      'en': 'DEBT AGREEMENT CONTRACT',
+      'bn': 'ঋণ চুক্তি চুক্তিপত্র'
+    },
+    'lender': {'en': 'Lender', 'bn': 'ঋণদাতা'},
+    'borrower': {'en': 'Borrower', 'bn': 'ঋণগ্রহীতা'},
+    'principal_amount': {'en': 'Principal Amount', 'bn': 'মূল অর্থ'},
+    'agreed_deadline': {'en': 'Agreed Deadline', 'bn': 'সম্মত সময়সীমা'},
+    'penalty_clause': {'en': 'Penalty Clause', 'bn': 'জরিমানা ধারা'},
+    'daily_penalty_after_deadline': {
+      'en': '{rate}% daily penalty after deadline',
+      'bn': 'ডেডলাইনের পর দৈনিক {rate}% জরিমানা'
+    },
+    'agreement_created_on': {
+      'en': 'Agreement created on {date}',
+      'bn': 'চুক্তি তৈরি হয়েছে {date}'
+    },
+    'me': {'en': 'Me', 'bn': 'আমি'},
+    // Tab labels
+    'all': {'en': 'All', 'bn': 'সব'},
+    'lent_tab': {'en': 'Lent', 'bn': 'ধার দিয়েছি'},
+    'borrowed_tab': {'en': 'Borrowed', 'bn': 'ধার নিয়েছি'},
+    'overdue_tab': {'en': 'Overdue', 'bn': 'মেয়াদোত্তীর্ণ'},
+    // Manual Penalty
+    'add_penalty': {'en': 'Add Penalty', 'bn': 'জরিমানা যোগ করুন'},
+    'add_penalty_hint': {
+      'en':
+          'Add a penalty amount for late payment. This will be added to the existing penalty.',
+      'bn':
+          'দেরিতে পরিশোধের জন্য জরিমানা যোগ করুন। এটি বিদ্যমান জরিমানায় যোগ হবে।'
+    },
+    'penalty_added': {'en': 'Penalty added', 'bn': 'জরিমানা যোগ হয়েছে'},
+    'current_penalty': {'en': 'Current penalty', 'bn': 'বর্তমান জরিমানা'},
+    'agreement_sms_sent': {
+      'en': 'Agreement SMS sent',
+      'bn': 'চুক্তির SMS পাঠানো হয়েছে'
+    },
+    // EMI Calculator additions
+    'principal': {'en': 'Principal', 'bn': 'মূলধন'},
+    'interest': {'en': 'Interest', 'bn': 'সুদ'},
+    'emi_balance': {'en': 'Balance', 'bn': 'অবশিষ্ট'},
+    'month_label': {'en': 'Month', 'bn': 'মাস'},
+    'loan_breakdown': {'en': 'Loan Breakdown', 'bn': 'ঋণ বিশ্লেষণ'},
+    'emi_empty_title': {'en': 'Calculate Your EMI', 'bn': 'আপনার ইএমআই হিসাব করুন'},
+    'emi_empty_subtitle': {
+      'en': 'Enter loan details above to see your monthly payment and full amortization schedule',
+      'bn': 'মাসিক পরিশোধ ও সম্পূর্ণ পরিশোধ সময়সূচী দেখতে উপরে ঋণের বিবরণ দিন'
+    },
+    'interest_amount': {'en': 'Interest Amount', 'bn': 'সুদের পরিমাণ'},
+    'email_verification_sent': {
+      'en': 'Account created! A verification link has been sent to your email. Please verify it before logging in.',
+      'bn': 'অ্যাকাউন্ট তৈরি হয়েছে! আপনার ইমেইলে একটি ভেরিফিকেশন লিংক পাঠানো হয়েছে। লগইন করার আগে অনুগ্রহ করে এটি ভেরিফাই করুন।'
+    },
+    'email_not_verified': {
+      'en': 'Your email is not verified yet. A new verification link has been sent to your email.',
+      'bn': 'আপনার ইমেইলটি এখনও ভেরিফাই করা হয়নি। আপনার ইমেইলে একটি নতুন ভেরিফিকেশন লিংক পাঠানো হয়েছে।'
+    },
+    'verify_email_title': {
+      'en': 'Verify Your Email',
+      'bn': 'আপনার ইমেইল ভেরিফাই করুন'
+    },
+    'verify_email_sent_msg': {
+      'en': 'We have sent a verification link to your email. Please click the link to verify your account.',
+      'bn': 'আমরা আপনার ইমেইলে একটি ভেরিফিকেশন লিংক পাঠিয়েছি। আপনার অ্যাকাউন্টটি ভেরিফাই করতে অনুগ্রহ করে লিংকটিতে ক্লিক করুন।'
+    },
+    'verify_email_instructions': {
+      'en': 'Once verified, click the button below to access CashTrack.',
+      'bn': 'ভেরিফাই করা হয়ে গেলে, ক্যাশট্র্যাকে প্রবেশ করতে নিচের বাটনে ক্লিক করুন।'
+    },
+    'i_have_verified': {
+      'en': 'I Have Verified',
+      'bn': 'আমি ভেরিফাই করেছি'
+    },
+    'resend_email': {
+      'en': 'Resend Email',
+      'bn': 'পুনরায় লিংক পাঠান'
+    },
+    'log_out': {
+      'en': 'Log Out',
+      'bn': 'লগ আউট'
+    },
+    'verification_link_resent': {
+      'en': 'Verification link has been resent.',
+      'bn': 'ভেরিফিকেশন লিংক পুনরায় পাঠানো হয়েছে।'
+    },
+    'still_not_verified': {
+      'en': 'Email is still not verified. Please check your inbox or spam folder.',
+      'bn': 'ইমেইল এখনও ভেরিফাই করা হয়নি। অনুগ্রহ করে আপনার ইনবক্স বা স্প্যাম ফোল্ডার চেক করুন।'
+    },
   };
-String t(String key, {Map<String, String>? params}) {
+
+  String t(String key, {Map<String, String>? params}) {
     final lang = locale.languageCode == 'bn' ? 'bn' : 'en';
     final map = _values[key];
     if (map == null) return key;

@@ -33,7 +33,7 @@ void main() {
     final box = await Hive.openBox('categories');
     await box.put(
       'cat_food',
-      CategoryModel(
+      const CategoryModel(
         id: 'cat_food',
         name: 'Food',
         nameBn: 'à¦–à¦¾à¦¬à¦¾à¦°',

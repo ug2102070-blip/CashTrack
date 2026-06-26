@@ -7,11 +7,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
-
 import '../../core/l10n/app_l10n.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/app_providers.dart';
-
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -28,9 +26,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   late final List<Animation<Offset>> _slideAnimations;
   late final Animation<double> _avatarScale;
 
-  static const List<int> _animationDelays = [
-    0, 80, 120, 160, 200, 240, 280,
-  ];
+  static const List<int> _animationDelays = [0, 80, 120, 160, 200, 240, 280];
+
+  final Map<String, TextEditingController> _controllers = {};
 
   @override
   void initState() {
@@ -43,8 +41,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       ..forward();
     _fadeAnimations = _animationDelays.map(_createFadeAnimation).toList();
     _slideAnimations = _animationDelays.map(_createSlideAnimation).toList();
-    _avatarScale = CurvedAnimation(
-        parent: _avatarCtrl, curve: Curves.elasticOut);
+    _avatarScale =
+        CurvedAnimation(parent: _avatarCtrl, curve: Curves.elasticOut);
   }
 
   @override
@@ -53,13 +51,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     _avatarCtrl.stop();
     _animCtrl.dispose();
     _avatarCtrl.dispose();
+    for (final c in _controllers.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
   @override
   void deactivate() {
-    // Stop animations BEFORE element is removed from the tree.
-    // This reduces the chance of stale animation dependents during route exit.
     _animCtrl.stop();
     _avatarCtrl.stop();
     super.deactivate();
@@ -76,20 +75,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final s = (ms / 700).clamp(0.0, 1.0);
     final e = ((ms + 300) / 700).clamp(0.0, 1.0);
     return Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
-        .animate(
-      CurvedAnimation(
-          parent: _animCtrl, curve: Interval(s, e, curve: Curves.easeOut)),
-    );
+        .animate(CurvedAnimation(
+            parent: _animCtrl,
+            curve: Interval(s, e, curve: Curves.easeOut)));
   }
 
   Widget _anim({required int index, required Widget child}) {
     return FadeTransition(
       opacity: _fadeAnimations[index],
-      child: SlideTransition(
-        position: _slideAnimations[index],
-        child: child,
-      ),
+      child: SlideTransition(position: _slideAnimations[index], child: child),
     );
+  }
+
+  TextEditingController _controllerFor(_FieldConfig f) {
+    return _controllers.putIfAbsent(
+        f.fieldKey, () => TextEditingController(text: f.initialValue));
   }
 
   @override
@@ -117,7 +117,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         slivers: [
           // ── Header ────────────────────────────────────────────────────
           SliverAppBar(
-            expandedHeight: 280,
+            expandedHeight: 200,
             pinned: true,
             backgroundColor: primary,
             leading: Padding(
@@ -165,13 +165,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 ),
                 child: Stack(
                   children: [
-                    // Decorative circles
                     Positioned(
-                      top: -30,
-                      right: -20,
+                      top: -30, right: -20,
                       child: Container(
-                        width: 120,
-                        height: 120,
+                        width: 120, height: 120,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.white.withValues(alpha: 0.06),
@@ -179,26 +176,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       ),
                     ),
                     Positioned(
-                      bottom: 0,
-                      left: -15,
+                      bottom: 0, left: -15,
                       child: Container(
-                        width: 90,
-                        height: 90,
+                        width: 90, height: 90,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.white.withValues(alpha: 0.05),
                         ),
                       ),
                     ),
-                    // Avatar + Name
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 70, 20, 20),
+                      padding: const EdgeInsets.fromLTRB(20, 50, 20, 16),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           Row(
                             children: [
-                              // Avatar
                               GestureDetector(
                                 onTap: () =>
                                     _showPhotoOptions(context, photoBase64),
@@ -207,8 +200,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                   child: Stack(
                                     children: [
                                       Container(
-                                        width: 80,
-                                        height: 80,
+                                        width: 72, height: 72,
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
                                           border: Border.all(
@@ -235,7 +227,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                                           context, displayName),
                                                       style: const TextStyle(
                                                         color: Colors.white,
-                                                        fontSize: 28,
+                                                        fontSize: 24,
                                                         fontWeight:
                                                             FontWeight.w800,
                                                       ),
@@ -245,11 +237,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                         ),
                                       ),
                                       Positioned(
-                                        bottom: 2,
-                                        right: 2,
+                                        bottom: 2, right: 2,
                                         child: Container(
-                                          width: 22,
-                                          height: 22,
+                                          width: 20, height: 20,
                                           decoration: BoxDecoration(
                                             color: Colors.white,
                                             shape: BoxShape.circle,
@@ -257,14 +247,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                                 color: primary, width: 2),
                                           ),
                                           child: Icon(Icons.edit_rounded,
-                                              size: 11, color: primary),
+                                              size: 10, color: primary),
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 16),
+                              const SizedBox(width: 14),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -273,7 +263,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                       displayName,
                                       style: const TextStyle(
                                         color: Colors.white,
-                                        fontSize: 22,
+                                        fontSize: 20,
                                         fontWeight: FontWeight.w800,
                                         letterSpacing: -0.4,
                                       ),
@@ -284,28 +274,41 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                           style: TextStyle(
                                               color: Colors.white
                                                   .withValues(alpha: 0.75),
-                                              fontSize: 13,
+                                              fontSize: 12,
                                               fontWeight: FontWeight.w500)),
                                     ],
                                     if (email.isNotEmpty) ...[
-                                      const SizedBox(height: 4),
-                                      Row(
+                                      const SizedBox(height: 3),
+                                      Row(children: [
+                                        Icon(Icons.email_rounded,
+                                            size: 11,
+                                            color: Colors.white
+                                                .withValues(alpha: 0.6)),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(email,
+                                              style: TextStyle(
+                                                  color: Colors.white
+                                                      .withValues(alpha: 0.65),
+                                                  fontSize: 11),
+                                              overflow: TextOverflow.ellipsis),
+                                        ),
+                                      ]),
+                                    ],
+                                    if (phone.isNotEmpty ||
+                                        address.isNotEmpty) ...[
+                                      const SizedBox(height: 6),
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 4,
                                         children: [
-                                          Icon(Icons.email_rounded,
-                                              size: 12,
-                                              color: Colors.white
-                                                  .withValues(alpha: 0.6)),
-                                          const SizedBox(width: 4),
-                                          Expanded(
-                                            child: Text(email,
-                                                style: TextStyle(
-                                                    color: Colors.white
-                                                        .withValues(
-                                                            alpha: 0.65),
-                                                    fontSize: 11),
-                                                overflow:
-                                                    TextOverflow.ellipsis),
-                                          ),
+                                          if (phone.isNotEmpty)
+                                            _headerBadge(
+                                                Icons.phone_rounded, phone),
+                                          if (address.isNotEmpty)
+                                            _headerBadge(
+                                                Icons.location_on_rounded,
+                                                address),
                                         ],
                                       ),
                                     ],
@@ -322,7 +325,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               ),
             ),
           ),
-
 
           // ── Personal Info ─────────────────────────────────────────────
           SliverToBoxAdapter(
@@ -358,8 +360,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 _FieldConfig(
                     icon: Icons.work_rounded,
                     label: context.t('occupation'),
-                    value:
-                        occupation.isEmpty ? context.t('not_set') : occupation,
+                    value: occupation.isEmpty
+                        ? context.t('not_set')
+                        : occupation,
                     fieldKey: 'occupation',
                     initialValue: occupation,
                     keyboardType: TextInputType.text),
@@ -371,7 +374,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           SliverToBoxAdapter(
             child: _anim(
                 index: 3,
-                child: _sectionLabel(context, context.t('additional_info'))),
+                child:
+                    _sectionLabel(context, context.t('additional_info'))),
           ),
           SliverToBoxAdapter(
             child: _anim(
@@ -404,11 +408,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             ),
           ),
 
-
           // ── Achievements ──────────────────────────────────────────────
           SliverToBoxAdapter(
-            child:
-                _anim(index: 5, child: _sectionLabel(context, context.t('achievements'))),
+            child: _anim(
+                index: 5,
+                child: _sectionLabel(context, context.t('achievements'))),
           ),
           SliverToBoxAdapter(
             child: _anim(
@@ -424,9 +428,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
+  // ── Header badge helper ───────────────────────────────────────────────────
+  Widget _headerBadge(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: Colors.white.withValues(alpha: 0.7)),
+          const SizedBox(width: 3),
+          Text(text,
+              style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
 
   // ── Info Group ────────────────────────────────────────────────────────────
-
   Widget _buildInfoGroup(BuildContext context, bool isDark, Color primary,
       List<_FieldConfig> fields) {
     return Container(
@@ -452,16 +477,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           final i = entry.key;
           final f = entry.value;
           final isLast = i == fields.length - 1;
+
           return Column(
             children: [
               InkWell(
-                onTap: () => f.isDate
-                    ? _showDatePicker(context, f)
-                    : _editField(context, f),
+                onTap: () {
+                  if (f.isDate) {
+                    _showDatePicker(context, f);
+                  } else {
+                    _showEditBottomSheet(context, f);
+                  }
+                },
                 borderRadius: BorderRadius.circular(16),
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 13),
                   child: Row(
                     children: [
                       Container(
@@ -497,7 +527,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                         .colorScheme
                                         .onSurface
                                         .withValues(alpha: 0.3)
-                                    : Theme.of(context).colorScheme.onSurface,
+                                    : Theme.of(context)
+                                        .colorScheme
+                                        .onSurface,
                               ),
                               maxLines: f.isMultiline ? 3 : 1,
                               overflow: TextOverflow.ellipsis,
@@ -531,9 +563,192 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
+  // ── Edit Bottom Sheet ──────────────────────────────────────────────────────
+  Future<void> _showEditBottomSheet(BuildContext context, _FieldConfig f) async {
+    final ctrl = _controllerFor(f);
+    ctrl.text = f.initialValue;
+    ctrl.selection = TextSelection.fromPosition(
+        TextPosition(offset: ctrl.text.length));
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        final primary = Theme.of(ctx).colorScheme.primary;
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 12,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).dividerColor,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    '${context.t('edit')} ${f.label}',
+                    style: AppTextStyles.h5.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: ctrl,
+                    autofocus: true,
+                    keyboardType: f.keyboardType,
+                    maxLines: f.isMultiline ? 4 : 1,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    decoration: InputDecoration(
+                      hintText: f.label,
+                      prefixIcon: Icon(f.icon, color: primary, size: 20),
+                      suffixIcon: ctrl.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear_rounded, size: 18),
+                              onPressed: () {
+                                ctrl.clear();
+                                setModalState(() {});
+                              },
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: isDark
+                          ? Colors.white.withValues(alpha: 0.04)
+                          : Colors.black.withValues(alpha: 0.02),
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 16, horizontal: 16),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: primary, width: 2),
+                      ),
+                    ),
+                    onChanged: (text) {
+                      setModalState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            side: BorderSide(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.12),
+                            ),
+                          ),
+                          child: Text(
+                            context.t('cancel'),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            _saveInlineField(context, f, ctrl);
+                            Navigator.pop(context);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: Text(
+                            context.t('save'),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _saveInlineField(BuildContext context, _FieldConfig f,
+      TextEditingController ctrl) {
+    final result = ctrl.text.trim();
+    if (!mounted) return;
+    final current = ref.read(userProfileProvider);
+    final updated = <String, String>{
+      'fullName': current['fullName'] ?? '',
+      'email': current['email'] ?? '',
+      'phone': current['phone'] ?? '',
+      'address': current['address'] ?? '',
+      'occupation': current['occupation'] ?? '',
+      'bio': current['bio'] ?? '',
+      'dob': current['dob'] ?? '',
+      'photoBase64': current['photoBase64'] ?? '',
+    };
+    updated[f.fieldKey] = result;
+    ref.read(userProfileProvider.notifier).updateProfile(
+          fullName: updated['fullName']!,
+          email: updated['email']!,
+          phone: updated['phone']!,
+          address: updated['address']!,
+          occupation: updated['occupation']!,
+          bio: updated['bio']!,
+          dob: updated['dob']!,
+          photoBase64: updated['photoBase64'],
+        );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content:
+          Text(context.t('field_updated', params: {'label': f.label})),
+      duration: const Duration(seconds: 1),
+      behavior: SnackBarBehavior.floating,
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
+  }
 
   // ── Achievements ──────────────────────────────────────────────────────────
-
   Widget _buildAchievements(
       BuildContext context, int txCount, bool isDark, Color primary) {
     final achievements = [
@@ -562,11 +777,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: Row(
-        children: achievements.map((a) {
-          final isLast = achievements.indexOf(a) == achievements.length - 1;
+        children: achievements.asMap().entries.map((entry) {
+          final i = entry.key;
+          final a = entry.value;
           return Expanded(
             child: Padding(
-              padding: EdgeInsets.only(right: isLast ? 0 : 8),
+              padding: EdgeInsets.only(right: i < achievements.length - 1 ? 8 : 0),
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -638,8 +854,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
-  // ── Actions ───────────────────────────────────────────────────────────────
-
+  // ── Section label ─────────────────────────────────────────────────────────
   Widget _sectionLabel(BuildContext context, String label) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
@@ -649,12 +864,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.2,
-          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+          color:
+              Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
         ),
       ),
     );
   }
 
+  // ── Photo options ─────────────────────────────────────────────────────────
   Future<void> _showPhotoOptions(
       BuildContext context, String currentPhoto) async {
     await showModalBottomSheet<void>(
@@ -663,7 +880,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       builder: (ctx) => Container(
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         child: Column(
@@ -681,8 +899,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             const SizedBox(height: 8),
             ListTile(
               leading: Container(
-                width: 40,
-                height: 40,
+                width: 40, height: 40,
                 decoration: BoxDecoration(
                     color: Theme.of(context)
                         .colorScheme
@@ -711,8 +928,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             ),
             ListTile(
               leading: Container(
-                width: 40,
-                height: 40,
+                width: 40, height: 40,
                 decoration: BoxDecoration(
                     color: Theme.of(context)
                         .colorScheme
@@ -726,7 +942,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               onTap: () async {
                 Navigator.pop(ctx);
                 final picker = ImagePicker();
-                final file = await picker.pickImage(source: ImageSource.camera);
+                final file =
+                    await picker.pickImage(source: ImageSource.camera);
                 if (file == null) return;
                 final bytes = await file.readAsBytes();
                 final b64 = base64Encode(bytes);
@@ -741,8 +958,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             if (currentPhoto.isNotEmpty)
               ListTile(
                 leading: Container(
-                  width: 40,
-                  height: 40,
+                  width: 40, height: 40,
                   decoration: BoxDecoration(
                       color: AppColors.error.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10)),
@@ -766,7 +982,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
-  Future<void> _showDatePicker(BuildContext context, _FieldConfig field) async {
+  // ── Date picker ───────────────────────────────────────────────────────────
+  Future<void> _showDatePicker(
+      BuildContext context, _FieldConfig field) async {
     final picked = await showDatePicker(
       context: context,
       initialDate: DateTime(1995, 1, 1),
@@ -776,175 +994,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     if (picked == null || !mounted) return;
     final formatted = DateFormat('dd MMM yyyy').format(picked);
     final current = ref.read(userProfileProvider);
-    final Map<String, String> updated = {
-      'fullName': current['fullName'] ?? '',
-      'email': current['email'] ?? '',
-      'phone': current['phone'] ?? '',
-      'address': current['address'] ?? '',
-      'occupation': current['occupation'] ?? '',
-      'bio': current['bio'] ?? '',
-      'dob': formatted,
-      'photoBase64': current['photoBase64'] ?? '',
-    };
-    // Defer state update to next frame so the picker animation finishes first
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(userProfileProvider.notifier).updateProfile(
-            fullName: updated['fullName']!,
-            email: updated['email']!,
-            phone: updated['phone']!,
-            address: updated['address']!,
-            occupation: updated['occupation']!,
-            bio: updated['bio']!,
-            dob: updated['dob']!,
-            photoBase64: updated['photoBase64'],
+            fullName: current['fullName'] ?? '',
+            email: current['email'] ?? '',
+            phone: current['phone'] ?? '',
+            address: current['address'] ?? '',
+            occupation: current['occupation'] ?? '',
+            bio: current['bio'] ?? '',
+            dob: formatted,
+            photoBase64: current['photoBase64'],
           );
     });
   }
 
-  Future<void> _editField(BuildContext context, _FieldConfig field) async {
-    final controller = TextEditingController(text: field.initialValue);
-    final focusNode = FocusNode();
-    String? result;
-
-    result = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Theme.of(ctx).colorScheme.surface,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                  child: Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                          color: Theme.of(ctx).dividerColor,
-                          borderRadius: BorderRadius.circular(2)))),
-              const SizedBox(height: 20),
-              Text(ctx.t('edit_field', params: {'label': field.label}),
-                  style: AppTextStyles.h5),
-              const SizedBox(height: 16),
-              TextField(
-                controller: controller,
-                focusNode: focusNode,
-                keyboardType: field.keyboardType,
-                maxLines: field.isMultiline ? 4 : 1,
-                autofocus: false,
-                decoration: InputDecoration(
-                  labelText: field.label,
-                  prefixIcon: Icon(field.icon),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        focusNode.unfocus();
-                        Navigator.pop(ctx);
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: Text(ctx.t('cancel')),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        focusNode.unfocus();
-                        Navigator.pop(ctx, controller.text.trim());
-                      },
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: Text(ctx.t('save_changes')),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    // Do NOT dispose focusNode/controller here — the bottom sheet exit animation
-    // is still running and the TextField will try to use them. Defer disposal
-    // to the next frame when the animation has fully completed.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      focusNode.dispose();
-      controller.dispose();
-    });
-
-    if (result == null || !mounted) return;
-
-    // Capture the values we need before any async gap
-    final current = ref.read(userProfileProvider);
-    final Map<String, String> updated = {
-      'fullName': current['fullName'] ?? '',
-      'email': current['email'] ?? '',
-      'phone': current['phone'] ?? '',
-      'address': current['address'] ?? '',
-      'occupation': current['occupation'] ?? '',
-      'bio': current['bio'] ?? '',
-      'dob': current['dob'] ?? '',
-      'photoBase64': current['photoBase64'] ?? '',
-    };
-    updated[field.fieldKey] = result;
-
-    final fieldLabel = field.label;
-
-    // Defer the state update to the next frame so the bottom sheet
-    // exit animation and any remaining dependents are fully cleaned up.
-    // This prevents the '_dependents.isEmpty' assertion.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      ref.read(userProfileProvider.notifier).updateProfile(
-            fullName: updated['fullName']!,
-            email: updated['email']!,
-            phone: updated['phone']!,
-            address: updated['address']!,
-            occupation: updated['occupation']!,
-            bio: updated['bio']!,
-            dob: updated['dob']!,
-            photoBase64: updated['photoBase64'],
-          );
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text(context.t('field_updated', params: {'label': fieldLabel})),
-          duration: const Duration(seconds: 1),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
-    });
-  }
-
+  // ── Helpers ───────────────────────────────────────────────────────────────
   String _initials(BuildContext context, String name) {
     final parts = name
         .split(' ')
@@ -965,6 +1030,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     }
   }
 }
+
+// ── Data classes ──────────────────────────────────────────────────────────────
 
 class _FieldConfig {
   const _FieldConfig({

@@ -1,11 +1,14 @@
 // lib/services/sms_service.dart
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui';
+
 
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
-import 'package:flutter_sms_inbox/flutter_sms_inbox.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:notification_listener_service/notification_event.dart';
+import 'package:notification_listener_service/notification_listener_service.dart';
+import 'package:uuid/uuid.dart';
 import '../core/l10n/app_l10n.dart';
 import '../data/models/transaction_model.dart';
 import '../data/repositories/transaction_repository.dart';
@@ -17,13 +20,21 @@ class SmsService {
   factory SmsService() => _instance;
   SmsService._internal();
 
+  /// Requests Notification Listener permission (opens system settings).
+  /// Returns true if permission is already granted.
   static Future<bool> requestPermission() async {
-    return SmsService()._requestPermissions();
+    if (kIsWeb) return false;
+    final isGranted = await NotificationListenerService.isPermissionGranted();
+    if (isGranted) return true;
+    // Opens the Notification Access settings page
+    await NotificationListenerService.requestPermission();
+    // Re-check after the user returns
+    return NotificationListenerService.isPermissionGranted();
   }
 
-  final SmsQuery _smsQuery = SmsQuery();
   final TransactionRepository _transactionRepo = TransactionRepository();
   final NotificationService _notificationService = NotificationService();
+  final Uuid _uuid = const Uuid();
   static const String _settingsBoxName = 'settingsBox';
   static const String _smsModeKey = 'smsMode';
   static const String _currencyKey = 'currency';
@@ -33,9 +44,14 @@ class SmsService {
   static const String _dailySummaryNotifiedDateKey =
       'sms_daily_summary_notified_date';
   static const int _dailySummaryNotifyHour = 21;
-  static const String _lastSmsIdKey = 'sms_last_processed_id';
 
-  final Set<String> _processedSmsIds = {};
+  final Set<String> _processedNotifIds = {};
+  StreamSubscription<ServiceNotificationEvent>? _notifSubscription;
+
+  // Stream that fires whenever a transaction is auto-imported (silent/daily_summary)
+  final StreamController<TransactionModel> _importController =
+      StreamController<TransactionModel>.broadcast();
+  Stream<TransactionModel> get onTransactionImported => _importController.stream;
 
   // ── Amount patterns ─────────────────────────────────────────────────────
   // Matches: BDT 1,500.00 | Tk. 500 | Tk500 | ৳1000 | Amount: 2000.50
@@ -58,10 +74,20 @@ class SmsService {
     'transaction', 'payment', 'received', 'cashin', 'cashout',
     'cash in', 'cash out', 'send money', 'bill payment',
     'recharge', 'merchant', 'transfer',
+    'credit card',
     // Bangla keywords
     'পেয়েছেন', 'পাঠিয়েছেন', 'জমা', 'খরচ', 'প্রদান',
     'ক্যাশ ইন', 'ক্যাশ আউট', 'রিচার্জ', 'বিল',
   ];
+
+  // ── Financial app package names ────────────────────────────────────────
+  static const _financialPackages = {
+    'com.bKash.customerapp',
+    'com.konasl.nagad',
+    'com.dbbl.mbs', // Rocket
+    'bd.com.upay',
+    'com.grameenphone.gp', // GP may send money notifications
+  };
 
   // ── Merchant → Category mapping ────────────────────────────────────────
   final Map<String, String> _merchantCategories = {
@@ -123,117 +149,126 @@ class SmsService {
     'tuition': 'cat_education',
   };
 
+  /// Initialise the notification listener.
   Future<void> init() async {
-    if (kIsWeb) return; // SMS not supported on web
-    final hasPermission = await _requestPermissions();
-    if (hasPermission) {
-      await _transactionRepo.init();
-      await _pollNewSms();
-    }
-  }
-
-  Future<bool> _requestPermissions() async {
-    if (kIsWeb) return false;
-    final statuses = await [
-      Permission.sms,
-    ].request();
-    return statuses[Permission.sms]?.isGranted ?? false;
-  }
-
-  /// Polls inbox for new SMS since last processed id.
-  Future<void> _pollNewSms() async {
-    try {
-      final box = await _getSettingsBox();
-      final lastId = (box.get(_lastSmsIdKey) as int?) ?? 0;
-
-      final messages = await _smsQuery.querySms(
-        kinds: [SmsQueryKind.inbox],
-        count: 50,
-      );
-
-      int latestId = lastId;
-      for (final message in messages) {
-        final id = message.id ?? 0;
-        if (id <= lastId) continue;
-        if (id > latestId) latestId = id;
-
-        final idStr = id.toString();
-        if (_processedSmsIds.contains(idStr)) continue;
-        _processedSmsIds.add(idStr);
-
-        if (_isFinancialSms(message.body ?? '')) {
-          final transaction = _parseSmsToTransaction(message);
-          if (transaction != null) {
-            await _handleParsedTransaction(transaction, message.sender ?? '');
-          }
-        }
-      }
-
-      if (latestId > lastId) {
-        await box.put(_lastSmsIdKey, latestId);
-      }
-    } catch (e) {
-      AppLogger.e('SMS poll failed: $e');
-    }
-  }
-
-  /// Call this from WorkManager periodic task to check new SMS in background.
-  Future<void> checkNewSmsInBackground() async {
     if (kIsWeb) return;
-    final hasPermission = await _requestPermissions();
-    if (hasPermission) await _pollNewSms();
+    
+    final box = await _getSettingsBox();
+    final isTrackEnabled = box.get('smsTrack', defaultValue: false) == true;
+    final hasPermission =
+        await NotificationListenerService.isPermissionGranted();
+
+    if (isTrackEnabled && hasPermission) {
+      await _transactionRepo.init();
+      
+      // Load processed notification IDs from Hive settings box
+      final savedIds = box.get('processedNotifIds', defaultValue: <dynamic>[]) as List<dynamic>;
+      _processedNotifIds.clear();
+      _processedNotifIds.addAll(savedIds.cast<String>());
+
+      _startListening();
+      
+      // Query currently active notifications in the drawer
+      await checkActiveNotifications();
+    } else {
+      stopListening();
+    }
   }
 
-  Future<void> _handleParsedTransaction(
-      TransactionModel transaction, String sender) async {
-    try {
-      if (!_transactionRepo.isInitialized) {
-        await _transactionRepo.init();
-      }
+  /// Query the currently active notifications in the notification drawer and process them.
+  Future<void> checkActiveNotifications() async {
+    if (kIsWeb) return;
+    
+    final box = await _getSettingsBox();
+    final isTrackEnabled = box.get('smsTrack', defaultValue: false) == true;
+    final hasPermission =
+        await NotificationListenerService.isPermissionGranted();
 
-      final mode = await _getSmsMode();
-      switch (mode) {
-        case 'silent':
-          await _transactionRepo.addTransaction(transaction);
-          AppLogger.d('SMS auto-imported silently: ${transaction.id}');
-          break;
-        case 'daily_summary':
-          await _transactionRepo.addTransaction(transaction);
-          await _updateDailySummary(transaction);
-          break;
-        case 'ask':
-        default:
-          _showConfirmationNotification(transaction, sender);
+    if (!isTrackEnabled || !hasPermission) return;
+
+    try {
+      final activeNotifications =
+          await NotificationListenerService.getActiveNotifications();
+      for (final event in activeNotifications) {
+        await _onNotificationReceived(event);
       }
     } catch (e) {
-      AppLogger.e('SMS mode handling failed: $e');
+      AppLogger.e('Error checking active notifications: $e');
     }
   }
 
-  Future<String> _getSmsMode() async {
-    final box = await _getSettingsBox();
-    return (box.get(_smsModeKey, defaultValue: 'ask') as String?) ?? 'ask';
+  /// Start listening to notifications.
+  void _startListening() {
+    _notifSubscription?.cancel();
+    _notifSubscription = NotificationListenerService.notificationsStream.listen(
+      _onNotificationReceived,
+      onError: (e) => AppLogger.e('Notification listener error: $e'),
+    );
+    AppLogger.d('Notification listener started');
   }
 
-  Future<Box> _getSettingsBox() async {
-    if (Hive.isBoxOpen(_settingsBoxName)) {
-      return Hive.box(_settingsBoxName);
+  /// Stop listening (call when feature is disabled).
+  void stopListening() {
+    _notifSubscription?.cancel();
+    _notifSubscription = null;
+  }
+
+  /// Handle an incoming notification.
+  Future<void> _onNotificationReceived(ServiceNotificationEvent event) async {
+    try {
+      final packageName = event.packageName ?? '';
+      final title = event.title ?? '';
+      final content = event.content ?? '';
+      final text = '$title $content';
+
+      // Only process financial notifications
+      if (!_isFinancialNotification(packageName, text)) return;
+
+      // De-duplicate by notification key
+      final notifKey = '${event.packageName}_${event.id}_${content.hashCode}';
+      if (_processedNotifIds.contains(notifKey)) return;
+      
+      _processedNotifIds.add(notifKey);
+
+      // Save processed keys back to Hive settings box
+      final box = await _getSettingsBox();
+      final list = _processedNotifIds.toList();
+      if (list.length > 200) {
+        final trimmedList = list.sublist(list.length - 200);
+        _processedNotifIds.clear();
+        _processedNotifIds.addAll(trimmedList);
+        await box.put('processedNotifIds', trimmedList);
+      } else {
+        await box.put('processedNotifIds', list);
+      }
+
+      // Ignore removed/dismissed notifications
+      if (event.hasRemoved == true) return;
+
+      final transaction =
+          _parseNotificationToTransaction(packageName, title, content);
+      if (transaction != null) {
+        _handleParsedTransaction(transaction, packageName);
+      }
+    } catch (e) {
+      AppLogger.e('Notification processing error: $e');
     }
-    return Hive.openBox(_settingsBoxName);
   }
 
-  AppL10n _l10nFromSettings(Box<dynamic> settings) {
-    final language = (settings.get('language') as String?) ?? 'en';
-    final locale =
-        language == 'bn' ? const Locale('bn', 'BD') : const Locale('en');
-    return AppL10n(locale);
+  /// Parse a raw text body (used by manual paste / clipboard import).
+  TransactionModel? parseFromText(String text) {
+    if (!_isFinancialText(text)) return null;
+    return _parseTextToTransaction(text, 'manual');
   }
 
-  String _currencyFromSettings(Box<dynamic> settings) {
-    return (settings.get(_currencyKey) as String?) ?? '৳';
+  bool _isFinancialNotification(String packageName, String body) {
+    // Check if from a known financial app
+    if (_financialPackages.contains(packageName)) return true;
+    // Otherwise check the text content for financial keywords
+    return _isFinancialText(body);
   }
 
-  bool _isFinancialSms(String body) {
+  bool _isFinancialText(String body) {
     final lowerBody = body.toLowerCase();
     if (_financialKeywords.any((keyword) => lowerBody.contains(keyword))) {
       return true;
@@ -241,25 +276,31 @@ class SmsService {
     return false;
   }
 
-  // ── Detect which MFS account the SMS belongs to ────────────────────────
-  String _detectMfsAccount(String sender, String body) {
-    final lower = '${sender.toLowerCase()} ${body.toLowerCase()}';
+  // ── Detect which MFS account the notification belongs to ───────────────
+  String _detectMfsAccount(String packageName, String body) {
+    final lower = '${packageName.toLowerCase()} ${body.toLowerCase()}';
+    if (lower.contains('credit card') || lower.contains('creditcard')) {
+      return 'acc_credit_card';
+    }
     if (lower.contains('bkash') || lower.contains('16247')) return 'acc_bkash';
     if (lower.contains('nagad') || lower.contains('16167')) return 'acc_nagad';
-    if (lower.contains('rocket') || lower.contains('dbbl') ||
-        lower.contains('dutch-bangla') || lower.contains('16216')) {
+    if (lower.contains('rocket') ||
+        lower.contains('dbbl') ||
+        lower.contains('dutch-bangla') ||
+        lower.contains('16216')) {
       return 'acc_rocket';
     }
     if (lower.contains('upay')) return 'acc_upay';
-    // Bank SMS
-    if (lower.contains('bank') || lower.contains('credited') ||
+    // Bank notification
+    if (lower.contains('bank') ||
+        lower.contains('credited') ||
         lower.contains('debited')) {
       return 'acc_online';
     }
     return 'acc_online';
   }
 
-  // ── Detect transaction type from SMS body ──────────────────────────────
+  // ── Detect transaction type from notification body ─────────────────────
   ({bool isCredit, bool isDebit, String txType}) _detectTransactionType(
       String body) {
     final lower = body.toLowerCase();
@@ -269,6 +310,8 @@ class SmsService {
         lower.contains('credited') ||
         lower.contains('cash in') ||
         lower.contains('cashin') ||
+        lower.contains('transferred from') ||
+        lower.contains('transfer received') ||
         lower.contains('পেয়েছেন') ||
         lower.contains('জমা') ||
         lower.contains('ক্যাশ ইন');
@@ -284,6 +327,9 @@ class SmsService {
         lower.contains('recharge') ||
         lower.contains('merchant') ||
         lower.contains('send money') ||
+        lower.contains('balance transfer') ||
+        lower.contains('transferred to') ||
+        lower.contains('transfer successful') ||
         lower.contains('পাঠিয়েছেন') ||
         lower.contains('খরচ') ||
         lower.contains('প্রদান') ||
@@ -295,18 +341,29 @@ class SmsService {
     String txType = 'general';
     if (lower.contains('bill payment') || lower.contains('বিল')) {
       txType = 'bill';
-    } else if (lower.contains('recharge') || lower.contains('top up') ||
-        lower.contains('topup') || lower.contains('রিচার্জ')) {
+    } else if (lower.contains('recharge') ||
+        lower.contains('top up') ||
+        lower.contains('topup') ||
+        lower.contains('রিচার্জ')) {
       txType = 'recharge';
-    } else if (lower.contains('send money') || lower.contains('sent to') ||
+    } else if (lower.contains('send money') ||
+        lower.contains('sent to') ||
+        lower.contains('balance transfer') ||
+        lower.contains('transferred to') ||
+        lower.contains('transfer successful') ||
         lower.contains('পাঠিয়েছেন')) {
       txType = 'send_money';
-    } else if (lower.contains('received') || lower.contains('পেয়েছেন')) {
+    } else if (lower.contains('received') ||
+        lower.contains('transferred from') ||
+        lower.contains('transfer received') ||
+        lower.contains('পেয়েছেন')) {
       txType = 'receive_money';
-    } else if (lower.contains('cash out') || lower.contains('cashout') ||
+    } else if (lower.contains('cash out') ||
+        lower.contains('cashout') ||
         lower.contains('ক্যাশ আউট')) {
       txType = 'cash_out';
-    } else if (lower.contains('cash in') || lower.contains('cashin') ||
+    } else if (lower.contains('cash in') ||
+        lower.contains('cashin') ||
         lower.contains('ক্যাশ ইন')) {
       txType = 'cash_in';
     } else if (lower.contains('merchant') || lower.contains('payment')) {
@@ -316,18 +373,19 @@ class SmsService {
     return (isCredit: isCredit, isDebit: isDebit, txType: txType);
   }
 
-  TransactionModel? _parseSmsToTransaction(SmsMessage message) {
-    try {
-      final body = message.body ?? '';
-      final sender = message.sender ?? '';
+  TransactionModel? _parseNotificationToTransaction(
+      String packageName, String title, String content) {
+    return _parseTextToTransaction('$title $content', packageName);
+  }
 
+  TransactionModel? _parseTextToTransaction(String body, String source) {
+    try {
       // Detect transaction type
       final detection = _detectTransactionType(body);
       if (!detection.isCredit && !detection.isDebit) return null;
 
-      final type = detection.isCredit
-          ? TransactionType.income
-          : TransactionType.expense;
+      final type =
+          detection.isCredit ? TransactionType.income : TransactionType.expense;
 
       // Extract amount
       double? amount;
@@ -342,30 +400,103 @@ class SmsService {
       if (amount == null) return null;
 
       // Detect account and category
-      final accountId = _detectMfsAccount(sender, body);
+      final accountId = _detectMfsAccount(source, body);
       final categoryId = _determineSmartCategory(body, detection.txType, type);
+
+      // Extract target phone number or name (from/to)
+      String? fromTarget;
+      String? toTarget;
+
+      final fromMatch = RegExp(
+        r'(?:from|Sender:?)\s*([a-zA-Z0-9\+\-\s]{3,25})',
+        caseSensitive: false,
+      ).firstMatch(body);
+      if (fromMatch != null) {
+        fromTarget = _cleanTarget(fromMatch.group(1));
+      }
+
+      final toMatch = RegExp(
+        r'(?:to|Receiver:?|Recipient:?)\s+(?:Agent|Merchant)?\s*([a-zA-Z0-9\+\-\s]{3,25})',
+        caseSensitive: false,
+      ).firstMatch(body);
+      if (toMatch != null) {
+        toTarget = _cleanTarget(toMatch.group(1));
+      }
 
       // Build note
       final accountName = _accountLabel(accountId);
-      final note = 'Auto: $accountName ${detection.txType.replaceAll('_', ' ')} '
-          '— from SMS (${sender.isNotEmpty ? sender : 'unknown'})';
+      final formattedType = _formatTxType(detection.txType);
+      
+      String note = 'Auto: $accountName $formattedType';
+      if (fromTarget != null && fromTarget.isNotEmpty) {
+        note += ' from $fromTarget';
+      } else if (toTarget != null && toTarget.isNotEmpty) {
+        if (detection.txType == 'cash_out') {
+          note += ' to Agent $toTarget';
+        } else if (detection.txType == 'merchant_payment') {
+          note += ' to Merchant $toTarget';
+        } else {
+          note += ' to $toTarget';
+        }
+      }
 
       return TransactionModel(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: _uuid.v4(),
         type: type,
         amount: amount,
         categoryId: categoryId,
         accountId: accountId,
-        date: message.date ?? DateTime.now(),
+        date: DateTime.now(),
         note: note,
         isRecurring: false,
-        smsId: message.id?.toString(),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
     } catch (e) {
-      AppLogger.e('Error parsing SMS: $e');
+      AppLogger.e('Error parsing notification: $e');
       return null;
+    }
+  }
+
+  String _cleanTarget(String? target) {
+    if (target == null) return '';
+    // Take everything before a period, comma, or newline
+    String clean = target.split(RegExp(r'[\.\,\r\n]')).first;
+    
+    // Replace "successful" or "success" (case-insensitive)
+    clean = clean.replaceAll(RegExp(r'\s+successful', caseSensitive: false), '');
+    clean = clean.replaceAll(RegExp(r'\s+success', caseSensitive: false), '');
+    
+    // Remove common trailing words
+    final stopWords = ['fee', 'txnid', 'trxid', 'balance', 'tk', 'ref', 'at'];
+    for (final stopWord in stopWords) {
+      final idx = clean.toLowerCase().indexOf(' $stopWord');
+      if (idx != -1) {
+        clean = clean.substring(0, idx);
+      }
+    }
+    
+    return clean.trim();
+  }
+
+  String _formatTxType(String txType) {
+    switch (txType) {
+      case 'bill':
+        return 'Bill Payment';
+      case 'recharge':
+        return 'Mobile Recharge';
+      case 'send_money':
+        return 'Send Money';
+      case 'receive_money':
+        return 'Receive Money';
+      case 'cash_out':
+        return 'Cash Out';
+      case 'cash_in':
+        return 'Cash In';
+      case 'merchant_payment':
+        return 'Merchant Payment';
+      default:
+        return 'Transaction';
     }
   }
 
@@ -379,6 +510,8 @@ class SmsService {
         return 'Rocket';
       case 'acc_upay':
         return 'Upay';
+      case 'acc_credit_card':
+        return 'Credit Card';
       case 'acc_online':
         return 'Bank';
       default:
@@ -394,8 +527,10 @@ class SmsService {
     switch (txType) {
       case 'bill':
         // Try to detect specific bill type
-        if (lowerBody.contains('desco') || lowerBody.contains('dpdc') ||
-            lowerBody.contains('nesco') || lowerBody.contains('electricity')) {
+        if (lowerBody.contains('desco') ||
+            lowerBody.contains('dpdc') ||
+            lowerBody.contains('nesco') ||
+            lowerBody.contains('electricity')) {
           return 'cat_bills';
         }
         if (lowerBody.contains('titas') || lowerBody.contains('gas')) {
@@ -404,7 +539,8 @@ class SmsService {
         if (lowerBody.contains('wasa') || lowerBody.contains('water')) {
           return 'cat_bills';
         }
-        if (lowerBody.contains('internet') || lowerBody.contains('isp') ||
+        if (lowerBody.contains('internet') ||
+            lowerBody.contains('isp') ||
             lowerBody.contains('broadband')) {
           return 'cat_internet';
         }
@@ -442,8 +578,59 @@ class SmsService {
         : 'cat_others';
   }
 
+  Future<void> _handleParsedTransaction(
+      TransactionModel transaction, String source) async {
+    try {
+      if (!_transactionRepo.isInitialized) {
+        await _transactionRepo.init();
+      }
+
+      final mode = await _getSmsMode();
+      switch (mode) {
+        case 'silent':
+          await _transactionRepo.addTransaction(transaction);
+          _importController.add(transaction);
+          AppLogger.d('Notification auto-imported silently: ${transaction.id}');
+          break;
+        case 'daily_summary':
+          await _transactionRepo.addTransaction(transaction);
+          _importController.add(transaction);
+          await _updateDailySummary(transaction);
+          break;
+        case 'ask':
+        default:
+          _showConfirmationNotification(transaction, source);
+      }
+    } catch (e) {
+      AppLogger.e('Import mode handling failed: $e');
+    }
+  }
+
+  Future<String> _getSmsMode() async {
+    final box = await _getSettingsBox();
+    return (box.get(_smsModeKey, defaultValue: 'ask') as String?) ?? 'ask';
+  }
+
+  Future<Box> _getSettingsBox() async {
+    if (Hive.isBoxOpen(_settingsBoxName)) {
+      return Hive.box(_settingsBoxName);
+    }
+    return Hive.openBox(_settingsBoxName);
+  }
+
+  AppL10n _l10nFromSettings(Box<dynamic> settings) {
+    final language = (settings.get('language') as String?) ?? 'en';
+    final locale =
+        language == 'bn' ? const Locale('bn', 'BD') : const Locale('en');
+    return AppL10n(locale);
+  }
+
+  String _currencyFromSettings(Box<dynamic> settings) {
+    return (settings.get(_currencyKey) as String?) ?? '৳';
+  }
+
   void _showConfirmationNotification(
-      TransactionModel transaction, String sender) {
+      TransactionModel transaction, String source) {
     if (!_transactionRepo.isInitialized) {
       AppLogger.w('Transaction repo not initialized; skipping save/notify');
       return;
@@ -466,7 +653,7 @@ class SmsService {
               'amount': '$currency${transaction.amount.toStringAsFixed(0)}',
             },
           ),
-          payload: 'sms_transaction:${transaction.id}',
+          payload: 'sms_transaction_json:${jsonEncode(transaction.toJson())}',
         );
       });
     } catch (e) {
@@ -486,10 +673,9 @@ class SmsService {
 
     if (savedDayKey == todayKey) {
       count = (box.get(_dailySummaryCountKey, defaultValue: 0) as int) + 1;
-      totalAmount =
-          (box.get(_dailySummaryAmountKey, defaultValue: 0.0) as num)
-                  .toDouble() +
-              transaction.amount;
+      totalAmount = (box.get(_dailySummaryAmountKey, defaultValue: 0.0) as num)
+              .toDouble() +
+          transaction.amount;
     } else {
       count = 1;
       totalAmount = transaction.amount;
@@ -545,6 +731,6 @@ class SmsService {
 
   void cancelTransaction(String transactionId) {
     AppLogger.d('Transaction cancelled: $transactionId');
-    _processedSmsIds.remove(transactionId);
+    _processedNotifIds.remove(transactionId);
   }
 }

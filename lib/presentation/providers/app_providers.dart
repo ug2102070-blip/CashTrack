@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:hive/hive.dart'; // Hive এর জন্য ইমপোর্ট প্রয়োজন
@@ -12,6 +13,7 @@ import '../../data/repositories/goal_repository.dart';
 import '../../data/repositories/debt_repository.dart';
 import '../../data/repositories/asset_repository.dart';
 import '../../data/repositories/investment_repository.dart';
+import '../../data/repositories/split_expense_repository.dart';
 import '../../data/models/transaction_model.dart';
 import '../../data/models/category_model.dart';
 import '../../data/models/account_model.dart';
@@ -20,8 +22,22 @@ import '../../data/models/goal_model.dart';
 import '../../data/models/debt_model.dart';
 import '../../data/models/asset_model.dart';
 import '../../data/models/investment_model.dart';
+import '../../data/models/split_expense_model.dart';
 import '../../core/utils/logger.dart';
 import '../../services/auth_service.dart';
+
+// ==========================================
+// 0. AUTH STATE PROVIDER
+// Login/logout হলে সব providers নতুন userId দিয়ে reload হবে
+// ==========================================
+
+/// Streams the current user UID (null = logged out).
+/// All data providers watch this so they reload on auth change.
+final authUserIdProvider = StreamProvider<String?>((ref) {
+  return AuthService().authStateChanges.map((_) {
+    return AuthService().currentUser?.uid;
+  });
+});
 
 // ==========================================
 // 1. REPOSITORY PROVIDERS
@@ -41,6 +57,11 @@ final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
 /// Account Repository Provider
 final accountRepositoryProvider = Provider<AccountRepository>((ref) {
   return AccountRepository();
+});
+
+/// Split Expense Repository Provider
+final splitExpenseRepositoryProvider = Provider<SplitExpenseRepository>((ref) {
+  return SplitExpenseRepository();
 });
 
 /// Budget Repository Provider
@@ -73,9 +94,11 @@ final investmentRepositoryProvider = Provider<InvestmentRepository>((ref) {
 // Transaction CRUD operations এর জন্য
 // ==========================================
 
-/// All Transactions Provider - StateNotifier দিয়ে state manage করে
+/// All Transactions Provider - auth change হলে নতুন userId দিয়ে reload হয়
 final transactionsProvider =
     StateNotifierProvider<TransactionsNotifier, List<TransactionModel>>((ref) {
+  // Watch auth state — when user changes, this provider rebuilds with new userId
+  ref.watch(authUserIdProvider);
   final repository = ref.watch(transactionRepositoryProvider);
   return TransactionsNotifier(repository);
 });
@@ -204,9 +227,11 @@ class CategoriesNotifier extends StateNotifier<List<CategoryModel>> {
 // Account management এর জন্য
 // ==========================================
 
-/// All Accounts Provider
+/// All Accounts Provider — auth change হলে নতুন userId দিয়ে reload হয়
 final accountsProvider =
     StateNotifierProvider<AccountsNotifier, List<AccountModel>>((ref) {
+  // Watch auth state — when user changes, this provider rebuilds
+  ref.watch(authUserIdProvider);
   final repository = ref.watch(accountRepositoryProvider);
   return AccountsNotifier(repository);
 });
@@ -259,6 +284,49 @@ class AccountsNotifier extends StateNotifier<List<AccountModel>> {
 
   double getTotalBalance() {
     return _repository.getTotalBalance();
+  }
+}
+
+/// All Split Groups Provider
+final splitGroupsProvider =
+    StateNotifierProvider<SplitGroupsNotifier, List<SplitGroup>>((ref) {
+  final repository = ref.watch(splitExpenseRepositoryProvider);
+  return SplitGroupsNotifier(repository);
+});
+
+class SplitGroupsNotifier extends StateNotifier<List<SplitGroup>> {
+  final SplitExpenseRepository _repository;
+
+  SplitGroupsNotifier(this._repository) : super([]) {
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    await _repository.init();
+    if (!mounted) return;
+    loadGroups();
+  }
+
+  void loadGroups() {
+    state = _repository.getAllGroups();
+  }
+
+  Future<void> addGroup(SplitGroup group) async {
+    await _repository.init();
+    await _repository.addGroup(group);
+    loadGroups();
+  }
+
+  Future<void> updateGroup(SplitGroup group) async {
+    await _repository.init();
+    await _repository.updateGroup(group);
+    loadGroups();
+  }
+
+  Future<void> deleteGroup(String id) async {
+    await _repository.init();
+    await _repository.deleteGroup(id);
+    loadGroups();
   }
 }
 
@@ -835,6 +903,10 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
           'hideAmounts': false,
           'voiceTransactionInput': false,
           'receiptImageAttachment': false,
+          'defaultRecurring': false,
+          'defaultRecurringType': 'monthly',
+          'pinnedAccounts': <String>[],
+          'pinnedCategories': <String>[],
         }) {
     if (Hive.isBoxOpen('settingsBox')) {
       _loadSettingsSync();
@@ -877,6 +949,11 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
           box.get('voiceTransactionInput', defaultValue: false),
       'receiptImageAttachment':
           box.get('receiptImageAttachment', defaultValue: false),
+      'defaultRecurring': box.get('defaultRecurring', defaultValue: false),
+      'defaultRecurringType': box.get('defaultRecurringType', defaultValue: 'monthly'),
+      'pinnedCategories': (box.get('pinnedCategories', defaultValue: <String>[])
+              as List<dynamic>)
+          .cast<String>(),
     };
   }
 
@@ -909,6 +986,14 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
           box.get('voiceTransactionInput', defaultValue: false),
       'receiptImageAttachment':
           box.get('receiptImageAttachment', defaultValue: false),
+      'defaultRecurring': box.get('defaultRecurring', defaultValue: false),
+      'defaultRecurringType': box.get('defaultRecurringType', defaultValue: 'monthly'),
+      'pinnedAccounts':
+          (box.get('pinnedAccounts', defaultValue: <String>[]) as List<dynamic>)
+              .cast<String>(),
+      'pinnedCategories': (box.get('pinnedCategories', defaultValue: <String>[])
+              as List<dynamic>)
+          .cast<String>(),
     };
   }
 
@@ -917,6 +1002,18 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
     final box = await _getBox();
     await box.put('rolloverBudget', value);
     state = {...state, 'rolloverBudget': value};
+  }
+
+  Future<void> updateDefaultRecurring(bool value) async {
+    final box = await _getBox();
+    await box.put('defaultRecurring', value);
+    state = {...state, 'defaultRecurring': value};
+  }
+
+  Future<void> updateDefaultRecurringType(String value) async {
+    final box = await _getBox();
+    await box.put('defaultRecurringType', value);
+    state = {...state, 'defaultRecurringType': value};
   }
 
   /// Accent Color পরিবর্তন করার জন্য
@@ -993,112 +1090,19 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
     await box.put(key, value);
     state = {...state, key: value};
   }
-} //===================================
-// USAGE EXAMPLES (Comment করে রাখা আছে)
-// ==========================================
 
-/*
-// কিভাবে ব্যবহার করবেন:
+  Future<void> updatePinnedCategories(List<String> pinnedIds) async {
+    final box = await _getBox();
+    await box.put('pinnedCategories', pinnedIds);
+    state = {...state, 'pinnedCategories': pinnedIds};
+  }
 
-// 1. Screen এ import করুন:
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/app_providers.dart';
-
-// 2. ConsumerWidget/ConsumerStatefulWidget ব্যবহার করুন:
-class MyScreen extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-
-    // 3. Data read করুন:
-    final transactions = ref.watch(transactionsProvider);
-    final summary = ref.watch(dashboardSummaryProvider);
-
-    // 4. Data modify করুন:
-    final transactionNotifier = ref.read(transactionsProvider.notifier);
-    transactionNotifier.addTransaction(myTransaction);
-
-    return YourWidget();
+  Future<void> updatePinnedAccounts(List<String> pinnedIds) async {
+    final box = await _getBox();
+    await box.put('pinnedAccounts', pinnedIds);
+    state = {...state, 'pinnedAccounts': pinnedIds};
   }
 }
-
-// ==========================================
-// 13. USER PROFILE PROVIDER
-// Profile data (name/email/phone/address) manage করার জন্য
-// ==========================================
-
-final userProfileProvider =
-    StateNotifierProvider<UserProfileNotifier, Map<String, String>>((ref) {
-  return UserProfileNotifier();
-});
-
-class UserProfileNotifier extends StateNotifier<Map<String, String>> {
-  UserProfileNotifier()
-      : super({
-          'fullName': '',
-          'email': '',
-          'phone': '',
-          'address': '',
-        }) {
-    _loadProfile();
-  }
-
-  static const _boxName = 'settingsBox';
-  static const _kFullName = 'profile_full_name';
-  static const _kEmail = 'profile_email';
-  static const _kPhone = 'profile_phone';
-  static const _kAddress = 'profile_address';
-
-  Future<Box> _getBox() async {
-    if (Hive.isBoxOpen(_boxName)) {
-      return Hive.box(_boxName);
-    }
-    return Hive.openBox(_boxName);
-  }
-
-  Future<void> _loadProfile() async {
-    final box = await _getBox();
-    final user = AuthService().currentUser;
-
-    final fullName = (box.get(_kFullName) as String?)?.trim();
-    final email = (box.get(_kEmail) as String?)?.trim();
-    final phone = (box.get(_kPhone) as String?)?.trim();
-    final address = (box.get(_kAddress) as String?)?.trim();
-
-    state = {
-      'fullName': (fullName == null || fullName.isEmpty)
-          ? ((user?.displayName?.trim().isNotEmpty ?? false)
-              ? user!.displayName!.trim()
-              : '')
-          : fullName,
-      'email': (email == null || email.isEmpty)
-          ? (user?.email?.trim() ?? '')
-          : email,
-      'phone': phone ?? '',
-      'address': address ?? '',
-    };
-  }
-
-  Future<void> updateProfile({
-    required String fullName,
-    required String email,
-    required String phone,
-    required String address,
-  }) async {
-    final box = await _getBox();
-    await box.put(_kFullName, fullName);
-    await box.put(_kEmail, email);
-    await box.put(_kPhone, phone);
-    await box.put(_kAddress, address);
-    state = {
-      'fullName': fullName,
-      'email': email,
-      'phone': phone,
-      'address': address,
-    };
-  }
-}
-
-*/
 
 // ==========================================
 // 13. USER PROFILE PROVIDER
@@ -1124,14 +1128,14 @@ class UserProfileNotifier extends StateNotifier<Map<String, String>> {
   }
 
   static const _boxName = 'settingsBox';
-  static const _kFullName = 'profile_full_name';
-  static const _kEmail = 'profile_email';
-  static const _kPhone = 'profile_phone';
-  static const _kAddress = 'profile_address';
-  static const _kOccupation = 'profile_occupation';
-  static const _kBio = 'profile_bio';
-  static const _kDob = 'profile_dob';
-  static const _kPhotoBase64 = 'profile_photo_base64';
+
+  /// Returns a UID-prefixed key for per-user storage.
+  /// Guest/anonymous users fall back to Firebase displayName/email only.
+  String _key(String field) {
+    final uid = AuthService().currentUser?.uid;
+    if (uid == null || uid.isEmpty) return 'profile_$field';
+    return 'profile_${uid}_$field';
+  }
 
   Future<Box> _getBox() async {
     if (Hive.isBoxOpen(_boxName)) {
@@ -1144,14 +1148,14 @@ class UserProfileNotifier extends StateNotifier<Map<String, String>> {
     final box = await _getBox();
     final user = AuthService().currentUser;
 
-    final fullName = (box.get(_kFullName) as String?)?.trim();
-    final email = (box.get(_kEmail) as String?)?.trim();
-    final phone = (box.get(_kPhone) as String?)?.trim();
-    final address = (box.get(_kAddress) as String?)?.trim();
-    final occupation = (box.get(_kOccupation) as String?)?.trim();
-    final bio = (box.get(_kBio) as String?)?.trim();
-    final dob = (box.get(_kDob) as String?)?.trim();
-    final photoBase64 = (box.get(_kPhotoBase64) as String?)?.trim();
+    final fullName = (box.get(_key('full_name')) as String?)?.trim();
+    final email = (box.get(_key('email')) as String?)?.trim();
+    final phone = (box.get(_key('phone')) as String?)?.trim();
+    final address = (box.get(_key('address')) as String?)?.trim();
+    final occupation = (box.get(_key('occupation')) as String?)?.trim();
+    final bio = (box.get(_key('bio')) as String?)?.trim();
+    final dob = (box.get(_key('dob')) as String?)?.trim();
+    final photoBase64 = (box.get(_key('photo_base64')) as String?)?.trim();
 
     state = {
       'fullName': (fullName == null || fullName.isEmpty)
@@ -1182,15 +1186,15 @@ class UserProfileNotifier extends StateNotifier<Map<String, String>> {
     String? photoBase64,
   }) async {
     final box = await _getBox();
-    await box.put(_kFullName, fullName);
-    await box.put(_kEmail, email);
-    await box.put(_kPhone, phone);
-    await box.put(_kAddress, address);
-    await box.put(_kOccupation, occupation);
-    await box.put(_kBio, bio);
-    await box.put(_kDob, dob);
+    await box.put(_key('full_name'), fullName);
+    await box.put(_key('email'), email);
+    await box.put(_key('phone'), phone);
+    await box.put(_key('address'), address);
+    await box.put(_key('occupation'), occupation);
+    await box.put(_key('bio'), bio);
+    await box.put(_key('dob'), dob);
     if (photoBase64 != null) {
-      await box.put(_kPhotoBase64, photoBase64);
+      await box.put(_key('photo_base64'), photoBase64);
     }
     state = {
       'fullName': fullName,
@@ -1206,13 +1210,18 @@ class UserProfileNotifier extends StateNotifier<Map<String, String>> {
 
   Future<void> updateProfilePhoto(String photoBase64) async {
     final box = await _getBox();
-    await box.put(_kPhotoBase64, photoBase64);
+    await box.put(_key('photo_base64'), photoBase64);
     state = {...state, 'photoBase64': photoBase64};
   }
 
   Future<void> clearProfilePhoto() async {
     final box = await _getBox();
-    await box.put(_kPhotoBase64, '');
+    await box.put(_key('photo_base64'), '');
     state = {...state, 'photoBase64': ''};
+  }
+
+  /// Reloads profile data from Hive (call after sign-in to load user-specific data).
+  Future<void> reloadProfile() async {
+    await _loadProfile();
   }
 }

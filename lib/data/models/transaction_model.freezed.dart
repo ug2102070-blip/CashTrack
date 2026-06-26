@@ -57,7 +57,10 @@ mixin _$TransactionModel {
   List<String> get tags =>
       throw _privateConstructorUsedError; // For SMS auto-categorization
   @HiveField(17)
-  double get confidenceScore => throw _privateConstructorUsedError;
+  double get confidenceScore =>
+      throw _privateConstructorUsedError; // SMS categorization confidence
+  @HiveField(18)
+  String? get userId => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -89,7 +92,8 @@ abstract class $TransactionModelCopyWith<$Res> {
       @HiveField(14) String? smsId,
       @HiveField(15) String? toAccountId,
       @HiveField(16) List<String> tags,
-      @HiveField(17) double confidenceScore});
+      @HiveField(17) double confidenceScore,
+      @HiveField(18) String? userId});
 }
 
 /// @nodoc
@@ -123,6 +127,7 @@ class _$TransactionModelCopyWithImpl<$Res, $Val extends TransactionModel>
     Object? toAccountId = freezed,
     Object? tags = null,
     Object? confidenceScore = null,
+    Object? userId = freezed,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -197,6 +202,10 @@ class _$TransactionModelCopyWithImpl<$Res, $Val extends TransactionModel>
           ? _value.confidenceScore
           : confidenceScore // ignore: cast_nullable_to_non_nullable
               as double,
+      userId: freezed == userId
+          ? _value.userId
+          : userId // ignore: cast_nullable_to_non_nullable
+              as String?,
     ) as $Val);
   }
 }
@@ -227,7 +236,8 @@ abstract class _$$TransactionModelImplCopyWith<$Res>
       @HiveField(14) String? smsId,
       @HiveField(15) String? toAccountId,
       @HiveField(16) List<String> tags,
-      @HiveField(17) double confidenceScore});
+      @HiveField(17) double confidenceScore,
+      @HiveField(18) String? userId});
 }
 
 /// @nodoc
@@ -259,6 +269,7 @@ class __$$TransactionModelImplCopyWithImpl<$Res>
     Object? toAccountId = freezed,
     Object? tags = null,
     Object? confidenceScore = null,
+    Object? userId = freezed,
   }) {
     return _then(_$TransactionModelImpl(
       id: null == id
@@ -333,6 +344,10 @@ class __$$TransactionModelImplCopyWithImpl<$Res>
           ? _value.confidenceScore
           : confidenceScore // ignore: cast_nullable_to_non_nullable
               as double,
+      userId: freezed == userId
+          ? _value.userId
+          : userId // ignore: cast_nullable_to_non_nullable
+              as String?,
     ));
   }
 }
@@ -358,7 +373,8 @@ class _$TransactionModelImpl implements _TransactionModel {
       @HiveField(14) this.smsId,
       @HiveField(15) this.toAccountId,
       @HiveField(16) final List<String> tags = const [],
-      @HiveField(17) this.confidenceScore = 0.0})
+      @HiveField(17) this.confidenceScore = 0.0,
+      @HiveField(18) this.userId})
       : _tags = tags;
 
   factory _$TransactionModelImpl.fromJson(Map<String, dynamic> json) =>
@@ -432,10 +448,14 @@ class _$TransactionModelImpl implements _TransactionModel {
   @JsonKey()
   @HiveField(17)
   final double confidenceScore;
+// SMS categorization confidence
+  @override
+  @HiveField(18)
+  final String? userId;
 
   @override
   String toString() {
-    return 'TransactionModel(id: $id, type: $type, amount: $amount, categoryId: $categoryId, accountId: $accountId, date: $date, note: $note, receiptUrl: $receiptUrl, isRecurring: $isRecurring, recurringType: $recurringType, isSynced: $isSynced, isDeleted: $isDeleted, createdAt: $createdAt, updatedAt: $updatedAt, smsId: $smsId, toAccountId: $toAccountId, tags: $tags, confidenceScore: $confidenceScore)';
+    return 'TransactionModel(id: $id, type: $type, amount: $amount, categoryId: $categoryId, accountId: $accountId, date: $date, note: $note, receiptUrl: $receiptUrl, isRecurring: $isRecurring, recurringType: $recurringType, isSynced: $isSynced, isDeleted: $isDeleted, createdAt: $createdAt, updatedAt: $updatedAt, smsId: $smsId, toAccountId: $toAccountId, tags: $tags, confidenceScore: $confidenceScore, userId: $userId)';
   }
 
   @override
@@ -471,31 +491,34 @@ class _$TransactionModelImpl implements _TransactionModel {
                 other.toAccountId == toAccountId) &&
             const DeepCollectionEquality().equals(other._tags, _tags) &&
             (identical(other.confidenceScore, confidenceScore) ||
-                other.confidenceScore == confidenceScore));
+                other.confidenceScore == confidenceScore) &&
+            (identical(other.userId, userId) || other.userId == userId));
   }
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode => Object.hash(
-      runtimeType,
-      id,
-      type,
-      amount,
-      categoryId,
-      accountId,
-      date,
-      note,
-      receiptUrl,
-      isRecurring,
-      recurringType,
-      isSynced,
-      isDeleted,
-      createdAt,
-      updatedAt,
-      smsId,
-      toAccountId,
-      const DeepCollectionEquality().hash(_tags),
-      confidenceScore);
+  int get hashCode => Object.hashAll([
+        runtimeType,
+        id,
+        type,
+        amount,
+        categoryId,
+        accountId,
+        date,
+        note,
+        receiptUrl,
+        isRecurring,
+        recurringType,
+        isSynced,
+        isDeleted,
+        createdAt,
+        updatedAt,
+        smsId,
+        toAccountId,
+        const DeepCollectionEquality().hash(_tags),
+        confidenceScore,
+        userId
+      ]);
 
   @JsonKey(ignore: true)
   @override
@@ -531,7 +554,8 @@ abstract class _TransactionModel implements TransactionModel {
       @HiveField(14) final String? smsId,
       @HiveField(15) final String? toAccountId,
       @HiveField(16) final List<String> tags,
-      @HiveField(17) final double confidenceScore}) = _$TransactionModelImpl;
+      @HiveField(17) final double confidenceScore,
+      @HiveField(18) final String? userId}) = _$TransactionModelImpl;
 
   factory _TransactionModel.fromJson(Map<String, dynamic> json) =
       _$TransactionModelImpl.fromJson;
@@ -590,6 +614,9 @@ abstract class _TransactionModel implements TransactionModel {
   @override // For SMS auto-categorization
   @HiveField(17)
   double get confidenceScore;
+  @override // SMS categorization confidence
+  @HiveField(18)
+  String? get userId;
   @override
   @JsonKey(ignore: true)
   _$$TransactionModelImplCopyWith<_$TransactionModelImpl> get copyWith =>

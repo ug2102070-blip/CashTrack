@@ -4,11 +4,13 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
+import 'dart:convert';
 import '../core/l10n/app_l10n.dart';
+import '../core/routes/app_router.dart';
 import '../data/models/transaction_model.dart';
 import '../data/models/budget_model.dart';
 import '../data/models/category_model.dart';
-// à¦¨à¦¿à¦šà§‡à¦° à¦‡à¦®à¦ªà§‹à¦°à§à¦Ÿà¦—à§à¦²à§‹ à¦¯à§‹à¦— à¦•à¦°à¦¾ à¦¹à§Ÿà§‡à¦›à§‡
+// à¦¨à¦¿à¦šà§‡à¦° à¦‡à¦®à¦ªà§‹à¦°à§ à¦Ÿà¦—à§ à¦²à§‹ à¦¯à§‹à¦— à¦•à¦°à¦¾ à¦¹à§Ÿà§‡à¦›à§‡
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 
@@ -153,7 +155,7 @@ class NotificationService {
           importance: Importance.high,
         ),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
     );
   }
 
@@ -245,7 +247,7 @@ class NotificationService {
             importance: Importance.high,
           ),
         ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       );
     }
 
@@ -262,7 +264,7 @@ class NotificationService {
           importance: Importance.high,
         ),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
     );
   }
 
@@ -301,7 +303,7 @@ class NotificationService {
           priority: Priority.high,
         ),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       matchDateTimeComponents: DateTimeComponents.time,
     );
   }
@@ -338,7 +340,23 @@ class NotificationService {
   }
 
   void _onNotificationTap(NotificationResponse response) {
-    // Handle notification tap
+    final payload = response.payload;
+    if (payload == null || payload.isEmpty) return;
+
+    if (payload.startsWith('sms_transaction_json:')) {
+      try {
+        final jsonStr = payload.substring('sms_transaction_json:'.length);
+        final Map<String, dynamic> map = jsonDecode(jsonStr);
+        final transaction = TransactionModel.fromJson(map);
+        
+        // Open the app and navigate to /add-transaction
+        appRouter.push('/add-transaction', extra: transaction);
+      } catch (e) {
+        debugPrint('Error parsing sms_transaction_json payload: $e');
+      }
+    } else if (payload.startsWith('sms_daily_summary:')) {
+      appRouter.push('/transactions');
+    }
   }
 
   int _nextId() {

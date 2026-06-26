@@ -6,6 +6,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
+    id("com.google.firebase.firebase-perf")
 }
 
 val localProperties = Properties()
@@ -92,10 +94,13 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-storage")
+    implementation("com.google.firebase:firebase-crashlytics")
+    implementation("com.google.firebase:firebase-perf")
 
     // Other
     implementation("androidx.multidex:multidex:2.0.1")
     implementation("com.google.android.material:material:1.12.0")
+
 }
 
 val flutterProjectRootDir = rootProject.rootDir.parentFile
@@ -110,4 +115,17 @@ val copyFlutterApkToRoot by tasks.registering(Copy::class) {
 
 tasks.matching { it.name in setOf("assembleDebug", "assembleRelease", "assembleProfile") }.configureEach {
     finalizedBy(copyFlutterApkToRoot)
+}
+
+// Copy .aab bundle to where Flutter tooling expects it (project root build dir)
+val flutterBundleCopyDir = File(flutterProjectRootDir, "build/app/outputs/bundle")
+
+val copyFlutterBundleToRoot by tasks.registering(Copy::class) {
+    from(layout.buildDirectory.dir("outputs/bundle"))
+    into(flutterBundleCopyDir)
+    include("**/*.aab")
+}
+
+tasks.matching { it.name in setOf("bundleDebug", "bundleRelease", "bundleProfile") }.configureEach {
+    finalizedBy(copyFlutterBundleToRoot)
 }

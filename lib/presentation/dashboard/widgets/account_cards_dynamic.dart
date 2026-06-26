@@ -4,6 +4,7 @@ import '../../../core/l10n/app_l10n.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/amount_mask.dart';
 import '../../../data/models/account_model.dart';
+import 'brand_logo.dart';
 
 class AccountCardsDynamic extends StatelessWidget {
   final List<AccountModel> accounts;
@@ -88,30 +89,10 @@ class AccountCardsDynamic extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Icon with gradient background
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: gradientColors,
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(13),
-                boxShadow: [
-                  BoxShadow(
-                    color: shadowColor.withValues(alpha: 0.35),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Center(
-                child: Text(
-                  account.icon ?? '💰',
-                  style: const TextStyle(fontSize: 20),
-                ),
-              ),
+            BrandLogo(
+              name: account.name,
+              icon: account.icon,
+              size: 28,
             ),
 
             const SizedBox(height: 14),

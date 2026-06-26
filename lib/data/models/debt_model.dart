@@ -18,6 +18,17 @@ class DebtModel with _$DebtModel {
     @HiveField(7) @Default(false) bool isSettled,
     @HiveField(8) DateTime? createdAt,
     @HiveField(9) DateTime? updatedAt,
+    // ── Smart Debt Agreement Fields ──────────────────────
+    @HiveField(10) String? phoneNumber,
+    @HiveField(11) @Default(AgreementStatus.pending) AgreementStatus agreementStatus,
+    @HiveField(12) @Default(0) double penaltyRate,
+    @HiveField(13) @Default(0) double penaltyAmount,
+    @HiveField(14) String? agreementTerms,
+    @HiveField(15) @Default(100) int trustScore,
+    @HiveField(16) @Default(0) int remindersSent,
+    @HiveField(17) DateTime? lastReminderAt,
+    @HiveField(18) @Default(false) bool hasAgreement,
+    @HiveField(19) String? paymentMethod,
   }) = _DebtModel;
 
   factory DebtModel.fromJson(Map<String, dynamic> json) =>
@@ -30,4 +41,18 @@ enum DebtType {
   lent, // Money you gave to someone
   @HiveField(1)
   borrowed, // Money you took from someone
+}
+
+@HiveType(typeId: 17)
+enum AgreementStatus {
+  @HiveField(0)
+  pending, // Agreement not yet confirmed
+  @HiveField(1)
+  accepted, // Both parties agreed
+  @HiveField(2)
+  rejected, // Borrower rejected
+  @HiveField(3)
+  expired, // Deadline passed without payment
+  @HiveField(4)
+  completed, // Fully paid
 }

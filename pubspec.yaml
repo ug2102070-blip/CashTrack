@@ -30,6 +30,9 @@ dependencies:
   cloud_functions: ^6.0.1
   firebase_storage: ^13.0.6
   firebase_analytics: ^12.1.1
+  firebase_crashlytics: any
+  firebase_performance: any
+  google_sign_in: ^6.2.1
 
   # Navigation
   go_router: ^17.0.1
@@ -37,7 +40,7 @@ dependencies:
   # UI & Icons
   cupertino_icons: ^1.0.6
   flutter_svg: ^2.0.9
-  lottie: ^3.0.0
+
   shimmer: ^3.0.0
   flutter_staggered_animations: ^1.1.1
 
@@ -51,8 +54,8 @@ dependencies:
   freezed_annotation: ^2.4.1
   json_annotation: ^4.8.1
 
-  # SMS & Permissions
-  flutter_sms_inbox: ^1.0.3
+  # Notification & Permissions
+  notification_listener_service: ^0.3.1
   permission_handler: ^12.0.1
 
   # Security
@@ -128,7 +131,11 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
-    - assets/lottie/
+    - assets/images/bkash.png
+    - assets/images/nagad.png
+    - assets/images/rocket.png
+
+
 
   fonts:
     - family: Poppins

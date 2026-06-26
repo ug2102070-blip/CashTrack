@@ -27,13 +27,23 @@ class DebtModelAdapter extends TypeAdapter<DebtModel> {
       isSettled: fields[7] as bool,
       createdAt: fields[8] as DateTime?,
       updatedAt: fields[9] as DateTime?,
+      phoneNumber: fields[10] as String?,
+      agreementStatus: fields[11] as AgreementStatus,
+      penaltyRate: fields[12] as double,
+      penaltyAmount: fields[13] as double,
+      agreementTerms: fields[14] as String?,
+      trustScore: fields[15] as int,
+      remindersSent: fields[16] as int,
+      lastReminderAt: fields[17] as DateTime?,
+      hasAgreement: fields[18] as bool,
+      paymentMethod: fields[19] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, DebtModel obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(20)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -53,7 +63,27 @@ class DebtModelAdapter extends TypeAdapter<DebtModel> {
       ..writeByte(8)
       ..write(obj.createdAt)
       ..writeByte(9)
-      ..write(obj.updatedAt);
+      ..write(obj.updatedAt)
+      ..writeByte(10)
+      ..write(obj.phoneNumber)
+      ..writeByte(11)
+      ..write(obj.agreementStatus)
+      ..writeByte(12)
+      ..write(obj.penaltyRate)
+      ..writeByte(13)
+      ..write(obj.penaltyAmount)
+      ..writeByte(14)
+      ..write(obj.agreementTerms)
+      ..writeByte(15)
+      ..write(obj.trustScore)
+      ..writeByte(16)
+      ..write(obj.remindersSent)
+      ..writeByte(17)
+      ..write(obj.lastReminderAt)
+      ..writeByte(18)
+      ..write(obj.hasAgreement)
+      ..writeByte(19)
+      ..write(obj.paymentMethod);
   }
 
   @override
@@ -106,6 +136,60 @@ class DebtTypeAdapter extends TypeAdapter<DebtType> {
           typeId == other.typeId;
 }
 
+class AgreementStatusAdapter extends TypeAdapter<AgreementStatus> {
+  @override
+  final int typeId = 17;
+
+  @override
+  AgreementStatus read(BinaryReader reader) {
+    switch (reader.readByte()) {
+      case 0:
+        return AgreementStatus.pending;
+      case 1:
+        return AgreementStatus.accepted;
+      case 2:
+        return AgreementStatus.rejected;
+      case 3:
+        return AgreementStatus.expired;
+      case 4:
+        return AgreementStatus.completed;
+      default:
+        return AgreementStatus.pending;
+    }
+  }
+
+  @override
+  void write(BinaryWriter writer, AgreementStatus obj) {
+    switch (obj) {
+      case AgreementStatus.pending:
+        writer.writeByte(0);
+        break;
+      case AgreementStatus.accepted:
+        writer.writeByte(1);
+        break;
+      case AgreementStatus.rejected:
+        writer.writeByte(2);
+        break;
+      case AgreementStatus.expired:
+        writer.writeByte(3);
+        break;
+      case AgreementStatus.completed:
+        writer.writeByte(4);
+        break;
+    }
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AgreementStatusAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}
+
 // **************************************************************************
 // JsonSerializableGenerator
 // **************************************************************************
@@ -128,6 +212,20 @@ _$DebtModelImpl _$$DebtModelImplFromJson(Map<String, dynamic> json) =>
       updatedAt: json['updatedAt'] == null
           ? null
           : DateTime.parse(json['updatedAt'] as String),
+      phoneNumber: json['phoneNumber'] as String?,
+      agreementStatus: $enumDecodeNullable(
+              _$AgreementStatusEnumMap, json['agreementStatus']) ??
+          AgreementStatus.pending,
+      penaltyRate: (json['penaltyRate'] as num?)?.toDouble() ?? 0,
+      penaltyAmount: (json['penaltyAmount'] as num?)?.toDouble() ?? 0,
+      agreementTerms: json['agreementTerms'] as String?,
+      trustScore: (json['trustScore'] as num?)?.toInt() ?? 100,
+      remindersSent: (json['remindersSent'] as num?)?.toInt() ?? 0,
+      lastReminderAt: json['lastReminderAt'] == null
+          ? null
+          : DateTime.parse(json['lastReminderAt'] as String),
+      hasAgreement: json['hasAgreement'] as bool? ?? false,
+      paymentMethod: json['paymentMethod'] as String?,
     );
 
 Map<String, dynamic> _$$DebtModelImplToJson(_$DebtModelImpl instance) =>
@@ -142,9 +240,27 @@ Map<String, dynamic> _$$DebtModelImplToJson(_$DebtModelImpl instance) =>
       'isSettled': instance.isSettled,
       'createdAt': instance.createdAt?.toIso8601String(),
       'updatedAt': instance.updatedAt?.toIso8601String(),
+      'phoneNumber': instance.phoneNumber,
+      'agreementStatus': _$AgreementStatusEnumMap[instance.agreementStatus]!,
+      'penaltyRate': instance.penaltyRate,
+      'penaltyAmount': instance.penaltyAmount,
+      'agreementTerms': instance.agreementTerms,
+      'trustScore': instance.trustScore,
+      'remindersSent': instance.remindersSent,
+      'lastReminderAt': instance.lastReminderAt?.toIso8601String(),
+      'hasAgreement': instance.hasAgreement,
+      'paymentMethod': instance.paymentMethod,
     };
 
 const _$DebtTypeEnumMap = {
   DebtType.lent: 'lent',
   DebtType.borrowed: 'borrowed',
+};
+
+const _$AgreementStatusEnumMap = {
+  AgreementStatus.pending: 'pending',
+  AgreementStatus.accepted: 'accepted',
+  AgreementStatus.rejected: 'rejected',
+  AgreementStatus.expired: 'expired',
+  AgreementStatus.completed: 'completed',
 };

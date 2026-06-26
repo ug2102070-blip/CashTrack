@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/l10n/app_l10n.dart';
+import '../../data/models/account_model.dart';
+import '../../data/models/category_model.dart';
 import '../../data/models/transaction_model.dart';
 import '../providers/app_providers.dart';
 import 'add_transaction_form.dart';
@@ -19,6 +21,9 @@ class TransactionsScreen extends ConsumerStatefulWidget {
 class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   TransactionType? _filterType;
   DateTimeRange? _dateRange;
+  // Multi-select state
+  bool _isSelecting = false;
+  final Set<String> _selectedIds = {};
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +40,10 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(context, isDark),
+            if (_isSelecting)
+              _buildSelectionToolbar(context, filtered, isDark, categories)
+            else
+              _buildHeader(context, isDark),
             _buildSummaryBanner(filtered, currency, isDark),
             if (_hasActiveFilters()) _buildFilterChips(context),
             Expanded(
@@ -48,8 +56,6 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
       ),
     );
   }
-
-  // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildHeader(BuildContext context, bool isDark) {
     return Padding(
@@ -73,6 +79,274 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
             isDark,
             _showFilterSheet,
             hasBadge: _hasActiveFilters(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Multi-select actions ──────────────────────────────────────────────────
+
+  void _toggleSelection(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+        if (_selectedIds.isEmpty) _isSelecting = false;
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  Future<void> _bulkDelete(List<TransactionModel> filtered) async {
+    if (_selectedIds.isEmpty) return;
+
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
+    final count = _selectedIds.length;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        icon: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: AppColors.error.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.delete_forever_rounded,
+              color: AppColors.error, size: 24),
+        ),
+        title: Text(
+          isBangla ? '$countটি লেনদেন মুছবেন?' : 'Delete $count transactions?',
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+        ),
+        content: Text(
+          isBangla
+              ? 'এই কাজটি পূর্বাবস্থায় ফেরানো যাবে না।'
+              : 'This action cannot be undone.',
+          style: TextStyle(
+            fontSize: 13,
+            color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.t('cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(context.t('delete')),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final txNotifier = ref.read(transactionsProvider.notifier);
+    final allTxs = ref.read(transactionsProvider);
+
+    for (final id in _selectedIds.toList()) {
+      final t = allTxs.firstWhere(
+        (t) => t.id == id,
+      );
+
+      await txNotifier.deleteTransaction(id);
+      await _syncBudgetOnDelete(t);
+      await _syncAccountOnDelete(t);
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isSelecting = false;
+      _selectedIds.clear();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isBangla
+              ? '$countটি লেনদেন মুছে ফেলা হয়েছে'
+              : '$count transactions deleted',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _bulkChangeCategory(List<CategoryModel> categories) async {
+    if (_selectedIds.isEmpty) return;
+
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
+    final chosen = await showModalBottomSheet<CategoryModel>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).dividerColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              context.t('select_category'),
+              style: AppTextStyles.h5,
+            ),
+            const SizedBox(height: 16),
+            ...categories.map(
+              (category) => ListTile(
+                leading: Text(category.icon),
+                title: Text(category.name),
+                subtitle: category.type == CategoryType.expense
+                    ? Text(context.t('expense'))
+                    : category.type == CategoryType.income
+                        ? Text(context.t('income'))
+                        : null,
+                onTap: () => Navigator.pop(ctx, category),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (chosen == null) return;
+
+    final txNotifier = ref.read(transactionsProvider.notifier);
+    final allTxs = ref.read(transactionsProvider);
+    var updatedCount = 0;
+
+    for (final id in _selectedIds.toList()) {
+      final t = allTxs.cast<TransactionModel?>().firstWhere(
+            (t) => t?.id == id,
+            orElse: () => null,
+          );
+      if (t == null) continue;
+
+      final updated = t.copyWith(
+        categoryId: chosen.id,
+        updatedAt: DateTime.now(),
+      );
+      await txNotifier.updateTransaction(updated);
+      updatedCount++;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isSelecting = false;
+      _selectedIds.clear();
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isBangla
+              ? '$updatedCountটি লেনদেনের ক্যাটেগরি পরিবর্তন করা হয়েছে'
+              : '$updatedCount transactions updated',
+        ),
+      ),
+    );
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────────
+
+  Widget _buildSelectionToolbar(
+    BuildContext context,
+    List<TransactionModel> filtered,
+    bool isDark,
+    List<CategoryModel> categories,
+  ) {
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
+    final count = _selectedIds.length;
+    final allSelected =
+        filtered.isNotEmpty && _selectedIds.length == filtered.length;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => setState(() {
+              _isSelecting = false;
+              _selectedIds.clear();
+            }),
+            icon: const Icon(Icons.close_rounded, size: 20),
+            tooltip: isBangla ? 'বাতিল' : 'Cancel',
+          ),
+          Text(
+            isBangla ? '$count টি নির্বাচিত' : '$count selected',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          const Spacer(),
+          // Select all / Deselect all
+          IconButton(
+            onPressed: () {
+              setState(() {
+                if (allSelected) {
+                  _selectedIds.clear();
+                } else {
+                  _selectedIds.clear();
+                  _selectedIds.addAll(filtered.map((t) => t.id));
+                }
+              });
+            },
+            icon: Icon(
+              allSelected ? Icons.deselect_rounded : Icons.select_all_rounded,
+              size: 20,
+            ),
+            tooltip: allSelected
+                ? (isBangla ? 'সব বাদ দিন' : 'Deselect All')
+                : (isBangla ? 'সব নির্বাচন' : 'Select All'),
+          ),
+          // Bulk delete
+          IconButton(
+            onPressed: count > 0 ? () => _bulkChangeCategory(categories) : null,
+            icon: Icon(
+              Icons.category_rounded,
+              size: 20,
+              color: count > 0 ? Theme.of(context).colorScheme.primary : null,
+            ),
+            tooltip: isBangla ? 'ক্যাটেগরি পরিবর্তন' : 'Change category',
+          ),
+          IconButton(
+            onPressed: count > 0 ? () => _bulkDelete(filtered) : null,
+            icon: Icon(
+              Icons.delete_rounded,
+              size: 20,
+              color: count > 0 ? AppColors.error : null,
+            ),
+            tooltip: isBangla ? 'মুছুন' : 'Delete',
           ),
         ],
       ),
@@ -369,9 +643,20 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
     final isIncome = t.type == TransactionType.income;
     final color = isIncome ? AppColors.success : AppColors.error;
     final catName = catMap[t.categoryId] ?? t.categoryId;
+    final isSelected = _selectedIds.contains(t.id);
 
     return InkWell(
-      onTap: () => _showDetails(context, t, currency, catMap),
+      onTap: _isSelecting
+          ? () => _toggleSelection(t.id)
+          : () => _showDetails(context, t, currency, catMap),
+      onLongPress: _isSelecting
+          ? null
+          : () {
+              setState(() {
+                _isSelecting = true;
+                _selectedIds.add(t.id);
+              });
+            },
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 6),
         padding: const EdgeInsets.all(14),
@@ -379,9 +664,11 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
           color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.05)
-                : Colors.black.withValues(alpha: 0.04),
+            color: isSelected
+                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)
+                : isDark
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : Colors.black.withValues(alpha: 0.04),
           ),
           boxShadow: [
             BoxShadow(
@@ -393,6 +680,18 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
         ),
         child: Row(
           children: [
+            // Show checkbox when in selection mode
+            if (_isSelecting) ...[
+              Checkbox(
+                value: isSelected,
+                onChanged: (_) => _toggleSelection(t.id),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                activeColor: Theme.of(context).colorScheme.primary,
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
             Container(
               width: 44,
               height: 44,
@@ -637,7 +936,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                 final picked = await showDateRangePicker(
                   context: context,
                   firstDate: DateTime(2020),
-                  lastDate: now,
+                  lastDate: DateTime(2100),
                   initialDateRange: _dateRange,
                 );
                 if (picked != null) {
@@ -725,6 +1024,111 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                     .onSurface
                     .withValues(alpha: 0.55),
               ),
+            ),
+            Builder(
+              builder: (context) {
+                final accounts = ref.read(accountsProvider);
+                final account = accounts.cast<AccountModel?>().firstWhere(
+                      (a) => a?.id == t.accountId,
+                      orElse: () => null,
+                    );
+                final toAccount =
+                    t.toAccountId != null && t.toAccountId!.isNotEmpty
+                        ? accounts.cast<AccountModel?>().firstWhere(
+                              (a) => a?.id == t.toAccountId,
+                              orElse: () => null,
+                            )
+                        : null;
+
+                if (account == null) return const SizedBox.shrink();
+
+                final accNickname = account.nickname?.isNotEmpty == true
+                    ? account.nickname!
+                    : account.name;
+                final accNumSuffix = account.accountNumber?.isNotEmpty == true
+                    ? ' (${account.accountNumber!.length > 4 ? account.accountNumber!.substring(account.accountNumber!.length - 4) : account.accountNumber})'
+                    : '';
+
+                final fromDisplay = '$accNickname$accNumSuffix';
+
+                if (toAccount != null) {
+                  final toNickname = toAccount.nickname?.isNotEmpty == true
+                      ? toAccount.nickname!
+                      : toAccount.name;
+                  final toNumSuffix = toAccount.accountNumber?.isNotEmpty ==
+                          true
+                      ? ' (${toAccount.accountNumber!.length > 4 ? toAccount.accountNumber!.substring(toAccount.accountNumber!.length - 4) : toAccount.accountNumber})'
+                      : '';
+                  final toDisplay = '$toNickname$toNumSuffix';
+
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(account.icon ?? '💳',
+                            style: const TextStyle(fontSize: 14)),
+                        const SizedBox(width: 4),
+                        Text(
+                          fromDisplay,
+                          style: AppTextStyles.caption.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.45),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 12,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.4),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(toAccount.icon ?? '💳',
+                            style: const TextStyle(fontSize: 14)),
+                        const SizedBox(width: 4),
+                        Text(
+                          toDisplay,
+                          style: AppTextStyles.caption.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.45),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(account.icon ?? '💳',
+                          style: const TextStyle(fontSize: 14)),
+                      const SizedBox(width: 5),
+                      Text(
+                        fromDisplay,
+                        style: AppTextStyles.caption.copyWith(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.45),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
             if (t.note != null && t.note!.isNotEmpty) ...[
               const SizedBox(height: 6),

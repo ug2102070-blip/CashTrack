@@ -27,13 +27,22 @@ class AccountModelAdapter extends TypeAdapter<AccountModel> {
       isDefault: fields[7] as bool,
       createdAt: fields[8] as DateTime?,
       updatedAt: fields[9] as DateTime?,
+      nickname: fields[10] as String?,
+      userId: fields[11] as String?,
+      accountNumber: fields[12] as String?,
+      cardType: fields[13] as String?,
+      cardIssuer: fields[14] as String?,
+      cardholderName: fields[15] as String?,
+      creditLimit: fields[16] as double?,
+      billingDay: fields[17] as int?,
+      paymentDueDay: fields[18] as int?,
     );
   }
 
   @override
   void write(BinaryWriter writer, AccountModel obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(19)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -53,7 +62,25 @@ class AccountModelAdapter extends TypeAdapter<AccountModel> {
       ..writeByte(8)
       ..write(obj.createdAt)
       ..writeByte(9)
-      ..write(obj.updatedAt);
+      ..write(obj.updatedAt)
+      ..writeByte(10)
+      ..write(obj.nickname)
+      ..writeByte(11)
+      ..write(obj.userId)
+      ..writeByte(12)
+      ..write(obj.accountNumber)
+      ..writeByte(13)
+      ..write(obj.cardType)
+      ..writeByte(14)
+      ..write(obj.cardIssuer)
+      ..writeByte(15)
+      ..write(obj.cardholderName)
+      ..writeByte(16)
+      ..write(obj.creditLimit)
+      ..writeByte(17)
+      ..write(obj.billingDay)
+      ..writeByte(18)
+      ..write(obj.paymentDueDay);
   }
 
   @override
@@ -80,6 +107,8 @@ class AccountTypeAdapter extends TypeAdapter<AccountType> {
         return AccountType.bank;
       case 2:
         return AccountType.mfs;
+      case 3:
+        return AccountType.creditCard;
       default:
         return AccountType.cash;
     }
@@ -96,6 +125,9 @@ class AccountTypeAdapter extends TypeAdapter<AccountType> {
         break;
       case AccountType.mfs:
         writer.writeByte(2);
+        break;
+      case AccountType.creditCard:
+        writer.writeByte(3);
         break;
     }
   }
@@ -131,6 +163,15 @@ _$AccountModelImpl _$$AccountModelImplFromJson(Map<String, dynamic> json) =>
       updatedAt: json['updatedAt'] == null
           ? null
           : DateTime.parse(json['updatedAt'] as String),
+      nickname: json['nickname'] as String?,
+      userId: json['userId'] as String?,
+      accountNumber: json['accountNumber'] as String?,
+      cardType: json['cardType'] as String?,
+      cardIssuer: json['cardIssuer'] as String?,
+      cardholderName: json['cardholderName'] as String?,
+      creditLimit: (json['creditLimit'] as num?)?.toDouble(),
+      billingDay: (json['billingDay'] as num?)?.toInt(),
+      paymentDueDay: (json['paymentDueDay'] as num?)?.toInt(),
     );
 
 Map<String, dynamic> _$$AccountModelImplToJson(_$AccountModelImpl instance) =>
@@ -145,10 +186,20 @@ Map<String, dynamic> _$$AccountModelImplToJson(_$AccountModelImpl instance) =>
       'isDefault': instance.isDefault,
       'createdAt': instance.createdAt?.toIso8601String(),
       'updatedAt': instance.updatedAt?.toIso8601String(),
+      'nickname': instance.nickname,
+      'userId': instance.userId,
+      'accountNumber': instance.accountNumber,
+      'cardType': instance.cardType,
+      'cardIssuer': instance.cardIssuer,
+      'cardholderName': instance.cardholderName,
+      'creditLimit': instance.creditLimit,
+      'billingDay': instance.billingDay,
+      'paymentDueDay': instance.paymentDueDay,
     };
 
 const _$AccountTypeEnumMap = {
   AccountType.cash: 'cash',
   AccountType.bank: 'bank',
   AccountType.mfs: 'mfs',
+  AccountType.creditCard: 'creditCard',
 };

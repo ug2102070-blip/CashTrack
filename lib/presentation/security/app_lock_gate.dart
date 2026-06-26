@@ -6,6 +6,7 @@ import 'package:local_auth/local_auth.dart';
 import '../../core/l10n/app_l10n.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../providers/app_providers.dart';
+import '../../services/sms_service.dart';
 
 class AppLockGate extends ConsumerStatefulWidget {
   const AppLockGate({super.key, required this.child});
@@ -54,6 +55,9 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
       return;
     }
     if (state == AppLifecycleState.resumed) {
+      // Check for active notifications that arrived while app was in background
+      SmsService().checkActiveNotifications();
+      
       final settings = ref.read(settingsProvider);
       final autoLockMinutes = settings['autoLockMinutes'] ?? 5;
       if (autoLockMinutes == 0) return;

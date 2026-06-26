@@ -25,8 +25,13 @@ class TransactionModel with _$TransactionModel {
     @HiveField(13) DateTime? updatedAt,
     @HiveField(14) String? smsId,
     @HiveField(15) String? toAccountId, // For transfers
-    @HiveField(16) @Default([]) List<String> tags, // For SMS auto-categorization
-    @HiveField(17) @Default(0.0) double confidenceScore, // SMS categorization confidence
+    @HiveField(16)
+    @Default([])
+    List<String> tags, // For SMS auto-categorization
+    @HiveField(17)
+    @Default(0.0)
+    double confidenceScore, // SMS categorization confidence
+    @HiveField(18) String? userId, // Track which user owns this transaction
   }) = _TransactionModel;
 
   factory TransactionModel.fromJson(Map<String, dynamic> json) =>

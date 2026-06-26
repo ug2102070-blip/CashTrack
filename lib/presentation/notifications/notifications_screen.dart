@@ -1,4 +1,4 @@
-﻿// lib/presentation/notifications/notifications_screen.dart
+// lib/presentation/notifications/notifications_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -16,6 +16,7 @@ class NotificationsScreen extends ConsumerWidget {
     final budgets =
         ref.watch(budgetsProvider.notifier).getBudgetsForCurrentMonth();
     final debts = ref.watch(debtsProvider);
+    final accounts = ref.watch(accountsProvider);
     final categories = ref.watch(categoriesProvider);
     final settings = ref.watch(settingsProvider);
     final currency = (settings['currency'] as String?) ?? '৳';
@@ -24,7 +25,8 @@ class NotificationsScreen extends ConsumerWidget {
 
     final items = <_NotifItem>[];
 
-    if (summary.totalBalance <= 0) {
+    // Only show low balance alert when accounts exist and balance is negative
+    if (accounts.isNotEmpty && summary.totalBalance < 0) {
       items.add(_NotifItem(
         title: context.t('low_balance'),
         body: context.t('low_balance_body', params: {

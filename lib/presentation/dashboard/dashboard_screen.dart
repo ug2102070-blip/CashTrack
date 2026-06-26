@@ -8,6 +8,10 @@ import '../../core/utils/amount_mask.dart';
 import '../../core/l10n/app_l10n.dart';
 import '../../data/models/account_model.dart';
 import '../../data/models/debt_model.dart';
+import '../../data/models/split_expense_model.dart';
+import '../../data/models/goal_model.dart';
+import '../../data/models/budget_model.dart';
+import '../../services/auth_service.dart';
 import '../providers/app_providers.dart';
 import 'package:go_router/go_router.dart';
 import 'widgets/expense_chart_dynamic.dart';
@@ -25,6 +29,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   bool _revealAmounts = false;
   ImageProvider? _profileImage;
   String? _profileImageCacheKey;
+  late final PageController _leftPageController;
+  late final PageController _rightPageController;
+  int _leftPageIndex = 0;
+  int _rightPageIndex = 0;
 
   // Pre-created animations to avoid creating new CurvedAnimation objects
   // on every build() call — which leaks InheritedWidget dependents and
@@ -36,6 +44,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   @override
   void initState() {
     super.initState();
+    _leftPageController = PageController();
+    _rightPageController = PageController();
     _animCtrl = AnimationController(
         duration: const Duration(milliseconds: 900), vsync: this)
       ..forward();
@@ -53,10 +63,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               parent: _animCtrl,
               curve: Interval(s, e, curve: Curves.easeOutCubic)));
     }).toList();
+
+    // Reload profile with current user's UID after auth redirect
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(userProfileProvider.notifier).reloadProfile();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _leftPageController.dispose();
+    _rightPageController.dispose();
     _animCtrl.dispose();
     super.dispose();
   }
@@ -86,6 +105,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final accounts = ref.watch(accountsProvider);
     final debts = ref.watch(debtsProvider);
     final settings = ref.watch(settingsProvider);
+    final profile = ref.watch(userProfileProvider);
     final currency = (settings['currency'] as String?) ?? '\u09F3';
     final hideAmounts = settings['hideAmounts'] ?? false;
     final rolloverEnabled = settings['rolloverBudget'] ?? false;
@@ -158,15 +178,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  // â”€â”€ AppBar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── AppBar ────────────────────────────────────────────────────────────
   Widget _appBar(BuildContext ctx, Color primary, int alertCount,
       bool hideAmounts, bool isDark) {
     final profile = ref.watch(userProfileProvider);
     final fullName = (profile['fullName'] ?? '').trim();
+    final profileEmail = (profile['email'] ?? '').trim();
+    final profilePhone = (profile['phone'] ?? '').trim();
     final photoBase64 = (profile['photoBase64'] ?? '').trim();
     final profileImage = _resolveProfileImage(photoBase64);
+
+    // Determine display name: fullName > email > 'Dashboard'
+    final firebaseUser = AuthService().currentUser;
+    final displayName = fullName.isNotEmpty
+        ? fullName
+        : profileEmail.isNotEmpty
+            ? profileEmail
+            : (firebaseUser?.email ?? context.t('dashboard'));
+
+    final contactLine = profilePhone.isNotEmpty
+        ? profilePhone
+        : profileEmail.isNotEmpty
+            ? profileEmail
+            : (firebaseUser?.email?.trim() ?? '');
+
     final initials = fullName.isEmpty
-        ? '?'
+        ? (profileEmail.isNotEmpty ? profileEmail[0].toUpperCase() : '?')
         : fullName
             .split(' ')
             .where((e) => e.isNotEmpty)
@@ -227,22 +264,28 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                         .onSurface
                         .withValues(alpha: 0.45),
                     fontSize: 11)),
-            Text(fullName.isEmpty ? context.t('dashboard') : fullName,
+            Text(displayName,
                 style: AppTextStyles.h2.copyWith(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.3,
-                    color: Theme.of(ctx).colorScheme.onSurface)),
+                    color: Theme.of(ctx).colorScheme.onSurface),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+            if (contactLine.isNotEmpty)
+              Text(contactLine,
+                  style: AppTextStyles.caption.copyWith(
+                      color: Theme.of(ctx)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.35),
+                      fontSize: 9),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
           ],
         )),
         if (hideAmounts) ...[
-          _navBtn(
-              ctx,
-              _revealAmounts
-                  ? Icons.visibility_rounded
-                  : Icons.visibility_off_rounded,
-              isDark,
-              () => setState(() => _revealAmounts = !_revealAmounts)),
+          // eye button now lives in balance card, not nav bar
           const SizedBox(width: 6),
         ],
         _navBtn(ctx, Icons.notifications_outlined, isDark,
@@ -387,7 +430,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                             fontWeight: FontWeight.w700))),
               const SizedBox(width: 8),
               GestureDetector(
-                  onTap: toggleReveal,
+                  onTap: () {
+                    // Toggle hide amounts in settings
+                    final current =
+                        ref.read(settingsProvider)['hideAmounts'] == true;
+                    ref
+                        .read(settingsProvider.notifier)
+                        .updateHideAmounts(!current);
+                    // Also reset local reveal state
+                    setState(() => _revealAmounts = false);
+                  },
                   child: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
@@ -507,7 +559,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  // â”€â”€ Accounts + Debt Row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _accountsDebtRow(
       BuildContext context,
       List<AccountModel> accounts,
@@ -517,18 +568,62 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       VoidCallback toggleReveal,
       bool isDark,
       Color primary) {
+    final splitGroups = ref.watch(splitGroupsProvider);
+    final goals = ref.watch(goalsProvider);
+    final allBudgets = ref.watch(budgetsProvider);
+    final profile = ref.watch(userProfileProvider);
+
+    final now = DateTime.now();
+    final monthBudgets = allBudgets.where((b) =>
+        b.month.year == now.year && b.month.month == now.month).toList();
+
+    // Accounts totals
     final totalBalance = accounts.fold<double>(0, (sum, a) => sum + a.balance);
-    AccountModel? cash;
-    AccountModel? online;
-    for (final a in accounts) {
-      if (a.id == 'acc_cash') cash = a;
-      if (a.id == 'acc_online') online = a;
+    final cashTotal = accounts
+        .where((a) => a.type == AccountType.cash)
+        .fold<double>(0, (s, a) => s + a.balance);
+    final onlineTotal = accounts
+        .where((a) => a.type != AccountType.cash)
+        .fold<double>(0, (s, a) => s + a.balance);
+
+    // Split Expenses totals
+    double totalSplitSpent = 0;
+    double yourSplitShare = 0;
+    double netOwedAmount = 0;
+    final splitRepo = ref.read(splitExpenseRepositoryProvider);
+
+    for (final group in splitGroups) {
+      final expenses = splitRepo.getExpensesByGroup(group.id);
+      final userMemberName = group.getUserMemberName(profile);
+      final hasYou = group.members.contains(userMemberName);
+
+      final groupSpent = expenses.fold<double>(0, (sum, e) => sum + e.amount);
+      totalSplitSpent += groupSpent;
+
+      if (hasYou) {
+        final groupYourShare = expenses.fold<double>(0, (sum, expense) {
+          final share = expense.splitAmong.isEmpty
+              ? 0.0
+              : expense.amount / expense.splitAmong.length;
+          return expense.splitAmong.contains(userMemberName) ? sum + share : sum;
+        });
+        yourSplitShare += groupYourShare;
+
+        final settlements = SplitSettlement.calculate(expenses, group.members);
+        for (final s in settlements) {
+          if (s.from == userMemberName) {
+            netOwedAmount -= s.amount;
+          } else if (s.to == userMemberName) {
+            netOwedAmount += s.amount;
+          }
+        }
+      }
     }
+
+    // Debts totals
     double lent = 0, borrowed = 0;
     for (final d in debts) {
-      if (d.isSettled) {
-        continue;
-      }
+      if (d.isSettled) continue;
       final rem = (d.amount - d.paidAmount).clamp(0.0, d.amount);
       if (d.type == DebtType.lent) {
         lent += rem;
@@ -536,202 +631,873 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         borrowed += rem;
       }
     }
+    final activeDebts = debts.where((d) => !d.isSettled).length;
+    final lentCount = debts.where((d) => !d.isSettled && d.type == DebtType.lent).length;
+    final borrowedCount = debts.where((d) => !d.isSettled && d.type == DebtType.borrowed).length;
+
+    // Goals totals
+    final activeGoals = goals.where((g) => !g.isCompleted).toList();
+    final totalGoalTarget = activeGoals.fold<double>(0, (sum, g) => sum + g.targetAmount);
+    final totalGoalSaved = activeGoals.fold<double>(0, (sum, g) => sum + g.currentAmount);
+    final goalPercentage = totalGoalTarget > 0 ? (totalGoalSaved / totalGoalTarget) : 0.0;
+
+    // Budget totals
+    final totalBudget = monthBudgets.fold<double>(0, (sum, b) => sum + b.amount);
+    final totalBudgetSpent = monthBudgets.fold<double>(0, (sum, b) => sum + b.spent);
+    final remainingBudget = (totalBudget - totalBudgetSpent).clamp(0.0, double.infinity);
+    final budgetProgress = totalBudget > 0 ? (totalBudgetSpent / totalBudget) : 0.0;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-      child: IntrinsicHeight(
-        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          // Accounts
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Left Card (Accounts / Split Expenses) ───────────────────────
           Expanded(
-            child: InkWell(
-              onTap: () => context.push('/accounts'),
-              borderRadius: BorderRadius.circular(20),
-              child: _surfCard(context, isDark,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _cardHeader2(
-                          context,
-                          context.t('accounts'),
-                          Icons.account_balance_wallet_rounded,
-                          primary,
-                          () => context.push('/accounts')),
-                      const SizedBox(height: 8),
-                      GestureDetector(
-                        onTap: toggleReveal,
-                        behavior: HitTestBehavior.translucent,
-                        child: Text(
-                          accounts.isEmpty
-                              ? context.t('no_accounts')
-                              : formatAmount(currency, totalBalance,
-                                  hide: hideAmounts),
-                          style: TextStyle(
-                            fontSize: accounts.isEmpty ? 12 : 18,
-                            fontWeight: accounts.isEmpty
-                                ? FontWeight.w600
-                                : FontWeight.w800,
-                            letterSpacing: -0.4,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
+            child: _surfCard(
+              context,
+              isDark,
+              child: SizedBox(
+                height: 135,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: PageView(
+                        controller: _leftPageController,
+                        onPageChanged: (idx) => setState(() => _leftPageIndex = idx),
+                        children: [
+                          _accountsCardContent(context, accounts, totalBalance, cashTotal, onlineTotal, currency, hideAmounts, toggleReveal, primary),
+                          _splitExpensesCardContent(context, splitGroups, totalSplitSpent, yourSplitShare, netOwedAmount, currency, hideAmounts, toggleReveal, primary),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        accounts.isEmpty
-                            ? context.t('add_first_account')
-                            : context.t('accounts_count',
-                                params: {'count': accounts.length.toString()}),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.45),
-                        ),
-                      ),
-                      if (accounts.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        if (cash != null)
-                          _accountMiniLine(
-                            context,
-                            context.t('cash'),
-                            cash.balance,
-                            currency,
-                            hideAmounts,
-                            toggleReveal,
-                          ),
-                        if (online != null)
-                          _accountMiniLine(
-                            context,
-                            context.t('online'),
-                            online.balance,
-                            currency,
-                            hideAmounts,
-                            toggleReveal,
-                          ),
-                      ],
-                      if (cash != null && online != null) ...[
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: InkWell(
-                            onTap: () =>
-                                _showTransferPicker(cash!, online!, currency),
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.swap_horiz_rounded,
-                                      size: 12, color: primary),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    context.t('transfer'),
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: primary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                      const Spacer(),
-                    ],
-                  )),
+                    ),
+                    const SizedBox(height: 6),
+                    _buildPageIndicator(2, _leftPageIndex, primary),
+                  ],
+                ),
+              ),
             ),
           ),
 
           const SizedBox(width: 12),
 
-          // Debts
+          // ── Right Card (Debts / Goals / Budget) ──────────────────────────
           Expanded(
-            child: _surfCard(context, isDark,
+            child: _surfCard(
+              context,
+              isDark,
+              child: SizedBox(
+                height: 135,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _cardHeader2(
-                        context,
-                        context.t('debts'),
-                        Icons.handshake_rounded,
-                        AppColors.warning,
-                        () => context.push('/debts')),
-                    const SizedBox(height: 10),
-                    _debtLine(context, context.t('to_receive'), lent,
-                        AppColors.success, currency, hideAmounts, toggleReveal),
-                    Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Divider(
-                            height: 1,
-                            color: Theme.of(context)
-                                .dividerColor
-                                .withValues(alpha: 0.4))),
-                    _debtLine(context, context.t('to_pay'), borrowed,
-                        AppColors.error, currency, hideAmounts, toggleReveal),
-                    const Spacer(),
+                    Expanded(
+                      child: PageView(
+                        controller: _rightPageController,
+                        onPageChanged: (idx) => setState(() => _rightPageIndex = idx),
+                        children: [
+                          _debtsCardContent(context, lent, borrowed, activeDebts, lentCount, borrowedCount, currency, hideAmounts, toggleReveal, primary),
+                          _goalsCardContent(context, goals, totalGoalTarget, totalGoalSaved, goalPercentage, currency, hideAmounts, toggleReveal, primary),
+                          _budgetsCardContent(context, monthBudgets, totalBudget, totalBudgetSpent, remainingBudget, budgetProgress, currency, hideAmounts, toggleReveal, primary),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    _buildPageIndicator(3, _rightPageIndex, primary),
                   ],
-                )),
+                ),
+              ),
+            ),
           ),
-        ]),
+        ],
       ),
     );
   }
 
-  void _showTransferPicker(
-      AccountModel cash, AccountModel online, String currency) {
+  Widget _accountsCardContent(
+      BuildContext context,
+      List<AccountModel> accounts,
+      double totalBalance,
+      double cashTotal,
+      double onlineTotal,
+      String currency,
+      bool hideAmounts,
+      VoidCallback toggleReveal,
+      Color primary) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Container(
+            width: 28, height: 28,
+            decoration: BoxDecoration(
+                color: primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8)),
+            child: Icon(Icons.account_balance_wallet_rounded,
+                color: primary, size: 14),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(context.t('accounts'),
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.onSurface)),
+          ),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () => context.push('/accounts'),
+              child: Icon(Icons.chevron_right_rounded,
+                  size: 16, color: primary),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: toggleReveal,
+                behavior: HitTestBehavior.translucent,
+                child: Text(
+                  accounts.isEmpty
+                      ? context.t('no_accounts')
+                      : formatAmount(currency, totalBalance,
+                          hide: hideAmounts),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: accounts.isEmpty ? 12 : 18,
+                    fontWeight: accounts.isEmpty
+                        ? FontWeight.w600
+                        : FontWeight.w800,
+                    letterSpacing: -0.4,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            ),
+            if (accounts.length >= 2)
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () => _showTransferPicker(accounts, currency),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.swap_horiz_rounded,
+                            size: 11, color: primary),
+                        const SizedBox(width: 3),
+                        Text(
+                          context.t('transfer'),
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: primary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          accounts.isEmpty
+              ? context.t('add_first_account')
+              : context.t('accounts_count',
+                  params: {'count': accounts.length.toString()}),
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context)
+                .colorScheme
+                .onSurface
+                .withValues(alpha: 0.45),
+          ),
+        ),
+        if (accounts.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          _accountMiniLine(context, context.t('cash'),
+              cashTotal, currency, hideAmounts, toggleReveal),
+          const SizedBox(height: 3),
+          _accountMiniLine(context, context.t('online'),
+              onlineTotal, currency, hideAmounts, toggleReveal),
+        ],
+      ],
+    );
+  }
+
+  Widget _splitExpensesCardContent(
+      BuildContext context,
+      List<SplitGroup> splitGroups,
+      double totalSplitSpent,
+      double yourSplitShare,
+      double netOwedAmount,
+      String currency,
+      bool hideAmounts,
+      VoidCallback toggleReveal,
+      Color primary) {
+    final bn = Localizations.localeOf(context).languageCode == 'bn';
+    final isOwed = netOwedAmount > 0;
+    final absOwed = netOwedAmount.abs();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Container(
+            width: 28, height: 28,
+            decoration: BoxDecoration(
+                color: Colors.blue.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8)),
+            child: const Icon(Icons.call_split_rounded,
+                color: Colors.blue, size: 14),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+                bn ? 'স্প্লিট খরচ' : 'Split Expenses',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.onSurface)),
+          ),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () => context.push('/split-expenses'),
+              child: const Icon(Icons.chevron_right_rounded,
+                  size: 16, color: Colors.blue),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        GestureDetector(
+          onTap: toggleReveal,
+          behavior: HitTestBehavior.translucent,
+          child: Text(
+            formatAmount(currency, totalSplitSpent, hide: hideAmounts),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          splitGroups.isEmpty
+              ? (bn ? 'কোনো গ্রুপ নেই' : 'No groups yet')
+              : (bn
+                  ? '${splitGroups.length} টি গ্রুপ'
+                  : '${splitGroups.length} active group${splitGroups.length > 1 ? 's' : ''}'),
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context)
+                .colorScheme
+                .onSurface
+                .withValues(alpha: 0.45),
+          ),
+        ),
+        if (splitGroups.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          _splitMiniLine(
+            context,
+            bn ? 'আপনার অংশ' : 'Your Share',
+            yourSplitShare,
+            Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
+            currency,
+            hideAmounts,
+          ),
+          const SizedBox(height: 3),
+          _splitMiniLine(
+            context,
+            absOwed < 0.01
+                ? (bn ? 'নিষ্পত্তি করা হয়েছে' : 'Settled')
+                : (isOwed ? (bn ? 'পাবেন' : 'To Receive') : (bn ? 'দেবেন' : 'To Pay')),
+            absOwed,
+            absOwed < 0.01
+                ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)
+                : (isOwed ? AppColors.success : AppColors.error),
+            currency,
+            hideAmounts,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _debtsCardContent(
+      BuildContext context,
+      double lent,
+      double borrowed,
+      int activeDebts,
+      int lentCount,
+      int borrowedCount,
+      String currency,
+      bool hideAmounts,
+      VoidCallback toggleReveal,
+      Color primary) {
+    final bn = Localizations.localeOf(context).languageCode == 'bn';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _cardHeader2(
+            context,
+            context.t('debts'),
+            Icons.handshake_rounded,
+            AppColors.warning,
+            () => context.push('/debts')),
+        const SizedBox(height: 6),
+        GestureDetector(
+          onTap: toggleReveal,
+          behavior: HitTestBehavior.translucent,
+          child: Text(
+            formatAmount(currency, lent + borrowed, hide: hideAmounts),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          activeDebts == 0
+              ? (bn ? 'কোনো সক্রিয় ঋণ নেই' : 'No active debts')
+              : context.t('due_count',
+                  params: {'count': activeDebts.toString()}),
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context)
+                .colorScheme
+                .onSurface
+                .withValues(alpha: 0.45),
+          ),
+        ),
+        if (lent > 0 || borrowed > 0) ...[
+          const SizedBox(height: 6),
+          _debtMiniLine(context, context.t('to_receive'),
+              lent, AppColors.success, currency, hideAmounts,
+              lentCount),
+          const SizedBox(height: 3),
+          _debtMiniLine(context, context.t('to_pay'),
+              borrowed, AppColors.error, currency, hideAmounts,
+              borrowedCount),
+        ],
+      ],
+    );
+  }
+
+  Widget _goalsCardContent(
+      BuildContext context,
+      List<GoalModel> goals,
+      double totalTarget,
+      double totalSaved,
+      double percentage,
+      String currency,
+      bool hideAmounts,
+      VoidCallback toggleReveal,
+      Color primary) {
+    final bn = Localizations.localeOf(context).languageCode == 'bn';
+    final activeCount = goals.where((g) => !g.isCompleted).length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _cardHeader2(
+            context,
+            bn ? 'লক্ষ্যসমূহ' : 'Goals',
+            Icons.track_changes_rounded,
+            Colors.purple,
+            () => context.push('/goals')),
+        const SizedBox(height: 6),
+        GestureDetector(
+          onTap: toggleReveal,
+          behavior: HitTestBehavior.translucent,
+          child: Text(
+            formatAmount(currency, totalSaved, hide: hideAmounts),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          activeCount == 0
+              ? (bn ? 'কোনো সক্রিয় লক্ষ্য নেই' : 'No active goals')
+              : (bn
+                  ? '$activeCount টি সক্রিয় লক্ষ্য'
+                  : '$activeCount active goal${activeCount > 1 ? 's' : ''}'),
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context)
+                .colorScheme
+                .onSurface
+                .withValues(alpha: 0.45),
+          ),
+        ),
+        if (goals.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          _goalProgressMiniLine(
+            context,
+            bn ? 'মোট লক্ষ্য' : 'Total Target',
+            totalTarget,
+            currency,
+            hideAmounts,
+          ),
+          const SizedBox(height: 3),
+          _goalPercentMiniLine(
+            context,
+            bn ? 'অগ্রগতি' : 'Progress',
+            percentage,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _budgetsCardContent(
+      BuildContext context,
+      List<BudgetModel> monthBudgets,
+      double totalBudget,
+      double totalSpent,
+      double remainingBudget,
+      double budgetProgress,
+      String currency,
+      bool hideAmounts,
+      VoidCallback toggleReveal,
+      Color primary) {
+    final bn = Localizations.localeOf(context).languageCode == 'bn';
+    final budgetCount = monthBudgets.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _cardHeader2(
+            context,
+            bn ? 'বাজেট' : 'Budget',
+            Icons.donut_large_rounded,
+            Colors.teal,
+            () => context.push('/budget')),
+        const SizedBox(height: 6),
+        GestureDetector(
+          onTap: toggleReveal,
+          behavior: HitTestBehavior.translucent,
+          child: Text(
+            formatAmount(currency, remainingBudget, hide: hideAmounts),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          budgetCount == 0
+              ? (bn ? 'কোনো বাজেট সেট নেই' : 'No budget set')
+              : (bn
+                  ? 'অবশিষ্ট বাজেট (মোট $budgetCount টি)'
+                  : 'Remaining of $budgetCount budget${budgetCount > 1 ? 's' : ''}'),
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context)
+                .colorScheme
+                .onSurface
+                .withValues(alpha: 0.45),
+          ),
+        ),
+        if (monthBudgets.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          _budgetProgressMiniLine(
+            context,
+            bn ? 'মোট বাজেট' : 'Total Budget',
+            totalBudget,
+            currency,
+            hideAmounts,
+            Colors.teal,
+          ),
+          const SizedBox(height: 3),
+          _budgetProgressMiniLine(
+            context,
+            bn ? 'মোট খরচ' : 'Spent',
+            totalSpent,
+            currency,
+            hideAmounts,
+            budgetProgress > 1.0 ? AppColors.error : Colors.teal.shade300,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPageIndicator(int count, int currentIndex, Color activeColor) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(count, (index) {
+        final isActive = index == currentIndex;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.symmetric(horizontal: 2.5),
+          height: 4,
+          width: isActive ? 12 : 4,
+          decoration: BoxDecoration(
+            color: isActive
+                ? activeColor
+                : activeColor.withValues(alpha: 0.25),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _splitMiniLine(
+    BuildContext context,
+    String label,
+    double amount,
+    Color color,
+    String currency,
+    bool hideAmounts,
+  ) {
+    return Row(
+      children: [
+        Container(
+          width: 6, height: 6,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(label,
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.5))),
+        const Spacer(),
+        Text(
+          formatAmount(currency, amount, hide: hideAmounts),
+          style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: color,
+              letterSpacing: -0.2),
+        ),
+      ],
+    );
+  }
+
+  Widget _goalProgressMiniLine(
+    BuildContext context,
+    String label,
+    double amount,
+    String currency,
+    bool hideAmounts,
+  ) {
+    return Row(
+      children: [
+        Container(
+          width: 6, height: 6,
+          decoration: const BoxDecoration(color: Colors.purple, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(label,
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.5))),
+        const Spacer(),
+        Text(
+          formatAmount(currency, amount, hide: hideAmounts),
+          style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Colors.purple,
+              letterSpacing: -0.2),
+        ),
+      ],
+    );
+  }
+
+  Widget _goalPercentMiniLine(
+    BuildContext context,
+    String label,
+    double percentage,
+  ) {
+    return Row(
+      children: [
+        Container(
+          width: 6, height: 6,
+          decoration: const BoxDecoration(color: Colors.purpleAccent, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(label,
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.5))),
+        const Spacer(),
+        Text(
+          '${(percentage * 100).toStringAsFixed(0)}%',
+          style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: Colors.purpleAccent,
+              letterSpacing: -0.2),
+        ),
+      ],
+    );
+  }
+
+  Widget _budgetProgressMiniLine(
+    BuildContext context,
+    String label,
+    double amount,
+    String currency,
+    bool hideAmounts,
+    Color color,
+  ) {
+    return Row(
+      children: [
+        Container(
+          width: 6, height: 6,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(label,
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.5))),
+        const Spacer(),
+        Text(
+          formatAmount(currency, amount, hide: hideAmounts),
+          style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: color,
+              letterSpacing: -0.2),
+        ),
+      ],
+    );
+  }
+
+  void _showTransferPicker(List<AccountModel> accounts, String currency) {
+    AccountModel? fromAccount;
+    AccountModel? toAccount;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: SafeArea(
-          top: false,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 12,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 6),
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).dividerColor,
-                  borderRadius: BorderRadius.circular(2),
+              Center(
+                child: Container(
+                  width: 36, height: 4,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).dividerColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-              ListTile(
-                leading: const Icon(Icons.swap_horiz_rounded),
-                title: Text('${cash.name} -> ${online.name}'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _showTransfer(cash, online, currency);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.swap_horiz_rounded),
-                title: Text('${online.name} -> ${cash.name}'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _showTransfer(online, cash, currency);
-                },
-              ),
+              const SizedBox(height: 16),
+              Text(context.t('transfer_funds'),
+                  style: AppTextStyles.h5),
+              const SizedBox(height: 16),
+              // From account
+              Text('From',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.45))),
               const SizedBox(height: 8),
+              _buildAccountChips(
+                  ctx, accounts, fromAccount, currency,
+                  (a) => setModalState(() {
+                        fromAccount = a;
+                        if (toAccount == a) toAccount = null;
+                      })),
+              const SizedBox(height: 14),
+              // To account
+              Text('To',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.45))),
+              const SizedBox(height: 8),
+              _buildAccountChips(
+                  ctx,
+                  accounts.where((a) => a != fromAccount).toList(),
+                  toAccount,
+                  currency,
+                  (a) => setModalState(() => toAccount = a)),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: fromAccount != null && toAccount != null
+                      ? () {
+                          Navigator.pop(ctx);
+                          _showTransfer(
+                              fromAccount!, toAccount!, currency);
+                        }
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.swap_horiz_rounded, size: 18),
+                      const SizedBox(width: 8),
+                      Text(fromAccount != null && toAccount != null
+                          ? '${fromAccount!.name}  →  ${toAccount!.name}'
+                          : context.t('select')),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAccountChips(
+    BuildContext context,
+    List<AccountModel> accounts,
+    AccountModel? selected,
+    String currency,
+    ValueChanged<AccountModel> onSelect,
+  ) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: accounts.map((a) {
+        final isSelected = selected == a;
+        final nickname = a.nickname?.isNotEmpty == true ? a.nickname! : a.name;
+        final accountNumberSuffix = a.accountNumber?.isNotEmpty == true 
+            ? ' (${a.accountNumber!.length > 4 ? a.accountNumber!.substring(a.accountNumber!.length - 4) : a.accountNumber})' 
+            : '';
+        final displayName = '$nickname$accountNumberSuffix';
+        return GestureDetector(
+          onTap: () => onSelect(a),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? primary.withValues(alpha: 0.12)
+                  : Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isSelected
+                    ? primary
+                    : Colors.transparent,
+                width: 1.5,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(a.icon ?? '💳',
+                        style: const TextStyle(fontSize: 14)),
+                    const SizedBox(width: 6),
+                    Text(displayName,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: isSelected
+                              ? primary
+                              : Theme.of(context).colorScheme.onSurface,
+                        )),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$currency${a.balance.toStringAsFixed(0)}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected
+                        ? primary
+                        : Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -773,38 +1539,65 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: Theme.of(context).colorScheme.onSurface))),
-      GestureDetector(
-          onTap: onTap,
-          child: Icon(Icons.chevron_right_rounded,
-              size: 16,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.3))),
+      MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+            onTap: onTap,
+            child: Icon(Icons.chevron_right_rounded,
+                size: 16,
+                color: iconColor)),
+      ),
     ]);
   }
 
-  Widget _debtLine(BuildContext context, String label, double amount,
-      Color color, String currency, bool hideAmounts, VoidCallback onTap) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label,
+  Widget _debtMiniLine(
+    BuildContext context,
+    String label,
+    double amount,
+    Color color,
+    String currency,
+    bool hideAmounts,
+    int count,
+  ) {
+    return Row(
+      children: [
+        Container(
+          width: 6, height: 6,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(label,
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.5))),
+        const Spacer(),
+        Text(
+          formatAmount(currency, amount, hide: hideAmounts),
           style: TextStyle(
-              fontSize: 10,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.4))),
-      const SizedBox(height: 3),
-      GestureDetector(
-          onTap: onTap,
-          behavior: HitTestBehavior.translucent,
-          child: Text(formatAmount(currency, amount, hide: hideAmounts),
-              style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: color,
-                  letterSpacing: -0.3))),
-    ]);
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: color,
+              letterSpacing: -0.2),
+        ),
+        if (count > 0) ...[
+          const SizedBox(width: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text('$count',
+                style: TextStyle(
+                    fontSize: 9, fontWeight: FontWeight.w700, color: color)),
+          ),
+        ],
+      ],
+    );
   }
 
   Widget _accountMiniLine(
@@ -815,37 +1608,34 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     bool hideAmounts,
     VoidCallback onTap,
   ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Text(
-            label,
+    return Row(
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context)
+                .colorScheme
+                .onSurface
+                .withValues(alpha: 0.5),
+          ),
+        ),
+        const Spacer(),
+        GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.translucent,
+          child: Text(
+            formatAmount(currency, amount, hide: hideAmounts),
             style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.5),
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: Theme.of(context).colorScheme.onSurface,
+              letterSpacing: -0.3,
             ),
           ),
-          const Spacer(),
-          GestureDetector(
-            onTap: onTap,
-            behavior: HitTestBehavior.translucent,
-            child: Text(
-              formatAmount(currency, amount, hide: hideAmounts),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: Theme.of(context).colorScheme.onSurface,
-                letterSpacing: -0.3,
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -875,12 +1665,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           const SizedBox(height: 16),
           Text(context.t('transfer_funds'), style: AppTextStyles.h5),
           const SizedBox(height: 4),
-          Text('${from.name}  ->  ${to.name}',
-              style: AppTextStyles.body2.copyWith(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.5))),
+          Text(
+            '${from.nickname?.isNotEmpty == true ? from.nickname! : from.name}${from.accountNumber?.isNotEmpty == true ? " (${from.accountNumber!.length > 4 ? from.accountNumber!.substring(from.accountNumber!.length - 4) : from.accountNumber})" : ""}  →  ${to.nickname?.isNotEmpty == true ? to.nickname! : to.name}${to.accountNumber?.isNotEmpty == true ? " (${to.accountNumber!.length > 4 ? to.accountNumber!.substring(to.accountNumber!.length - 4) : to.accountNumber})" : ""}',
+            style: AppTextStyles.body2.copyWith(
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.5)),
+          ),
           const SizedBox(height: 16),
           TextField(
               controller: ctrl,
@@ -929,8 +1721,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 
   int _alertCount(DashboardSummary summary, List budgets, List debts) {
+    final accounts = ref.read(accountsProvider);
     int n = 0;
-    if (summary.totalBalance < 0) {
+    if (accounts.isNotEmpty && summary.totalBalance < 0) {
       n++;
     }
     if (budgets.any((b) => b.amount > 0 && b.spent / b.amount >= 0.9)) {
@@ -949,9 +1742,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   String _greeting(BuildContext context) {
     final h = DateTime.now().hour;
+    if (h < 5) return context.t('good_night');
     if (h < 12) return context.t('good_morning');
     if (h < 17) return context.t('good_afternoon');
-    return context.t('good_evening');
+    if (h < 21) return context.t('good_evening');
+    return context.t('good_night');
   }
 
   ImageProvider? _resolveProfileImage(String photoBase64) {

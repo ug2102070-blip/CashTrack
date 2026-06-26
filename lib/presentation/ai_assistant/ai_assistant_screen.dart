@@ -1,4 +1,4 @@
-﻿// lib/presentation/ai_assistant/ai_assistant_screen.dart
+// lib/presentation/ai_assistant/ai_assistant_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -738,7 +738,12 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen>
                         .onSurface
                         .withValues(alpha: 0.35),
                   ),
+                  filled: false,
                   border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 ),

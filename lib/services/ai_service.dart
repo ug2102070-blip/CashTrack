@@ -17,11 +17,11 @@ class AiService {
   // to Firebase Functions when explicitly requested via dart-define.
   static const bool _useBackendOverride =
       bool.fromEnvironment('USE_AI_BACKEND', defaultValue: false);
-  static const String _defaultModel = 'gemini-2.0-flash';
+  static const String _defaultModel = 'llama-3.1-8b-instant';
   static const String _functionsRegion = 'us-central1';
   static const String _settingsBoxName = 'settingsBox';
-  static const String _apiKeySettingKey = 'geminiApiKey';
-  static const String _secureApiKeyKey = 'gemini_api_key_secure';
+  static const String _apiKeySettingKey = 'geminiApiKey'; // Reused for Groq API key compatibility
+  static const String _secureApiKeyKey = 'gemini_api_key_secure'; // Reused for Groq API key compatibility
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
   /// In-memory cache so the sync getter can work without awaiting.
@@ -42,9 +42,14 @@ class AiService {
     if (explicit != null && explicit.trim().isNotEmpty) {
       return explicit.trim();
     }
-    const envKey = String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
+    const envKey = String.fromEnvironment(
+      'GROQ_API_KEY',
+      defaultValue: String.fromEnvironment('GEMINI_API_KEY', defaultValue: ''),
+    );
     if (envKey.trim().isNotEmpty) return envKey.trim();
-    return _storedKey().trim();
+    final stored = _storedKey().trim();
+    if (stored.isNotEmpty) return stored;
+    return '';
   }
 
   bool get isConfigured => _useBackendOverride || _apiKey.isNotEmpty;
@@ -55,10 +60,16 @@ class AiService {
       return explicit.trim();
     }
 
-    const envKey = String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
+    const envKey = String.fromEnvironment(
+      'GROQ_API_KEY',
+      defaultValue: String.fromEnvironment('GEMINI_API_KEY', defaultValue: ''),
+    );
     if (envKey.trim().isNotEmpty) return envKey.trim();
 
-    return (await loadApiKey()).trim();
+    final stored = (await loadApiKey()).trim();
+    if (stored.isNotEmpty) return stored;
+
+    return '';
   }
 
   /// Pre-loads the API key from secure storage into the in-memory cache.
@@ -134,9 +145,9 @@ class AiService {
     try {
       final effectiveApiKey = await _getEffectiveApiKey();
 
-      // Priority 1: Direct Gemini API (user's own key — most reliable path)
+      // Priority 1: Direct Groq API (user's own key — most reliable path)
       if (effectiveApiKey.isNotEmpty) {
-        return await _getResponseFromGemini(
+        return await _getResponseFromGroq(
           query: query,
           financialContext: financialContext,
           l10n: l10n,
@@ -252,7 +263,7 @@ $query
     return l10n?.t('ai_service_no_response') ?? 'No response from AI service.';
   }
 
-  Future<String> _getResponseFromGemini({
+  Future<String> _getResponseFromGroq({
     required String query,
     String? financialContext,
     AppL10n? l10n,
@@ -264,36 +275,33 @@ $query
     );
 
     final response = await _dio.post(
-      'https://generativelanguage.googleapis.com/v1beta/models/$_defaultModel:generateContent?key=$apiKey',
+      'https://api.groq.com/openai/v1/chat/completions',
       options: Options(
         headers: {
+          'Authorization': 'Bearer $apiKey',
           'Content-Type': 'application/json',
         },
       ),
       data: {
-        'contents': [
+        'model': _defaultModel,
+        'messages': [
           {
             'role': 'user',
-            'parts': [
-              {'text': prompt},
-            ],
+            'content': prompt,
           },
         ],
-        'generationConfig': {
-          'temperature': 0.7,
-        },
+        'temperature': 0.7,
       },
     );
 
     final data = response.data;
-    final candidates = data is Map<String, dynamic> ? data['candidates'] : null;
-    if (candidates is List && candidates.isNotEmpty) {
-      final content = candidates.first['content'];
-      final parts = content is Map ? content['parts'] : null;
-      if (parts is List && parts.isNotEmpty) {
-        final text = parts.first['text'];
-        if (text is String && text.trim().isNotEmpty) {
-          return text.trim();
+    final choices = data is Map<String, dynamic> ? data['choices'] : null;
+    if (choices is List && choices.isNotEmpty) {
+      final message = choices.first['message'];
+      if (message is Map) {
+        final content = message['content'];
+        if (content is String && content.trim().isNotEmpty) {
+          return content.trim();
         }
       }
     }

@@ -72,8 +72,8 @@ class AppConstants {
   ];
 
   // Support
-  static const String supportEmail = 'support@cashtrack.app';
-  static const String appWebsiteUrl = 'https://cashtrack.app';
-  static const String privacyPolicyUrl = 'https://cashtrack.app/privacy';
-  static const String termsOfServiceUrl = 'https://cashtrack.app/terms';
+  static const String supportEmail = 'iamjahid.2025@gmail.com';
+  static const String appWebsiteUrl = 'https://ug2102070-blip.github.io/cashtrack-privacy/';
+  static const String privacyPolicyUrl = 'https://ug2102070-blip.github.io/cashtrack-privacy/privacy-policy.html';
+  static const String termsOfServiceUrl = 'https://ug2102070-blip.github.io/cashtrack-privacy/terms-of-service.html';
 }

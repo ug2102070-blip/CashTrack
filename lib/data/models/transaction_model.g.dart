@@ -35,13 +35,14 @@ class TransactionModelAdapter extends TypeAdapter<TransactionModel> {
       toAccountId: fields[15] as String?,
       tags: (fields[16] as List).cast<String>(),
       confidenceScore: fields[17] as double,
+      userId: fields[18] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, TransactionModel obj) {
     writer
-      ..writeByte(18)
+      ..writeByte(19)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -77,7 +78,9 @@ class TransactionModelAdapter extends TypeAdapter<TransactionModel> {
       ..writeByte(16)
       ..write(obj.tags)
       ..writeByte(17)
-      ..write(obj.confidenceScore);
+      ..write(obj.confidenceScore)
+      ..writeByte(18)
+      ..write(obj.userId);
   }
 
   @override
@@ -226,6 +229,7 @@ _$TransactionModelImpl _$$TransactionModelImplFromJson(
           (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList() ??
               const [],
       confidenceScore: (json['confidenceScore'] as num?)?.toDouble() ?? 0.0,
+      userId: json['userId'] as String?,
     );
 
 Map<String, dynamic> _$$TransactionModelImplToJson(
@@ -249,6 +253,7 @@ Map<String, dynamic> _$$TransactionModelImplToJson(
       'toAccountId': instance.toAccountId,
       'tags': instance.tags,
       'confidenceScore': instance.confidenceScore,
+      'userId': instance.userId,
     };
 
 const _$TransactionTypeEnumMap = {

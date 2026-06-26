@@ -18,9 +18,10 @@ class GoalsScreen extends ConsumerWidget {
     final completedGoals = goals.where((g) => g.isCompleted).toList();
     final settings = ref.watch(settingsProvider);
     final currency = settings['currency'] ?? '৳';
+    final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(context.t('savings_goals')),
         actions: [
@@ -170,20 +171,25 @@ class GoalsScreen extends ConsumerWidget {
     final remaining = goal.targetAmount - goal.currentAmount;
     final daysLeft = goal.deadline?.difference(DateTime.now()).inDays;
     final currency = ref.read(settingsProvider)['currency'] ?? '৳';
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final cardColor = theme.colorScheme.surface;
+    final textColor = theme.colorScheme.onSurface;
+    final mutedColor = theme.colorScheme.onSurface.withValues(alpha: 0.72);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: cardColor,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: goal.isCompleted
               ? AppColors.success.withValues(alpha: 0.3)
-              : AppColors.divider,
+              : theme.dividerColor.withValues(alpha: isDark ? 0.45 : 0.75),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: theme.shadowColor.withValues(alpha: isDark ? 0.18 : 0.06),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -220,6 +226,7 @@ class GoalsScreen extends ConsumerWidget {
                       Text(
                         goal.name,
                         style: AppTextStyles.h5.copyWith(
+                          color: textColor,
                           decoration: goal.isCompleted
                               ? TextDecoration.lineThrough
                               : null,
@@ -231,9 +238,8 @@ class GoalsScreen extends ConsumerWidget {
                           context.t('days_left',
                               params: {'count': daysLeft.toString()}),
                           style: AppTextStyles.caption.copyWith(
-                            color: daysLeft < 30
-                                ? AppColors.warning
-                                : AppColors.textSecondary,
+                            color:
+                                daysLeft < 30 ? AppColors.warning : mutedColor,
                           ),
                         ),
                     ],
@@ -284,7 +290,7 @@ class GoalsScreen extends ConsumerWidget {
                     Text(
                       '$currency${goal.targetAmount.toStringAsFixed(0)}',
                       style: AppTextStyles.body1.copyWith(
-                        color: AppColors.textSecondary,
+                        color: mutedColor,
                       ),
                     ),
                   ],
@@ -329,7 +335,7 @@ class GoalsScreen extends ConsumerWidget {
                       context.t('percent_completed', params: {
                         'value': (percentage * 100).toStringAsFixed(0)
                       }),
-                      style: AppTextStyles.caption,
+                      style: AppTextStyles.caption.copyWith(color: mutedColor),
                     ),
                     Text(
                       context.t('to_go_amount', params: {
@@ -383,6 +389,9 @@ class GoalsScreen extends ConsumerWidget {
   }
 
   Widget _buildEmptyState(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final mutedColor = theme.colorScheme.onSurface.withValues(alpha: 0.65);
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -390,12 +399,12 @@ class GoalsScreen extends ConsumerWidget {
           Icon(
             Icons.flag_outlined,
             size: 80,
-            color: AppColors.textSecondary.withValues(alpha: 0.3),
+            color: mutedColor.withValues(alpha: 0.35),
           ),
           const SizedBox(height: 16),
           Text(
             context.t('no_savings_goals'),
-            style: AppTextStyles.h5.copyWith(color: AppColors.textSecondary),
+            style: AppTextStyles.h5.copyWith(color: mutedColor),
           ),
           const SizedBox(height: 8),
           Text(
@@ -709,30 +718,37 @@ class GoalsScreen extends ConsumerWidget {
 
   void _showGoalDetails(BuildContext context, WidgetRef ref, GoalModel goal) {
     final currency = ref.read(settingsProvider)['currency'] ?? '৳';
+    final theme = Theme.of(context);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
         padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(goal.name, style: AppTextStyles.h3),
+            Text(goal.name,
+                style: AppTextStyles.h3.copyWith(
+                  color: theme.colorScheme.onSurface,
+                )),
             const SizedBox(height: 24),
-            _buildDetailRow(context.t('target'),
+            _buildDetailRow(context, context.t('target'),
                 '$currency${goal.targetAmount.toStringAsFixed(0)}'),
-            _buildDetailRow(context.t('saved'),
+            _buildDetailRow(context, context.t('saved'),
                 '$currency${goal.currentAmount.toStringAsFixed(0)}'),
             _buildDetailRow(
+              context,
               context.t('remaining'),
               '$currency${(goal.targetAmount - goal.currentAmount).toStringAsFixed(0)}',
             ),
             if (goal.deadline != null)
               _buildDetailRow(
+                context,
                 context.t('deadline'),
                 DateFormat('MMM dd, yyyy').format(goal.deadline!),
               ),
@@ -754,17 +770,23 @@ class GoalsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildDetailRow(BuildContext context, String label, String value) {
+    final theme = Theme.of(context);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label,
-              style:
-                  AppTextStyles.body2.copyWith(color: AppColors.textSecondary)),
+              style: AppTextStyles.body2.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
+              )),
           Text(value,
-              style: AppTextStyles.body1.copyWith(fontWeight: FontWeight.w600)),
+              style: AppTextStyles.body1.copyWith(
+                color: theme.colorScheme.onSurface,
+                fontWeight: FontWeight.w600,
+              )),
         ],
       ),
     );

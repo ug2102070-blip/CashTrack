@@ -67,6 +67,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         children: [
           _buildMonthSelector(),
           _buildOverviewCard(totalBudget, totalSpent, currency),
+          _buildRolloverToggle(context, rolloverEnabled),
           Expanded(
             child: monthBudgets.isEmpty
                 ? _buildEmptyState(
@@ -305,7 +306,9 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         border: Border.all(
           color: isOverBudget
               ? AppColors.error.withValues(alpha: 0.3)
-              : Theme.of(context).dividerColor,
+              : (Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.04)),
         ),
         boxShadow: [
           BoxShadow(
@@ -781,6 +784,91 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(context.t('budget_deleted'))),
+    );
+  }
+
+  bool _isBangla(BuildContext context) =>
+      Localizations.localeOf(context).languageCode == 'bn';
+
+  String _budgetRolloverSubtitle(BuildContext context, bool enabled) {
+    return _isBangla(context)
+        ? (enabled
+            ? 'মাস শেষে বাকি বাজেট পরের মাসে carry forward হবে'
+            : 'প্রতি মাসের বাজেট আলাদা থাকবে, carry forward হবে না')
+        : (enabled
+            ? 'Unused monthly budget carries into the next month'
+            : 'Each month starts fresh without carrying leftovers');
+  }
+
+  Widget _buildRolloverToggle(BuildContext context, bool rolloverEnabled) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primary = Theme.of(context).colorScheme.primary;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : Colors.black.withValues(alpha: 0.04),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0EA5E9).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.sync_alt_rounded,
+              color: Color(0xFF0EA5E9),
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.t('rollover_budget'),
+                  style: AppTextStyles.body1.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  _budgetRolloverSubtitle(context, rolloverEnabled),
+                  style: AppTextStyles.caption.copyWith(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: rolloverEnabled,
+            onChanged: (v) =>
+                ref.read(settingsProvider.notifier).updateRolloverBudget(v),
+            activeTrackColor: primary.withValues(alpha: 0.45),
+            activeThumbColor: primary,
+          ),
+        ],
+      ),
     );
   }
 }

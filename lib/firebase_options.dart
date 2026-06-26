@@ -44,7 +44,7 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBfwipAuMMW0B6b5JYHdkd2qqA1jpxadec',
+    apiKey: 'AIzaSyDHnzhZr3dztQfFuv9Qcdv5JP1x_r_Bi4Y',
     appId: '1:68532369864:web:7ebe7a4ec687b935d728fd',
     messagingSenderId: '68532369864',
     projectId: 'cashtrack-c130b',
@@ -54,7 +54,7 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBsVfUGlfK3ManVCJh8X9Be7k2IdmDQkZA',
+    apiKey: 'AIzaSyA9HC-Mgn1sqxFCfCScmWi-0Eig7km39iY',
     appId: '1:68532369864:android:732643e7f759b52dd728fd',
     messagingSenderId: '68532369864',
     projectId: 'cashtrack-c130b',

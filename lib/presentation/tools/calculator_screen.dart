@@ -84,14 +84,46 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                       ),
                     ),
                   ),
-                  Text(
-                    context.t('calculator'),
-                    style: AppTextStyles.h2.copyWith(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.3,
-                      color: Theme.of(context).colorScheme.onSurface,
+                  Expanded(
+                    child: Text(
+                      context.t('calculator'),
+                      style: AppTextStyles.h2.copyWith(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                     ),
+                  ),
+                  IconButton(
+                    onPressed: () {
+                      if (_result.isNotEmpty) {
+                        context.pop(_result);
+                      } else if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/tools');
+                      }
+                    },
+                    icon: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.07)
+                            : Colors.black.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.check_rounded,
+                        size: 18,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.65),
+                      ),
+                    ),
+                    tooltip: context.t('calculator'),
                   ),
                 ],
               ),

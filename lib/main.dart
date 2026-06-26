@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/l10n/app_l10n.dart';
@@ -15,6 +17,8 @@ import 'presentation/security/app_lock_gate.dart';
 import 'core/utils/logger.dart';
 import 'services/ai_service.dart';
 import 'services/screenshot_protection_service.dart';
+import 'services/notification_service.dart';
+import 'services/sms_service.dart';
 
 // Import all repositories
 import 'data/repositories/transaction_repository.dart';
@@ -25,6 +29,7 @@ import 'data/repositories/goal_repository.dart';
 import 'data/repositories/debt_repository.dart';
 import 'data/repositories/asset_repository.dart';
 import 'data/repositories/investment_repository.dart';
+import 'data/repositories/split_expense_repository.dart';
 
 // Import all models for Hive registration
 import 'data/models/category_model.dart';
@@ -34,6 +39,7 @@ import 'data/models/goal_model.dart';
 import 'data/models/debt_model.dart';
 import 'data/models/asset_model.dart';
 import 'data/models/investment_model.dart';
+import 'data/models/split_expense_model.dart';
 import 'data/models/user_model.dart';
 import 'firebase_options.dart';
 
@@ -42,10 +48,8 @@ void main() async {
 
   // Initialize Hive
   await Hive.initFlutter();
-  await Hive.openBox('settingsBox');
 
-  // সেটিংস বক্সটি ওপেন করুন যাতে শুরুতেই থিম চেক করা যায়
-  // প্রোভাইডারে 'settingsBox' নাম ব্যবহার করা হয়েছে তাই এখানেও একই নাম থাকতে হবে
+  // Register adapters before opening any boxes so typed objects load safely.
   Hive.registerAdapter(CategoryModelAdapter());
   Hive.registerAdapter(CategoryTypeAdapter());
   Hive.registerAdapter(AccountModelAdapter());
@@ -54,12 +58,18 @@ void main() async {
   Hive.registerAdapter(GoalModelAdapter());
   Hive.registerAdapter(DebtModelAdapter());
   Hive.registerAdapter(DebtTypeAdapter());
+  Hive.registerAdapter(AgreementStatusAdapter());
   Hive.registerAdapter(AssetModelAdapter());
   Hive.registerAdapter(InvestmentModelAdapter());
   Hive.registerAdapter(InvestmentTypeAdapter());
+  Hive.registerAdapter(SplitGroupAdapter());
+  Hive.registerAdapter(SplitExpenseAdapter());
   Hive.registerAdapter(UserModelAdapter());
   Hive.registerAdapter(UserSettingsAdapter());
   Hive.registerAdapter(UserStatsAdapter());
+
+  // Open the settings box only after adapters have been registered.
+  await Hive.openBox('settingsBox');
 
   try {
     await Firebase.initializeApp(
@@ -78,6 +88,39 @@ void main() async {
     AppLogger.w('AiService init skipped: $e');
   }
 
+  // Initialize notification service (daily reminders, budget alerts, etc.)
+  try {
+    await NotificationService().init();
+  } catch (e) {
+    AppLogger.w('NotificationService init skipped: $e');
+  }
+
+  // Initialize SMS Auto-Import service if enabled
+  try {
+    await SmsService().init();
+  } catch (e) {
+    AppLogger.w('SmsService init skipped: $e');
+  }
+
+  // ── Crashlytics: catch all Flutter framework errors ──
+  // NOTE: Crashlytics is NOT supported on web — guard with kIsWeb.
+  FlutterError.onError = (errorDetails) {
+    if (!kIsWeb) {
+      FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+    } else {
+      AppLogger.e('Flutter error: ${errorDetails.exceptionAsString()}');
+    }
+  };
+  // ── Crashlytics: catch async / platform errors ──
+  PlatformDispatcher.instance.onError = (error, stack) {
+    if (!kIsWeb) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    } else {
+      AppLogger.e('Platform error: $error');
+    }
+    return true;
+  };
+
   runApp(
     const ProviderScope(
       child: CashTrackApp(),
@@ -95,6 +138,7 @@ Future<void> _initializeRepositories() async {
     ('DebtRepository', () => DebtRepository().init()),
     ('AssetRepository', () => AssetRepository().init()),
     ('InvestmentRepository', () => InvestmentRepository().init()),
+    ('SplitExpenseRepository', () => SplitExpenseRepository().init()),
   ];
 
   for (final task in tasks) {
@@ -107,11 +151,33 @@ Future<void> _initializeRepositories() async {
   }
 }
 
-class CashTrackApp extends ConsumerWidget {
+class CashTrackApp extends ConsumerStatefulWidget {
   const CashTrackApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CashTrackApp> createState() => _CashTrackAppState();
+}
+
+class _CashTrackAppState extends ConsumerState<CashTrackApp> {
+  StreamSubscription? _smsImportSub;
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen to SMS auto-import stream — reload transactions when a new one arrives
+    _smsImportSub = SmsService().onTransactionImported.listen((_) {
+      ref.read(transactionsProvider.notifier).loadTransactions();
+    });
+  }
+
+  @override
+  void dispose() {
+    _smsImportSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     // settingsProvider থেকে গ্লোবাল সেটিংস স্টেট ওয়াচ করা হচ্ছে
     final settings = ref.watch(settingsProvider);
     final bool rolloverEnabled = settings['rolloverBudget'] == true;
@@ -136,8 +202,7 @@ class CashTrackApp extends ConsumerWidget {
     Intl.defaultLocale = appLocale.toString();
 
     unawaited(
-      ScreenshotProtectionService.instance
-          .apply(enabled: screenshotProtection),
+      ScreenshotProtectionService.instance.apply(enabled: screenshotProtection),
     );
 
     return MaterialApp.router(

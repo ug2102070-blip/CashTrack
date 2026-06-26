@@ -22,6 +22,16 @@ class AccountModel with _$AccountModel {
     @HiveField(7) @Default(false) bool isDefault,
     @HiveField(8) DateTime? createdAt,
     @HiveField(9) DateTime? updatedAt,
+    @HiveField(10)
+    String? nickname, // User-editable custom name (e.g. "Salary Account")
+    @HiveField(11) String? userId, // Track which user owns this account
+    @HiveField(12) String? accountNumber,
+    @HiveField(13) String? cardType,
+    @HiveField(14) String? cardIssuer,
+    @HiveField(15) String? cardholderName,
+    @HiveField(16) double? creditLimit,
+    @HiveField(17) int? billingDay,
+    @HiveField(18) int? paymentDueDay,
   }) = _AccountModel;
 
   factory AccountModel.fromJson(Map<String, dynamic> json) =>
@@ -36,6 +46,8 @@ enum AccountType {
   bank,
   @HiveField(2)
   mfs, // Mobile Financial Services
+  @HiveField(3)
+  creditCard,
 }
 
 class DefaultAccounts {
@@ -103,6 +115,17 @@ class DefaultAccounts {
       balance: 0,
       icon: '🏦',
       colorHex: '#3B82F6',
+      isDefault: true,
+      createdAt: DateTime.now(),
+    ),
+    AccountModel(
+      id: 'acc_credit_card',
+      name: 'Credit Card',
+      nameBn: 'ক্রেডিট কার্ড',
+      type: AccountType.creditCard,
+      balance: 0,
+      icon: '💳',
+      colorHex: '#8B5CF6',
       isDefault: true,
       createdAt: DateTime.now(),
     ),

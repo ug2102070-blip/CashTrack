@@ -2,6 +2,7 @@ import 'package:hive/hive.dart';
 
 import '../models/transaction_model.dart';
 import 'hive_box_recovery.dart';
+import '../../services/auth_service.dart';
 
 class TransactionRepository {
   TransactionRepository._internal();
@@ -24,6 +25,12 @@ class TransactionRepository {
     return _box;
   }
 
+  // Get current user ID for filtering
+  String? _getCurrentUserId() {
+    final authService = AuthService();
+    return authService.currentUser?.uid;
+  }
+
   Future<void> init() async {
     if (_initialized && _box != null) return;
     if (Hive.isBoxOpen(_boxName)) {
@@ -36,7 +43,12 @@ class TransactionRepository {
   }
 
   List<TransactionModel> getAllTransactions() {
-    return _decodedValues().where((t) => !t.isDeleted).toList();
+    final userId = _getCurrentUserId();
+    // Only show transactions belonging to the current user
+    // Don't show transactions with null userId to avoid data leakage
+    return _decodedValues()
+        .where((t) => !t.isDeleted && t.userId == userId)
+        .toList();
   }
 
   List<TransactionModel> getRecentTransactions({int limit = 10}) {
@@ -45,8 +57,9 @@ class TransactionRepository {
   }
 
   List<TransactionModel> getTransactionsByType(TransactionType type) {
+    final userId = _getCurrentUserId();
     return _decodedValues()
-        .where((t) => !t.isDeleted && t.type == type)
+        .where((t) => !t.isDeleted && t.type == type && t.userId == userId)
         .toList();
   }
 
@@ -54,9 +67,11 @@ class TransactionRepository {
     DateTime start,
     DateTime end,
   ) {
+    final userId = _getCurrentUserId();
     return _decodedValues()
         .where((t) =>
             !t.isDeleted &&
+            t.userId == userId &&
             t.date.isAfter(start.subtract(const Duration(days: 1))) &&
             t.date.isBefore(end.add(const Duration(days: 1))))
         .toList();
@@ -64,12 +79,16 @@ class TransactionRepository {
 
   Future<void> addTransaction(TransactionModel transaction) async {
     await init();
-    await _box!.put(transaction.id, transaction.toJson());
+    final userId = _getCurrentUserId();
+    final txnWithUser = transaction.copyWith(userId: userId);
+    await _box!.put(txnWithUser.id, txnWithUser.toJson());
   }
 
   Future<void> updateTransaction(TransactionModel transaction) async {
     await init();
-    await _box!.put(transaction.id, transaction.toJson());
+    final userId = _getCurrentUserId();
+    final txnWithUser = transaction.copyWith(userId: userId);
+    await _box!.put(txnWithUser.id, txnWithUser.toJson());
   }
 
   Future<void> deleteTransaction(String id) async {
@@ -86,8 +105,12 @@ class TransactionRepository {
   }
 
   double getTotalIncome({DateTime? start, DateTime? end}) {
-    var transactions = _decodedValues()
-        .where((t) => !t.isDeleted && t.type == TransactionType.income);
+    final userId = _getCurrentUserId();
+    // Strictly filter by current user only — no null userId fallback
+    var transactions = _decodedValues().where((t) =>
+        !t.isDeleted &&
+        t.type == TransactionType.income &&
+        t.userId == userId);
 
     if (start != null && end != null) {
       transactions = transactions.where((t) =>
@@ -99,8 +122,11 @@ class TransactionRepository {
   }
 
   double getTotalExpense({DateTime? start, DateTime? end}) {
-    var transactions = _decodedValues()
-        .where((t) => !t.isDeleted && t.type == TransactionType.expense);
+    final userId = _getCurrentUserId();
+    var transactions = _decodedValues().where((t) =>
+        !t.isDeleted &&
+        t.type == TransactionType.expense &&
+        t.userId == userId);
 
     if (start != null && end != null) {
       transactions = transactions.where((t) =>

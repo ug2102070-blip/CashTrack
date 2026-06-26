@@ -40,6 +40,25 @@ mixin _$AccountModel {
   DateTime? get createdAt => throw _privateConstructorUsedError;
   @HiveField(9)
   DateTime? get updatedAt => throw _privateConstructorUsedError;
+  @HiveField(10)
+  String? get nickname =>
+      throw _privateConstructorUsedError; // User-editable custom name (e.g. "Salary Account")
+  @HiveField(11)
+  String? get userId => throw _privateConstructorUsedError;
+  @HiveField(12)
+  String? get accountNumber => throw _privateConstructorUsedError;
+  @HiveField(13)
+  String? get cardType => throw _privateConstructorUsedError;
+  @HiveField(14)
+  String? get cardIssuer => throw _privateConstructorUsedError;
+  @HiveField(15)
+  String? get cardholderName => throw _privateConstructorUsedError;
+  @HiveField(16)
+  double? get creditLimit => throw _privateConstructorUsedError;
+  @HiveField(17)
+  int? get billingDay => throw _privateConstructorUsedError;
+  @HiveField(18)
+  int? get paymentDueDay => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -63,7 +82,16 @@ abstract class $AccountModelCopyWith<$Res> {
       @HiveField(6) String? colorHex,
       @HiveField(7) bool isDefault,
       @HiveField(8) DateTime? createdAt,
-      @HiveField(9) DateTime? updatedAt});
+      @HiveField(9) DateTime? updatedAt,
+      @HiveField(10) String? nickname,
+      @HiveField(11) String? userId,
+      @HiveField(12) String? accountNumber,
+      @HiveField(13) String? cardType,
+      @HiveField(14) String? cardIssuer,
+      @HiveField(15) String? cardholderName,
+      @HiveField(16) double? creditLimit,
+      @HiveField(17) int? billingDay,
+      @HiveField(18) int? paymentDueDay});
 }
 
 /// @nodoc
@@ -89,6 +117,15 @@ class _$AccountModelCopyWithImpl<$Res, $Val extends AccountModel>
     Object? isDefault = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
+    Object? nickname = freezed,
+    Object? userId = freezed,
+    Object? accountNumber = freezed,
+    Object? cardType = freezed,
+    Object? cardIssuer = freezed,
+    Object? cardholderName = freezed,
+    Object? creditLimit = freezed,
+    Object? billingDay = freezed,
+    Object? paymentDueDay = freezed,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -131,6 +168,42 @@ class _$AccountModelCopyWithImpl<$Res, $Val extends AccountModel>
           ? _value.updatedAt
           : updatedAt // ignore: cast_nullable_to_non_nullable
               as DateTime?,
+      nickname: freezed == nickname
+          ? _value.nickname
+          : nickname // ignore: cast_nullable_to_non_nullable
+              as String?,
+      userId: freezed == userId
+          ? _value.userId
+          : userId // ignore: cast_nullable_to_non_nullable
+              as String?,
+      accountNumber: freezed == accountNumber
+          ? _value.accountNumber
+          : accountNumber // ignore: cast_nullable_to_non_nullable
+              as String?,
+      cardType: freezed == cardType
+          ? _value.cardType
+          : cardType // ignore: cast_nullable_to_non_nullable
+              as String?,
+      cardIssuer: freezed == cardIssuer
+          ? _value.cardIssuer
+          : cardIssuer // ignore: cast_nullable_to_non_nullable
+              as String?,
+      cardholderName: freezed == cardholderName
+          ? _value.cardholderName
+          : cardholderName // ignore: cast_nullable_to_non_nullable
+              as String?,
+      creditLimit: freezed == creditLimit
+          ? _value.creditLimit
+          : creditLimit // ignore: cast_nullable_to_non_nullable
+              as double?,
+      billingDay: freezed == billingDay
+          ? _value.billingDay
+          : billingDay // ignore: cast_nullable_to_non_nullable
+              as int?,
+      paymentDueDay: freezed == paymentDueDay
+          ? _value.paymentDueDay
+          : paymentDueDay // ignore: cast_nullable_to_non_nullable
+              as int?,
     ) as $Val);
   }
 }
@@ -153,7 +226,16 @@ abstract class _$$AccountModelImplCopyWith<$Res>
       @HiveField(6) String? colorHex,
       @HiveField(7) bool isDefault,
       @HiveField(8) DateTime? createdAt,
-      @HiveField(9) DateTime? updatedAt});
+      @HiveField(9) DateTime? updatedAt,
+      @HiveField(10) String? nickname,
+      @HiveField(11) String? userId,
+      @HiveField(12) String? accountNumber,
+      @HiveField(13) String? cardType,
+      @HiveField(14) String? cardIssuer,
+      @HiveField(15) String? cardholderName,
+      @HiveField(16) double? creditLimit,
+      @HiveField(17) int? billingDay,
+      @HiveField(18) int? paymentDueDay});
 }
 
 /// @nodoc
@@ -177,6 +259,15 @@ class __$$AccountModelImplCopyWithImpl<$Res>
     Object? isDefault = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
+    Object? nickname = freezed,
+    Object? userId = freezed,
+    Object? accountNumber = freezed,
+    Object? cardType = freezed,
+    Object? cardIssuer = freezed,
+    Object? cardholderName = freezed,
+    Object? creditLimit = freezed,
+    Object? billingDay = freezed,
+    Object? paymentDueDay = freezed,
   }) {
     return _then(_$AccountModelImpl(
       id: null == id
@@ -219,6 +310,42 @@ class __$$AccountModelImplCopyWithImpl<$Res>
           ? _value.updatedAt
           : updatedAt // ignore: cast_nullable_to_non_nullable
               as DateTime?,
+      nickname: freezed == nickname
+          ? _value.nickname
+          : nickname // ignore: cast_nullable_to_non_nullable
+              as String?,
+      userId: freezed == userId
+          ? _value.userId
+          : userId // ignore: cast_nullable_to_non_nullable
+              as String?,
+      accountNumber: freezed == accountNumber
+          ? _value.accountNumber
+          : accountNumber // ignore: cast_nullable_to_non_nullable
+              as String?,
+      cardType: freezed == cardType
+          ? _value.cardType
+          : cardType // ignore: cast_nullable_to_non_nullable
+              as String?,
+      cardIssuer: freezed == cardIssuer
+          ? _value.cardIssuer
+          : cardIssuer // ignore: cast_nullable_to_non_nullable
+              as String?,
+      cardholderName: freezed == cardholderName
+          ? _value.cardholderName
+          : cardholderName // ignore: cast_nullable_to_non_nullable
+              as String?,
+      creditLimit: freezed == creditLimit
+          ? _value.creditLimit
+          : creditLimit // ignore: cast_nullable_to_non_nullable
+              as double?,
+      billingDay: freezed == billingDay
+          ? _value.billingDay
+          : billingDay // ignore: cast_nullable_to_non_nullable
+              as int?,
+      paymentDueDay: freezed == paymentDueDay
+          ? _value.paymentDueDay
+          : paymentDueDay // ignore: cast_nullable_to_non_nullable
+              as int?,
     ));
   }
 }
@@ -236,7 +363,16 @@ class _$AccountModelImpl implements _AccountModel {
       @HiveField(6) this.colorHex,
       @HiveField(7) this.isDefault = false,
       @HiveField(8) this.createdAt,
-      @HiveField(9) this.updatedAt});
+      @HiveField(9) this.updatedAt,
+      @HiveField(10) this.nickname,
+      @HiveField(11) this.userId,
+      @HiveField(12) this.accountNumber,
+      @HiveField(13) this.cardType,
+      @HiveField(14) this.cardIssuer,
+      @HiveField(15) this.cardholderName,
+      @HiveField(16) this.creditLimit,
+      @HiveField(17) this.billingDay,
+      @HiveField(18) this.paymentDueDay});
 
   factory _$AccountModelImpl.fromJson(Map<String, dynamic> json) =>
       _$$AccountModelImplFromJson(json);
@@ -272,10 +408,38 @@ class _$AccountModelImpl implements _AccountModel {
   @override
   @HiveField(9)
   final DateTime? updatedAt;
+  @override
+  @HiveField(10)
+  final String? nickname;
+// User-editable custom name (e.g. "Salary Account")
+  @override
+  @HiveField(11)
+  final String? userId;
+  @override
+  @HiveField(12)
+  final String? accountNumber;
+  @override
+  @HiveField(13)
+  final String? cardType;
+  @override
+  @HiveField(14)
+  final String? cardIssuer;
+  @override
+  @HiveField(15)
+  final String? cardholderName;
+  @override
+  @HiveField(16)
+  final double? creditLimit;
+  @override
+  @HiveField(17)
+  final int? billingDay;
+  @override
+  @HiveField(18)
+  final int? paymentDueDay;
 
   @override
   String toString() {
-    return 'AccountModel(id: $id, name: $name, nameBn: $nameBn, type: $type, balance: $balance, icon: $icon, colorHex: $colorHex, isDefault: $isDefault, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'AccountModel(id: $id, name: $name, nameBn: $nameBn, type: $type, balance: $balance, icon: $icon, colorHex: $colorHex, isDefault: $isDefault, createdAt: $createdAt, updatedAt: $updatedAt, nickname: $nickname, userId: $userId, accountNumber: $accountNumber, cardType: $cardType, cardIssuer: $cardIssuer, cardholderName: $cardholderName, creditLimit: $creditLimit, billingDay: $billingDay, paymentDueDay: $paymentDueDay)';
   }
 
   @override
@@ -296,13 +460,49 @@ class _$AccountModelImpl implements _AccountModel {
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
-                other.updatedAt == updatedAt));
+                other.updatedAt == updatedAt) &&
+            (identical(other.nickname, nickname) ||
+                other.nickname == nickname) &&
+            (identical(other.userId, userId) || other.userId == userId) &&
+            (identical(other.accountNumber, accountNumber) ||
+                other.accountNumber == accountNumber) &&
+            (identical(other.cardType, cardType) ||
+                other.cardType == cardType) &&
+            (identical(other.cardIssuer, cardIssuer) ||
+                other.cardIssuer == cardIssuer) &&
+            (identical(other.cardholderName, cardholderName) ||
+                other.cardholderName == cardholderName) &&
+            (identical(other.creditLimit, creditLimit) ||
+                other.creditLimit == creditLimit) &&
+            (identical(other.billingDay, billingDay) ||
+                other.billingDay == billingDay) &&
+            (identical(other.paymentDueDay, paymentDueDay) ||
+                other.paymentDueDay == paymentDueDay));
   }
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode => Object.hash(runtimeType, id, name, nameBn, type, balance,
-      icon, colorHex, isDefault, createdAt, updatedAt);
+  int get hashCode => Object.hash(
+      runtimeType,
+      id,
+      name,
+      nameBn,
+      type,
+      balance,
+      icon,
+      colorHex,
+      isDefault,
+      createdAt,
+      updatedAt,
+      nickname,
+      userId,
+      accountNumber,
+      cardType,
+      cardIssuer,
+      cardholderName,
+      creditLimit,
+      billingDay,
+      paymentDueDay);
 
   @JsonKey(ignore: true)
   @override
@@ -329,7 +529,16 @@ abstract class _AccountModel implements AccountModel {
       @HiveField(6) final String? colorHex,
       @HiveField(7) final bool isDefault,
       @HiveField(8) final DateTime? createdAt,
-      @HiveField(9) final DateTime? updatedAt}) = _$AccountModelImpl;
+      @HiveField(9) final DateTime? updatedAt,
+      @HiveField(10) final String? nickname,
+      @HiveField(11) final String? userId,
+      @HiveField(12) final String? accountNumber,
+      @HiveField(13) final String? cardType,
+      @HiveField(14) final String? cardIssuer,
+      @HiveField(15) final String? cardholderName,
+      @HiveField(16) final double? creditLimit,
+      @HiveField(17) final int? billingDay,
+      @HiveField(18) final int? paymentDueDay}) = _$AccountModelImpl;
 
   factory _AccountModel.fromJson(Map<String, dynamic> json) =
       _$AccountModelImpl.fromJson;
@@ -364,6 +573,33 @@ abstract class _AccountModel implements AccountModel {
   @override
   @HiveField(9)
   DateTime? get updatedAt;
+  @override
+  @HiveField(10)
+  String? get nickname;
+  @override // User-editable custom name (e.g. "Salary Account")
+  @HiveField(11)
+  String? get userId;
+  @override
+  @HiveField(12)
+  String? get accountNumber;
+  @override
+  @HiveField(13)
+  String? get cardType;
+  @override
+  @HiveField(14)
+  String? get cardIssuer;
+  @override
+  @HiveField(15)
+  String? get cardholderName;
+  @override
+  @HiveField(16)
+  double? get creditLimit;
+  @override
+  @HiveField(17)
+  int? get billingDay;
+  @override
+  @HiveField(18)
+  int? get paymentDueDay;
   @override
   @JsonKey(ignore: true)
   _$$AccountModelImplCopyWith<_$AccountModelImpl> get copyWith =>

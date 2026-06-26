@@ -73,3 +73,6 @@
 -keepattributes *Annotation*
 -keepattributes EnclosingMethod
 -keepattributes InnerClasses
+
+# Play Core (referenced by Flutter's deferred component manager, not used at runtime)
+-dontwarn com.google.android.play.core.**

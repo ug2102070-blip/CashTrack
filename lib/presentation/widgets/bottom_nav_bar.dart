@@ -12,7 +12,13 @@ class CustomBottomNavBar extends StatelessWidget {
         location.startsWith('/budget') ||
         location.startsWith('/debts') ||
         location.startsWith('/calculator') ||
-        location.startsWith('/notes');
+        location.startsWith('/notes') ||
+        location.startsWith('/investments') ||
+        location.startsWith('/assets') ||
+        location.startsWith('/split-expenses') ||
+        location.startsWith('/emi-calculator') ||
+        location.startsWith('/goals') ||
+        location.startsWith('/subscriptions');
   }
 
   int _getCurrentIndex(BuildContext context) {

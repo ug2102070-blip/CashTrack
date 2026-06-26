@@ -22,8 +22,8 @@ import '../../core/l10n/app_l10n.dart';
 import '../../services/auth_service.dart';
 import '../../services/sms_service.dart';
 import '../../services/sync_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../services/notification_service.dart';
-import '../../services/ai_service.dart';
 import '../../services/screenshot_protection_service.dart';
 import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/category_repository.dart';
@@ -96,8 +96,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   // Pre-created animations — avoids creating new CurvedAnimation objects
   // on every build(), which leaks InheritedWidget dependents.
   static const List<int> _animDelays = [
-    0, 50, 110, 130, 160, 180, 195, 205, 210, 230,
-    235, 240, 245, 255, 260, 280, 310, 330, 360, 380, 410,
+    0,
+    50,
+    110,
+    130,
+    160,
+    180,
+    195,
+    205,
+    210,
+    230,
+    235,
+    240,
+    245,
+    255,
+    260,
+    280,
+    310,
   ];
   late final List<Animation<double>> _fadeAnims;
   late final Animation<double> _rootFade;
@@ -148,7 +163,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     final weeklyReport = settings['weeklyReport'] ?? false;
     final biometricLock = settings['biometricLock'] ?? false;
 
-    final rolloverBudget = settings['rolloverBudget'] ?? false;
     final dailyReminderTime = settings['dailyReminderTime'] as String?;
     final screenshotProtection = settings['screenshotProtection'] ?? false;
     final autoLockMinutes = settings['autoLockMinutes'] ?? 5;
@@ -173,7 +187,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               // â”€â”€ Profile Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               SliverToBoxAdapter(
                 child: _anim(
-                    index: 1, child: _buildProfileCard(context, profile, isDark)),
+                    index: 1,
+                    child: _buildProfileCard(context, profile, isDark)),
               ),
 
               // â”€â”€ Appearance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -204,32 +219,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ),
 
-              // â”€â”€ Planning & Tools â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              SliverToBoxAdapter(
-                child: _anim(
-                    index: 6,
-                    child: _sectionLabel(context, context.t('planning_tools'))),
-              ),
-              SliverToBoxAdapter(
-                child: _anim(
-                  index: 7,
-                  child: _buildPlanningSection(
-                    context,
-                    rolloverBudget,
-                    screenIsDark,
-                  ),
-                ),
-              ),
-
               // â”€â”€ General â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               SliverToBoxAdapter(
                 child: _anim(
-                    index: 8,
+                    index: 6,
                     child: _sectionLabel(context, context.t('general'))),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                  index: 9,
+                  index: 7,
                   child: _buildGeneralSection(
                       context, smsTrack, smsMode, language, screenIsDark),
                 ),
@@ -237,45 +235,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
               SliverToBoxAdapter(
                 child: _anim(
-                  index: 10,
+                  index: 8,
                   child: _sectionLabel(context, context.t('transaction_entry')),
                 ),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                  index: 11,
+                  index: 9,
                   child: _buildTransactionEntrySection(
                     context,
                     voiceTransactionInput,
                     receiptImageAttachment,
+                    settings['defaultRecurring'] ?? false,
+                    settings['defaultRecurringType'] ?? 'monthly',
                     screenIsDark,
                   ),
-                ),
-              ),
-
-              // ── AI Assistant ───────────────────────────────────────────────
-              SliverToBoxAdapter(
-                child: _anim(
-                    index: 12,
-                    child: _sectionLabel(context, context.t('ai_assistant'))),
-              ),
-              SliverToBoxAdapter(
-                child: _anim(
-                  index: 13,
-                  child: _buildAiSection(context, screenIsDark),
                 ),
               ),
 
               // â”€â”€ Security â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               SliverToBoxAdapter(
                 child: _anim(
-                    index: 14,
+                    index: 10,
                     child:
                         _sectionLabel(context, context.t('security_privacy'))),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                  index: 15,
+                  index: 11,
                   child: _buildSecuritySection(
                       context,
                       biometricLock,
@@ -290,28 +277,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               // â”€â”€ Data & Sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               SliverToBoxAdapter(
                 child: _anim(
-                    index: 16,
+                    index: 12,
                     child: _sectionLabel(context, context.t('data_sync'))),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                    index: 17, child: _buildDataSection(context, screenIsDark)),
+                    index: 13, child: _buildDataSection(context, screenIsDark)),
               ),
 
               // â”€â”€ About â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               SliverToBoxAdapter(
                 child: _anim(
-                    index: 18, child: _sectionLabel(context, context.t('about'))),
+                    index: 14,
+                    child: _sectionLabel(context, context.t('about'))),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                    index: 19, child: _buildAboutSection(context, screenIsDark)),
+                    index: 15,
+                    child: _buildAboutSection(context, screenIsDark)),
               ),
 
               // â”€â”€ Danger Zone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               SliverToBoxAdapter(
                 child: _anim(
-                    index: 20, child: _buildDangerZone(context, screenIsDark)),
+                    index: 16, child: _buildDangerZone(context, screenIsDark)),
               ),
 
               const SliverToBoxAdapter(child: SizedBox(height: 110)),
@@ -562,9 +551,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         trailing: Switch.adaptive(
           value: notifEnabled,
           onChanged: (v) async {
-            await ref
-                .read(settingsProvider.notifier)
-                .update('notifications', v);
             if (kIsWeb) {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -574,6 +560,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               }
               return;
             }
+            if (v) {
+              final granted = await Permission.notification.request().isGranted;
+              if (!granted) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        _isBangla(context)
+                            ? 'পুশ নোটিফিকেশন পারমিশন প্রয়োজন'
+                            : 'Push notifications permission is required',
+                      ),
+                    ),
+                  );
+                }
+                return;
+              }
+            }
+            await ref
+                .read(settingsProvider.notifier)
+                .update('notifications', v);
             await NotificationService().setNotificationsEnabled(v);
             if (v && dailyReminderTime != null) {
               final time = _timeFromString(dailyReminderTime);
@@ -593,19 +599,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       _settingsTile(
         context,
         icon: Icons.summarize_rounded,
-        iconColor: notifEnabled ? AppColors.info : AppColors.info.withValues(alpha: 0.4),
+        iconColor: notifEnabled
+            ? AppColors.info
+            : AppColors.info.withValues(alpha: 0.4),
         title: context.t('weekly_report'),
         subtitle: _weeklyReportSubtitle(context, weeklyReport),
         trailing: Switch.adaptive(
           value: weeklyReport,
           onChanged: notifEnabled
               ? (v) async {
-                  await ref.read(settingsProvider.notifier).update('weeklyReport', v);
+                  await ref
+                      .read(settingsProvider.notifier)
+                      .update('weeklyReport', v);
                   if (kIsWeb) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                            content: Text(context.t('feature_not_supported_web'))),
+                            content:
+                                Text(context.t('feature_not_supported_web'))),
                       );
                     }
                     return;
@@ -638,7 +649,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           title: context.t('notification_schedule'),
           subtitle: notifEnabled
               ? _notificationScheduleSubtitle(context, reminderLabel)
-              : (_isBangla(context) ? 'Push Notifications চালু করুন' : 'Turn on Push Notifications first'),
+              : (_isBangla(context)
+                  ? 'Push Notifications চালু করুন'
+                  : 'Turn on Push Notifications first'),
           onTap: notifEnabled
               ? () => _showTimePickerDialog(context, dailyReminderTime)
               : null,
@@ -649,46 +662,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   // â”€â”€ Planning & Tools Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  Widget _buildPlanningSection(
-    BuildContext context,
-    bool rolloverBudget,
-    bool isDark,
-  ) {
-    return _settingsGroup(context, isDark, [
-      _settingsTile(
-        context,
-        icon: Icons.category_rounded,
-        iconColor: AppColors.info,
-        title: context.t('manage_categories'),
-        subtitle: _manageCategoriesSubtitle(context),
-        onTap: () => context.push('/categories'),
-      ),
-      _divider(context),
-      _settingsTile(
-        context,
-        icon: Icons.account_balance_wallet_rounded,
-        iconColor: AppColors.primary,
-        title: context.t('manage_budgets'),
-        subtitle: context.t('manage_budgets_desc'),
-        onTap: () => context.push('/budget'),
-      ),
-      _divider(context),
-      _settingsTile(
-        context,
-        icon: Icons.sync_alt_rounded,
-        iconColor: AppColors.secondary,
-        title: context.t('rollover_budget'),
-        subtitle: _budgetRolloverSubtitle(context, rolloverBudget),
-        trailing: Switch.adaptive(
-          value: rolloverBudget,
-          onChanged: (v) =>
-              ref.read(settingsProvider.notifier).updateRolloverBudget(v),
-          thumbColor: _switchThumbColor(context),
-          trackColor: _switchTrackColor(context),
-        ),
-      ),
-    ]);
-  }
+
 
   // â”€â”€ General Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -699,7 +673,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     return _settingsGroup(context, isDark, [
       _settingsTile(
         context,
-        icon: Icons.sms_rounded,
+        icon: Icons.notifications_active_rounded,
         iconColor: AppColors.success,
         title: context.t('sms_auto_import'),
         subtitle: context.t('import_sms'),
@@ -707,8 +681,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           value: smsTrack,
           onChanged: (v) async {
             if (v) {
+              // Persist true first to handle process kills on permission grant
+              await ref.read(settingsProvider.notifier).updateSmsTrack(true);
+              
               final granted = await SmsService.requestPermission();
               if (!granted) {
+                // Revert to false if not granted/cancelled
+                await ref.read(settingsProvider.notifier).updateSmsTrack(false);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text(context.t('sms_permission_denied'))),
@@ -716,8 +695,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 }
                 return;
               }
+
+              // Check and request standard notification permission on Android 13+
+              final notifGranted = await Permission.notification.request().isGranted;
+              if (!notifGranted && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      _isBangla(context)
+                          ? 'লেনদেন নিশ্চিতকরণের জন্য নোটিফিকেশন পারমিশন প্রয়োজন'
+                          : 'Notification permission is required to ask for transaction confirmation',
+                    ),
+                  ),
+                );
+              }
+
+              // If still running (or returning granted), start listening
+              await SmsService().init();
+            } else {
+              SmsService().stopListening();
+              await ref.read(settingsProvider.notifier).updateSmsTrack(false);
             }
-            ref.read(settingsProvider.notifier).updateSmsTrack(v);
           },
           thumbColor: _switchThumbColor(context),
           trackColor: _switchTrackColor(context),
@@ -734,6 +732,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           onTap: () => _showSmsModeDialog(context, smsMode),
         ),
       ],
+      _divider(context),
       _settingsTile(
         context,
         icon: Icons.language_rounded,
@@ -749,6 +748,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     BuildContext context,
     bool voiceEnabled,
     bool receiptEnabled,
+    bool defaultRecurring,
+    String defaultRecurringType,
     bool isDark,
   ) {
     return _settingsGroup(context, isDark, [
@@ -779,88 +780,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           trackColor: _switchTrackColor(context),
         ),
       ),
-    ]);
-  }
-
-  // AI Assistant Section
-
-  Widget _buildAiSection(BuildContext context, bool isDark) {
-    return _settingsGroup(context, isDark, [
+      _divider(context),
       _settingsTile(
         context,
-        icon: Icons.auto_awesome_rounded,
-        iconColor: const Color(0xFF8B5CF6),
-        title: context.t('gemini_api_key'),
-        subtitle: context.t('gemini_key_desc'),
-        onTap: () => _showApiKeyDialog(context),
-      ),
-    ]);
-  }
-
-  void _showApiKeyDialog(BuildContext context) {
-    final TextEditingController ctrl = TextEditingController();
-    AiService.loadApiKey().then((k) {
-      if (ctrl.text.isEmpty) ctrl.text = k;
-    });
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(children: [
-          Icon(Icons.auto_awesome_rounded,
-              color: Theme.of(context).colorScheme.primary, size: 22),
-          const SizedBox(width: 8),
-          Text(context.t('gemini_api_key'),
-              style:
-                  const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-        ]),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              context.t('gemini_key_info'),
-              style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(ctx)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.6)),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: ctrl,
-              obscureText: true,
-              decoration: InputDecoration(
-                hintText: 'AIzaSy...',
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                prefixIcon: const Icon(Icons.vpn_key_rounded),
-              ),
-            ),
-          ],
+        icon: Icons.repeat_rounded,
+        iconColor: AppColors.info,
+        title: context.t('default_recurring_payment'),
+        subtitle: defaultRecurring ? context.t('on') : context.t('off'),
+        trailing: Switch.adaptive(
+          value: defaultRecurring,
+          onChanged: (v) =>
+              ref.read(settingsProvider.notifier).updateDefaultRecurring(v),
+          thumbColor: _switchThumbColor(context),
+          trackColor: _switchTrackColor(context),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(context.t('cancel')),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              await AiService.saveApiKey(ctrl.text.trim());
-              if (ctx.mounted) {
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.t('api_key_saved'))),
-                );
-              }
-            },
-            child: Text(context.t('save')),
-          ),
-        ],
       ),
-    );
+      if (defaultRecurring) ...[
+        _divider(context),
+        _settingsTile(
+          context,
+          icon: Icons.schedule_rounded,
+          iconColor: AppColors.warning,
+          title: context.t('default_recurring_frequency'),
+          subtitle: _recurrenceLabelString(context, defaultRecurringType),
+          onTap: () =>
+              _showDefaultRecurringTypeDialog(context, defaultRecurringType),
+        ),
+      ],
+    ]);
   }
 
   // â”€â”€ Security Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -997,12 +944,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 gradient: LinearGradient(
                   colors: [
                     Theme.of(context).colorScheme.primary,
-                    Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+                    Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.7),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 26),
+              child: const Icon(Icons.account_balance_wallet_rounded,
+                  color: Colors.white, size: 26),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -1024,7 +975,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                         : 'Personal Finance Manager',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.5),
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -1321,111 +1275,112 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           ),
           child: SingleChildScrollView(
             child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).dividerColor,
-                    borderRadius: BorderRadius.circular(999),
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).dividerColor,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                context.t('accent_color'),
-                style: AppTextStyles.h5.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _colorPickerSubtitle(context),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.55),
+                const SizedBox(height: 18),
+                Text(
+                  context.t('accent_color'),
+                  style: AppTextStyles.h5.copyWith(fontWeight: FontWeight.w800),
                 ),
-              ),
-              const SizedBox(height: 18),
-              GridView.builder(
-                shrinkWrap: true,
-                itemCount: accentColorEntries.length,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4,
-                  mainAxisSpacing: 14,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 0.78,
+                const SizedBox(height: 4),
+                Text(
+                  _colorPickerSubtitle(context),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.55),
+                  ),
                 ),
-                itemBuilder: (gridContext, index) {
-                  final entry = accentColorEntries[index];
-                  final color = entry.$1;
-                  final name = entry.$2;
-                  final selected =
-                      color.toARGB32() == currentColor.toARGB32();
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(18),
-                    onTap: () async {
-                      await ref
-                          .read(settingsProvider.notifier)
-                          .updateAccentColor(color.toARGB32());
-                      if (sheetContext.mounted) Navigator.pop(sheetContext);
-                    },
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Expanded(
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            decoration: BoxDecoration(
-                              color: color,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: selected
-                                    ? Colors.white
-                                    : color.withValues(alpha: 0.25),
-                                width: selected ? 3 : 1,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: color.withValues(alpha: 0.35),
-                                  blurRadius: 14,
-                                  offset: const Offset(0, 6),
+                const SizedBox(height: 18),
+                GridView.builder(
+                  shrinkWrap: true,
+                  itemCount: accentColorEntries.length,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4,
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 0.78,
+                  ),
+                  itemBuilder: (gridContext, index) {
+                    final entry = accentColorEntries[index];
+                    final color = entry.$1;
+                    final name = entry.$2;
+                    final selected =
+                        color.toARGB32() == currentColor.toARGB32();
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(18),
+                      onTap: () async {
+                        await ref
+                            .read(settingsProvider.notifier)
+                            .updateAccentColor(color.toARGB32());
+                        if (sheetContext.mounted) Navigator.pop(sheetContext);
+                      },
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Expanded(
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              decoration: BoxDecoration(
+                                color: color,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: selected
+                                      ? Colors.white
+                                      : color.withValues(alpha: 0.25),
+                                  width: selected ? 3 : 1,
                                 ),
-                              ],
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: color.withValues(alpha: 0.35),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: selected
+                                  ? const Center(
+                                      child: Icon(Icons.check_rounded,
+                                          color: Colors.white, size: 26))
+                                  : null,
                             ),
-                            child: selected
-                                ? const Center(
-                                    child: Icon(Icons.check_rounded,
-                                        color: Colors.white, size: 26))
-                                : null,
                           ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          name,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                            color: selected
-                                ? color
-                                : Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withValues(alpha: 0.55),
+                          const SizedBox(height: 5),
+                          Text(
+                            name,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight:
+                                  selected ? FontWeight.w700 : FontWeight.w500,
+                              color: selected
+                                  ? color
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withValues(alpha: 0.55),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1526,6 +1481,89 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ),
               ],
             ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _recurrenceLabelString(BuildContext context, String typeStr) {
+    switch (typeStr) {
+      case 'daily':
+        return context.t('daily');
+      case 'weekly':
+        return context.t('weekly');
+      case 'monthly':
+        return context.t('monthly');
+      case 'yearly':
+        return context.t('yearly');
+      default:
+        return context.t('once');
+    }
+  }
+
+  void _showDefaultRecurringTypeDialog(BuildContext context, String current) {
+    final types = [
+      ('daily', context.t('daily')),
+      ('weekly', context.t('weekly')),
+      ('monthly', context.t('monthly')),
+      ('yearly', context.t('yearly')),
+    ];
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.fromLTRB(
+              20, 12, 20, 24 + MediaQuery.of(ctx).padding.bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                  child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                          color: theme.dividerColor,
+                          borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 16),
+              Text(context.t('default_recurring_frequency'),
+                  style: AppTextStyles.h5),
+              const SizedBox(height: 12),
+              ...types.map((t) {
+                final isSelected = current == t.$1;
+                final primary = theme.colorScheme.primary;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    title: Text(t.$2,
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: isSelected ? primary : null)),
+                    trailing: isSelected
+                        ? Icon(Icons.check_circle_rounded, color: primary)
+                        : null,
+                    onTap: () {
+                      ref
+                          .read(settingsProvider.notifier)
+                          .updateDefaultRecurringType(t.$1);
+                      Navigator.pop(ctx);
+                    },
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    selected: isSelected,
+                    selectedTileColor: primary.withValues(alpha: 0.05),
+                  ),
+                );
+              }),
+            ],
           ),
         );
       },
@@ -1997,7 +2035,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             ),
           ),
           pw.SizedBox(height: 8),
-          pw.Text('Exported: ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}'),
+          pw.Text(
+              'Exported: ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}'),
           pw.SizedBox(height: 12),
           pw.Text('Income: $currency${income.toStringAsFixed(2)}'),
           pw.Text('Expense: $currency${expense.toStringAsFixed(2)}'),
@@ -2113,21 +2152,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
 
-  String _manageCategoriesSubtitle(BuildContext context) {
-    return _isBangla(context)
-        ? 'খাবার, ভাড়া, ইউটিলিটি, ফ্রিল্যান্সসহ ডিফল্ট ক্যাটাগরি ম্যানেজ করুন'
-        : 'Manage expanded defaults like rent, utilities, freelance and more';
-  }
-
-  String _budgetRolloverSubtitle(BuildContext context, bool enabled) {
-    return _isBangla(context)
-        ? (enabled
-            ? 'মাস শেষে বাকি বাজেট পরের মাসে carry forward হবে'
-            : 'প্রতি মাসের বাজেট আলাদা থাকবে, carry forward হবে না')
-        : (enabled
-            ? 'Unused monthly budget carries into the next month'
-            : 'Each month starts fresh without carrying leftovers');
-  }
 
   String _voiceInputSubtitle(BuildContext context) {
     return _isBangla(context)
@@ -2153,7 +2177,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         : 'Export your data as CSV, JSON or PDF';
   }
 
-
   String _termsSubtitle(BuildContext context) {
     return _isBangla(context)
         ? 'ব্যবহার ও দায়িত্ব সম্পর্কিত সংক্ষিপ্ত তথ্য'
@@ -2170,86 +2193,103 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => SafeArea(
-        top: false,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).dividerColor,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
+      isScrollControlled: true,
+      useRootNavigator: true,
+      builder: (sheetCtx) {
+        final media = MediaQuery.of(sheetCtx);
+        final maxHeight = media.size.height - media.padding.top - 16;
+
+        return Padding(
+          padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxHeight),
+            child: Container(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                16,
+                20,
+                24 + media.padding.bottom,
+              ),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 42,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).dividerColor,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      context.t('export_data'),
+                      style: AppTextStyles.h5
+                          .copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _exportSubtitle(context),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.55),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    _exportFormatTile(
+                      context: context,
+                      sheetCtx: sheetCtx,
+                      icon: Icons.table_chart_rounded,
+                      color: const Color(0xFF10B981),
+                      title: 'CSV',
+                      subtitle: _isBangla(context)
+                          ? 'Excel / Google Sheets এ ওপেন করা যাবে'
+                          : 'Opens in Excel or Google Sheets',
+                      format: 'csv',
+                    ),
+                    const SizedBox(height: 10),
+                    _exportFormatTile(
+                      context: context,
+                      sheetCtx: sheetCtx,
+                      icon: Icons.picture_as_pdf_rounded,
+                      color: const Color(0xFFEF4444),
+                      title: 'PDF',
+                      subtitle: _isBangla(context)
+                          ? 'প্রিন্ট বা শেয়ার করার জন্য উপযুক্ত'
+                          : 'Ready to print or share',
+                      format: 'pdf',
+                    ),
+                    const SizedBox(height: 10),
+                    _exportFormatTile(
+                      context: context,
+                      sheetCtx: sheetCtx,
+                      icon: Icons.data_object_rounded,
+                      color: const Color(0xFF3B82F6),
+                      title: 'JSON',
+                      subtitle: _isBangla(context)
+                          ? 'সম্পূর্ণ ডেটা ব্যাকআপ ফরম্যাট'
+                          : 'Full data backup format',
+                      format: 'json',
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 18),
-              Text(
-                context.t('export_data'),
-                style:
-                    AppTextStyles.h5.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _exportSubtitle(context),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.55),
-                ),
-              ),
-              const SizedBox(height: 18),
-              _exportFormatTile(
-                context: context,
-                sheetCtx: sheetCtx,
-                icon: Icons.table_chart_rounded,
-                color: const Color(0xFF10B981),
-                title: 'CSV',
-                subtitle: _isBangla(context)
-                    ? 'Excel / Google Sheets এ ওপেন করা যাবে'
-                    : 'Opens in Excel or Google Sheets',
-                format: 'csv',
-              ),
-              const SizedBox(height: 10),
-              _exportFormatTile(
-                context: context,
-                sheetCtx: sheetCtx,
-                icon: Icons.picture_as_pdf_rounded,
-                color: const Color(0xFFEF4444),
-                title: 'PDF',
-                subtitle: _isBangla(context)
-                    ? 'প্রিন্ট বা শেয়ার করার জন্য উপযুক্ত'
-                    : 'Ready to print or share',
-                format: 'pdf',
-              ),
-              const SizedBox(height: 10),
-              _exportFormatTile(
-                context: context,
-                sheetCtx: sheetCtx,
-                icon: Icons.data_object_rounded,
-                color: const Color(0xFF3B82F6),
-                title: 'JSON',
-                subtitle: _isBangla(context)
-                    ? 'সম্পূর্ণ ডেটা ব্যাকআপ ফরম্যাট'
-                    : 'Full data backup format',
-                format: 'json',
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -2373,6 +2413,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             onPressed: () async {
               Navigator.pop(ctx);
               await AuthService().signOut();
+              // Reload profile to clear stale user data
+              ref.read(userProfileProvider.notifier).reloadProfile();
             },
             child: Text(context.t('sign_out')),
           ),

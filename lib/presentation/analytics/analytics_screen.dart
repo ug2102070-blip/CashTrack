@@ -22,7 +22,8 @@ class AnalyticsScreen extends ConsumerStatefulWidget {
 class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     with SingleTickerProviderStateMixin {
   bool _revealAmounts = false;
-  DateTime _calendarMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
+  DateTime _calendarMonth =
+      DateTime(DateTime.now().year, DateTime.now().month, 1);
   late AnimationController _animCtrl;
 
   // Pre-created animations to avoid CurvedAnimation leak in build().
@@ -366,7 +367,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
@@ -419,7 +420,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             Text(
               value,
               style: TextStyle(
@@ -430,7 +431,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
                 height: 1.1,
               ),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 2),
             Text(
               subtitle != null ? '$label · $subtitle' : label,
               style: TextStyle(
@@ -675,130 +676,129 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     final today = DateTime.now();
 
     return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: weekdays
-                .map((d) => Expanded(
-                      child: Center(
-                        child: Text(d,
-                            style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withValues(alpha: 0.35))),
-                      ),
-                    ))
-                .toList(),
-          ),
-          const SizedBox(height: 8),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: cells,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7,
-              crossAxisSpacing: 5,
-              mainAxisSpacing: 5,
-              childAspectRatio: 1,
-            ),
-            itemBuilder: (_, index) {
-              final dayNumber = index - startOffset + 1;
-              if (dayNumber < 1 || dayNumber > daysInMonth) {
-                return const SizedBox.shrink();
-              }
-              final amount = expenseByDay[dayNumber] ?? 0;
-              final dayDate = DateTime(month.year, month.month, dayNumber);
-              final dayTransactions = transactions
-                  .where((t) =>
-                      t.date.year == dayDate.year &&
-                      t.date.month == dayDate.month &&
-                      t.date.day == dayDate.day)
-                  .toList();
-              final isToday = dayDate.year == today.year &&
-                  dayDate.month == today.month &&
-                  dayDate.day == today.day;
-
-              return GestureDetector(
-                onTap: () => _showDaySheet(
-                    context, dayDate, dayTransactions, currency, hideAmounts),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  decoration: BoxDecoration(
-                    color: dayColor(amount),
-                    borderRadius: BorderRadius.circular(8),
-                    border: isToday
-                        ? Border.all(color: primary, width: 2)
-                        : Border.all(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.06)
-                                : Colors.black.withValues(alpha: 0.05),
-                            width: 0.5),
-                    boxShadow: amount > 0
-                        ? [
-                            BoxShadow(
-                                color: AppColors.error.withValues(alpha: 0.15),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2))
-                          ]
-                        : null,
-                  ),
-                  child: Center(
-                    child: Text('$dayNumber',
-                        style: TextStyle(
-                          fontWeight:
-                              isToday ? FontWeight.w900 : FontWeight.w600,
-                          fontSize: 10,
-                          color: amount > maxExpense * 0.3
-                              ? Colors.white
-                              : Theme.of(context)
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: weekdays
+              .map((d) => Expanded(
+                    child: Center(
+                      child: Text(d,
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Theme.of(context)
                                   .colorScheme
                                   .onSurface
-                                  .withValues(alpha: isToday ? 1.0 : 0.6),
-                        )),
-                  ),
+                                  .withValues(alpha: 0.35))),
+                    ),
+                  ))
+              .toList(),
+        ),
+        const SizedBox(height: 8),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: cells,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 7,
+            crossAxisSpacing: 5,
+            mainAxisSpacing: 5,
+            childAspectRatio: 1,
+          ),
+          itemBuilder: (_, index) {
+            final dayNumber = index - startOffset + 1;
+            if (dayNumber < 1 || dayNumber > daysInMonth) {
+              return const SizedBox.shrink();
+            }
+            final amount = expenseByDay[dayNumber] ?? 0;
+            final dayDate = DateTime(month.year, month.month, dayNumber);
+            final dayTransactions = transactions
+                .where((t) =>
+                    t.date.year == dayDate.year &&
+                    t.date.month == dayDate.month &&
+                    t.date.day == dayDate.day)
+                .toList();
+            final isToday = dayDate.year == today.year &&
+                dayDate.month == today.month &&
+                dayDate.day == today.day;
+
+            return GestureDetector(
+              onTap: () => _showDaySheet(
+                  context, dayDate, dayTransactions, currency, hideAmounts),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  color: dayColor(amount),
+                  borderRadius: BorderRadius.circular(8),
+                  border: isToday
+                      ? Border.all(color: primary, width: 2)
+                      : Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.06)
+                              : Colors.black.withValues(alpha: 0.05),
+                          width: 0.5),
+                  boxShadow: amount > 0
+                      ? [
+                          BoxShadow(
+                              color: AppColors.error.withValues(alpha: 0.15),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2))
+                        ]
+                      : null,
                 ),
-              );
-            },
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Text(context.t('less'),
-                  style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.4))),
-              const SizedBox(width: 8),
-              ...List.generate(
-                  5,
-                  (i) => Container(
-                        width: 16,
-                        height: 16,
-                        margin: const EdgeInsets.only(right: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.error
-                              .withValues(alpha: 0.1 + (i * 0.18)),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
+                child: Center(
+                  child: Text('$dayNumber',
+                      style: TextStyle(
+                        fontWeight: isToday ? FontWeight.w900 : FontWeight.w600,
+                        fontSize: 10,
+                        color: amount > maxExpense * 0.3
+                            ? Colors.white
+                            : Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: isToday ? 1.0 : 0.6),
                       )),
-              const SizedBox(width: 4),
-              Text(context.t('more'),
-                  style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.4))),
-            ],
-          ),
-        ],
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Text(context.t('less'),
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.4))),
+            const SizedBox(width: 8),
+            ...List.generate(
+                5,
+                (i) => Container(
+                      width: 16,
+                      height: 16,
+                      margin: const EdgeInsets.only(right: 4),
+                      decoration: BoxDecoration(
+                        color:
+                            AppColors.error.withValues(alpha: 0.1 + (i * 0.18)),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    )),
+            const SizedBox(width: 4),
+            Text(context.t('more'),
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.4))),
+          ],
+        ),
+      ],
     );
   }
 
@@ -971,11 +971,11 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
           builder: (sheetCtx, setSheetState) {
             final viewMonth =
                 DateTime(_calendarMonth.year, _calendarMonth.month, 1);
-            final monthAnalytics = ref.read(monthlyAnalyticsProvider(viewMonth));
-            final canGoNext =
-                viewMonth.year < DateTime.now().year ||
-                    (viewMonth.year == DateTime.now().year &&
-                        viewMonth.month < DateTime.now().month);
+            final monthAnalytics =
+                ref.read(monthlyAnalyticsProvider(viewMonth));
+            final canGoNext = viewMonth.year < DateTime.now().year ||
+                (viewMonth.year == DateTime.now().year &&
+                    viewMonth.month < DateTime.now().month);
 
             return DraggableScrollableSheet(
               expand: false,
@@ -1042,7 +1042,8 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w800,
-                                    color: Theme.of(context).colorScheme.onSurface,
+                                    color:
+                                        Theme.of(context).colorScheme.onSurface,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -1110,45 +1111,84 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     );
   }
 
-  // ── Line Trend ───────────────────────────────────────────────────────────
+  // ── Expense / Income Area Trend ──────────────────────────────────────────
+
+  // 0 = Expense, 1 = Income
+  int _trendViewIndex = 0;
+  int _nearestTouchBar = 0; // tracked via touchCallback, no setState needed
 
   Widget _buildLineTrend(MonthlyAnalytics analytics, String currency,
       bool hideAmounts, bool isDark, Color primary) {
     final month = analytics.month;
     final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
-    final expenseByDay = List<double>.filled(daysInMonth, 0);
-    final incomeByDay = List<double>.filled(daysInMonth, 0);
-    final netByDay = List<double>.filled(daysInMonth, 0);
+    final now = DateTime.now();
+    final isCurrentMonth = month.year == now.year && month.month == now.month;
+    // Only show up to today's day for current month
+    final visibleDays = isCurrentMonth ? now.day : daysInMonth;
+    final isExpenseView = _trendViewIndex == 0;
+    final viewType =
+        isExpenseView ? TransactionType.expense : TransactionType.income;
+    final palette = isExpenseView
+        ? AppColors.chartPaletteExpense
+        : AppColors.chartPaletteIncome;
 
+    // ── Gather per-category per-day data (only up to visibleDays) ──
+    final catTotals = <String, double>{};
+    final catDayMap = <String, List<double>>{};
     for (final t in analytics.transactions) {
-      final i = t.date.day - 1;
-      if (i < 0 || i >= daysInMonth) continue;
-      if (t.type == TransactionType.expense) {
-        expenseByDay[i] += t.amount;
-        netByDay[i] -= t.amount;
-      } else {
-        incomeByDay[i] += t.amount;
-        netByDay[i] += t.amount;
+      if (t.type != viewType) continue;
+      final dayIdx = t.date.day - 1;
+      if (dayIdx < 0 || dayIdx >= visibleDays) continue;
+      catTotals[t.categoryId] = (catTotals[t.categoryId] ?? 0) + t.amount;
+      catDayMap.putIfAbsent(
+          t.categoryId, () => List<double>.filled(visibleDays, 0));
+      catDayMap[t.categoryId]![dayIdx] += t.amount;
+    }
+
+    // Sort by total descending → top 5
+    final sortedCats = catTotals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final topCats = sortedCats.take(5).toList();
+
+    // ── Build CUMULATIVE running totals for smooth flowing curves ──
+    final catCumulative = <String, List<double>>{};
+    for (final cat in topCats) {
+      final dayData = catDayMap[cat.key]!;
+      final cumList = List<double>.filled(visibleDays, 0);
+      double running = 0;
+      for (var i = 0; i < visibleDays; i++) {
+        running += dayData[i];
+        cumList[i] = running;
+      }
+      catCumulative[cat.key] = cumList;
+    }
+
+    // Max cumulative value
+    double maxVal = 0;
+    for (final entry in catCumulative.entries) {
+      for (final v in entry.value) {
+        if (v > maxVal) maxVal = v;
       }
     }
+    final safeMax = maxVal <= 0 ? 1.0 : maxVal;
 
-    final allVals = [
-      ...expenseByDay,
-      ...incomeByDay,
-      ...netByDay.map((e) => e.abs()),
-    ];
-    final maxValue =
-        allVals.isEmpty ? 1.0 : allVals.reduce((a, b) => a > b ? a : b);
-    final safeMax = maxValue <= 0 ? 1.0 : maxValue;
-
-    final spotsExpense = <FlSpot>[];
-    final spotsIncome = <FlSpot>[];
-    final spotsNet = <FlSpot>[];
-    for (var i = 0; i < daysInMonth; i++) {
-      spotsExpense.add(FlSpot(i.toDouble() + 1, expenseByDay[i]));
-      spotsIncome.add(FlSpot(i.toDouble() + 1, incomeByDay[i]));
-      spotsNet.add(FlSpot(i.toDouble() + 1, netByDay[i].abs()));
+    // Build spots from cumulative data (only up to visibleDays)
+    final catSpots = <String, List<FlSpot>>{};
+    for (final cat in topCats) {
+      final cumData = catCumulative[cat.key]!;
+      catSpots[cat.key] = [
+        for (var i = 0; i < visibleDays; i++)
+          FlSpot(i.toDouble() + 1, cumData[i]),
+      ];
     }
+
+    // Read categories for names
+    final categories = ref.watch(categoriesProvider);
+    final categoryMap = {for (final c in categories) c.id: c};
+
+    // Area fill opacities – progressively lighter for lower-ranked categories
+    const areaOpacities = [0.32, 0.26, 0.22, 0.18, 0.14];
+    const lineWidths = [3.2, 2.8, 2.5, 2.2, 2.0];
 
     return _card(
       context,
@@ -1156,187 +1196,353 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _cardHeader(
-              context, context.t('daily_trend'), Icons.show_chart_rounded, primary),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 12,
-            runSpacing: 6,
+          // Header row
+          Row(
             children: [
-              _legendDot(context.t('income'), AppColors.success),
-              _legendDot(context.t('expense'), AppColors.error),
-              _legendDot(context.t('net_savings'), AppColors.info),
+              Expanded(
+                child: _cardHeader(context, context.t('daily_trend'),
+                    Icons.area_chart_rounded, primary),
+              ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 12),
+
+          // Toggle chips
+          Row(
+            children: [
+              _trendToggleChip(
+                label: context.t('expense'),
+                isSelected: isExpenseView,
+                color: AppColors.error,
+                isDark: isDark,
+                onTap: () => setState(() => _trendViewIndex = 0),
+              ),
+              const SizedBox(width: 8),
+              _trendToggleChip(
+                label: context.t('income'),
+                isSelected: !isExpenseView,
+                color: AppColors.success,
+                isDark: isDark,
+                onTap: () => setState(() => _trendViewIndex = 1),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Subtitle
           Text(
-            context.t('income_vs_expense',
-                params: {'month': DateFormat('MMM yyyy').format(month)}),
+            '${isExpenseView ? context.t('expense') : context.t('income')} — ${DateFormat('MMM yyyy').format(month)}',
             style: TextStyle(
                 fontSize: 11,
+                fontWeight: FontWeight.w500,
                 color: Theme.of(context)
                     .colorScheme
                     .onSurface
-                    .withValues(alpha: 0.4)),
+                    .withValues(alpha: 0.38)),
           ),
-          const SizedBox(height: 18),
-          SizedBox(
-            height: 200,
-            child: LineChart(
-              LineChartData(
-                minX: 1,
-                maxX: daysInMonth.toDouble(),
-                minY: 0,
-                maxY: safeMax * 1.25,
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  horizontalInterval: safeMax / 5,
-                  getDrawingHorizontalLine: (_) => FlLine(
-                    color:
-                        Theme.of(context).dividerColor.withValues(alpha: 0.25),
-                    strokeWidth: 0.8,
-                    dashArray: [4, 4],
+          const SizedBox(height: 14),
+
+          // Legend
+          if (topCats.isNotEmpty) ...[
+            Wrap(
+              spacing: 10,
+              runSpacing: 6,
+              children: [
+                for (var i = 0; i < topCats.length; i++)
+                  _legendDot(
+                    categoryMap[topCats[i].key]?.name ?? topCats[i].key,
+                    palette[i % palette.length],
+                    isBold: i == 0,
                   ),
-                ),
-                titlesData: FlTitlesData(
-                  topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 40,
-                      getTitlesWidget: (value, meta) {
-                        if (value == 0) return const SizedBox.shrink();
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: Text(
-                            hideAmounts ? '••' : _fmtShort(value),
-                            style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w500,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withValues(alpha: 0.35)),
-                          ),
-                        );
-                      },
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Chart
+          if (topCats.isEmpty)
+            _emptyState(
+                context,
+                isExpenseView
+                    ? context.t('no_expense_month')
+                    : 'No income data for this month')
+          else
+            SizedBox(
+              height: 230,
+              child: LineChart(
+                LineChartData(
+                  minX: 1,
+                  maxX: visibleDays.toDouble(),
+                  minY: 0,
+                  maxY: safeMax * 1.15,
+                  clipData: const FlClipData.all(),
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    horizontalInterval: safeMax / 4,
+                    getDrawingHorizontalLine: (_) => FlLine(
+                      color: Theme.of(context)
+                          .dividerColor
+                          .withValues(alpha: 0.12),
+                      strokeWidth: 0.6,
+                      dashArray: [6, 6],
                     ),
                   ),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      interval: 7,
-                      getTitlesWidget: (value, meta) {
-                        if (value.toInt() % 7 != 0 &&
-                            value.toInt() != daysInMonth) {
-                          return const SizedBox.shrink();
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Text(value.toInt().toString(),
+                  titlesData: FlTitlesData(
+                    topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 42,
+                        getTitlesWidget: (value, meta) {
+                          if (value == 0) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: Text(
+                              hideAmounts ? '••' : _fmtShort(value),
                               style: TextStyle(
                                   fontSize: 9,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w500,
                                   color: Theme.of(context)
                                       .colorScheme
                                       .onSurface
-                                      .withValues(alpha: 0.4))),
-                        );
+                                      .withValues(alpha: 0.30)),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        interval: 7,
+                        getTitlesWidget: (value, meta) {
+                          final v = value.toInt();
+                          if (v % 7 != 0 && v != visibleDays) {
+                            return const SizedBox.shrink();
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(v.toString(),
+                                style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.35))),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  lineTouchData: LineTouchData(
+                    handleBuiltInTouches: true,
+                    touchCallback:
+                        (FlTouchEvent event, LineTouchResponse? response) {
+                      if (response?.lineBarSpots == null ||
+                          response!.lineBarSpots!.isEmpty) {
+                        return;
+                      }
+                      // Approximate touch Y in data coordinates to find nearest line
+                      final spots = response.lineBarSpots!;
+                      // Try to get the touch pixel position from the event
+                      double? touchPixelY;
+                      if (event is FlTapDownEvent) {
+                        touchPixelY = event.details.localPosition.dy;
+                      }
+                      if (event is FlPanUpdateEvent) {
+                        touchPixelY = event.details.localPosition.dy;
+                      }
+                      if (event is FlLongPressStart) {
+                        touchPixelY = event.details.localPosition.dy;
+                      }
+                      if (event is FlPanStartEvent) {
+                        touchPixelY = event.details.localPosition.dy;
+                      }
+                      if (touchPixelY != null) {
+                        // Convert pixel Y → approximate data Y (chart ~190px effective height)
+                        final approxDataY = safeMax *
+                            1.15 *
+                            math.max(0, 1.0 - touchPixelY / 190.0);
+                        int nearest = 0;
+                        double minDist = double.infinity;
+                        for (var i = 0; i < spots.length; i++) {
+                          final d = (spots[i].y - approxDataY).abs();
+                          if (d < minDist) {
+                            minDist = d;
+                            nearest = spots[i].barIndex;
+                          }
+                        }
+                        _nearestTouchBar = nearest;
+                      }
+                    },
+                    touchTooltipData: LineTouchTooltipData(
+                      maxContentWidth: 160,
+                      getTooltipColor: (_) =>
+                          isDark ? const Color(0xFF1A2332) : Colors.white,
+                      tooltipBorderRadius: BorderRadius.circular(14),
+                      tooltipPadding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      tooltipBorder: BorderSide(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.06)
+                              : Colors.black.withValues(alpha: 0.06)),
+                      getTooltipItems: (spots) {
+                        // Show only the nearest touched line's tooltip
+                        return spots.map((spot) {
+                          if (spot.barIndex != _nearestTouchBar) return null;
+                          final catIdx = spot.barIndex;
+                          Color c;
+                          String label;
+                          if (catIdx < topCats.length) {
+                            c = palette[catIdx % palette.length];
+                            label = categoryMap[topCats[catIdx].key]?.name ??
+                                topCats[catIdx].key;
+                          } else {
+                            c = Colors.grey;
+                            label = '?';
+                          }
+                          return LineTooltipItem(
+                            '$label: ${hideAmounts ? '••••' : '$currency${_fmtShort(spot.y)}'}',
+                            TextStyle(
+                                color: c,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                                height: 1.4),
+                          );
+                        }).toList();
                       },
                     ),
                   ),
+                  lineBarsData: [
+                    for (var i = 0; i < topCats.length; i++)
+                      _areaLineData(
+                        catSpots[topCats[i].key]!,
+                        palette[i % palette.length],
+                        barWidth: lineWidths[i.clamp(0, lineWidths.length - 1)],
+                        areaOpacity:
+                            areaOpacities[i.clamp(0, areaOpacities.length - 1)],
+                      ),
+                  ],
                 ),
-                borderData: FlBorderData(show: false),
-                lineTouchData: LineTouchData(
-                  touchTooltipData: LineTouchTooltipData(
-                    getTooltipColor: (_) =>
-                        isDark ? const Color(0xFF1E2A3A) : Colors.white,
-                    tooltipBorderRadius: BorderRadius.circular(10),
-                    tooltipBorder: BorderSide(
-                        color: isDark ? Colors.white12 : Colors.black12),
-                    getTooltipItems: (spots) => spots.map((spot) {
-                      final color = spot.barIndex == 0
-                          ? AppColors.error
-                          : spot.barIndex == 1
-                              ? AppColors.success
-                              : AppColors.info;
-                      final label = spot.barIndex == 0
-                          ? context.t('expense_short')
-                          : spot.barIndex == 1
-                              ? context.t('income_short')
-                              : context.t('net_savings');
-                      return LineTooltipItem(
-                          '$label: ${_fmtShort(spot.y)}',
-                          TextStyle(
-                              color: color,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12));
-                    }).toList(),
-                  ),
-                ),
-                lineBarsData: [
-                  _lineData(
-                    spotsExpense,
-                    AppColors.error,
-                    isAccent: true,
-                  ),
-                  _lineData(
-                    spotsIncome,
-                    AppColors.success,
-                    isAccent: true,
-                  ),
-                  _lineData(
-                    spotsNet,
-                    AppColors.info,
-                    isAccent: false,
-                  ),
-                ],
               ),
             ),
-          ),
         ],
       ),
     );
   }
 
-  LineChartBarData _lineData(List<FlSpot> spots, Color color,
-      {required bool isAccent}) {
+  Widget _trendToggleChip({
+    required String label,
+    required bool isSelected,
+    required Color color,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? color.withValues(alpha: 0.15)
+              : isDark
+                  ? Colors.white.withValues(alpha: 0.04)
+                  : Colors.black.withValues(alpha: 0.03),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? color.withValues(alpha: 0.4)
+                : isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.black.withValues(alpha: 0.06),
+            width: isSelected ? 1.5 : 1,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.15),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: isSelected ? color : color.withValues(alpha: 0.3),
+                shape: BoxShape.circle,
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: color.withValues(alpha: 0.4),
+                          blurRadius: 4,
+                        ),
+                      ]
+                    : null,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected
+                    ? color
+                    : Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.5),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  LineChartBarData _areaLineData(
+    List<FlSpot> spots,
+    Color color, {
+    required double barWidth,
+    required double areaOpacity,
+  }) {
     return LineChartBarData(
       spots: spots,
       color: color,
-      barWidth: isAccent ? 2.8 : 2.2,
+      barWidth: barWidth,
       isCurved: true,
-      curveSmoothness: 0.35,
-      dotData: FlDotData(
-        show: isAccent,
-        getDotPainter: (spot, _, __, ___) {
-          if (spot.y == 0) {
-            return FlDotCirclePainter(
-                radius: 0,
-                color: Colors.transparent,
-                strokeWidth: 0,
-                strokeColor: Colors.transparent);
-          }
-          return FlDotCirclePainter(
-              radius: isAccent ? 3 : 2,
-              color: color,
-              strokeWidth: 1.5,
-              strokeColor: Colors.white);
-        },
-        checkToShowDot: (spot, _) => isAccent && spot.y > 0,
-      ),
+      curveSmoothness: 0.45,
       isStrokeCapRound: true,
+      dotData: const FlDotData(show: false),
+      shadow: Shadow(
+        color: color.withValues(alpha: 0.18),
+        blurRadius: 6,
+        offset: const Offset(0, 3),
+      ),
       belowBarData: BarAreaData(
         show: true,
         gradient: LinearGradient(
           colors: [
-            color.withValues(alpha: isAccent ? 0.22 : 0.12),
-            color.withValues(alpha: 0.0)
+            color.withValues(alpha: areaOpacity),
+            color.withValues(alpha: areaOpacity * 0.5),
+            color.withValues(alpha: 0.02),
           ],
+          stops: const [0.0, 0.55, 1.0],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -1420,23 +1626,34 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     );
   }
 
-  Widget _legendDot(String label, Color color) {
+  Widget _legendDot(String label, Color color, {bool isBold = false}) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+            width: isBold ? 10 : 8,
+            height: isBold ? 10 : 8,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              boxShadow: isBold
+                  ? [
+                      BoxShadow(
+                          color: color.withValues(alpha: 0.4), blurRadius: 4)
+                    ]
+                  : null,
+            )),
         const SizedBox(width: 5),
         Text(label,
             style: TextStyle(
-                fontWeight: FontWeight.w600,
+                fontWeight: isBold ? FontWeight.w700 : FontWeight.w600,
                 fontSize: 11,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.6))),
+                color: isBold
+                    ? color
+                    : Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.6))),
       ],
     );
   }

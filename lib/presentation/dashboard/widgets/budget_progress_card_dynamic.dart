@@ -39,9 +39,16 @@ class BudgetProgressCardDynamic extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(context.t('monthly_budget'), style: AppTextStyles.h3),
+              Expanded(
+                child: Text(
+                  context.t('monthly_budget'),
+                  style: AppTextStyles.h3,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
               Text(
                 '${(progress * 100).toStringAsFixed(0)}%',
                 style: AppTextStyles.body2

@@ -52,3 +52,24 @@ app.*.map.json
 *.freezed.dart
 *.mocks.dart
 .flutter-plugins
+
+# Firebase & Secrets
+**/google-services.json
+**/GoogleService-Info.plist
+**/key.properties
+*.jks
+*.keystore
+firebase_options.dart
+
+# Build logs & temp files
+build_log.txt
+flutter_build_verbose.txt
+bn_missing.txt
+
+# Local config
+local.properties
+
+# Local assistant/tool state
+.refact/
+scratch/
+cashtrack-privacy/
