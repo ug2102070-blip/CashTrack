@@ -25,13 +25,14 @@ dependencies:
 
   # Firebase
   firebase_core: ^4.4.0
+  firebase_app_check: ^0.4.1+4
   firebase_auth: ^6.1.4
   cloud_firestore: ^6.1.2
   cloud_functions: ^6.0.1
   firebase_storage: ^13.0.6
   firebase_analytics: ^12.1.1
-  firebase_crashlytics: any
-  firebase_performance: any
+  firebase_crashlytics: ^5.1.0
+  firebase_performance: ^0.11.2
   google_sign_in: ^6.2.1
 
   # Navigation
@@ -98,6 +99,7 @@ dependencies:
   cached_network_image: ^3.3.1
 
   google_generative_ai: ^0.4.0
+  webview_flutter: ^4.14.0
 
 dev_dependencies:
   flutter_test:
@@ -138,25 +140,9 @@ flutter:
 
 
   fonts:
-    - family: Poppins
+    - family: Inter
       fonts:
-        - asset: assets/fonts/Poppins-Regular.ttf
-        - asset: assets/fonts/Poppins-Medium.ttf
-          weight: 500
-        - asset: assets/fonts/Poppins-SemiBold.ttf
-          weight: 600
-        - asset: assets/fonts/Poppins-Bold.ttf
-          weight: 700
-
-    - family: BalooDa2
-      fonts:
-        - asset: assets/fonts/BalooDa2-Regular.ttf
-        - asset: assets/fonts/BalooDa2-Bold.ttf
-          weight: 700
-
-    - family: NotoSansBengali
-      fonts:
-        - asset: assets/fonts/NotoSansBengali-Var.ttf
+        - asset: assets/fonts/Inter-Variable.ttf
 
 flutter_native_splash:
   color: "#FFFFFF"

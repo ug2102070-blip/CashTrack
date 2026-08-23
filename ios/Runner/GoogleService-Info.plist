@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
 	<key>API_KEY</key>
-	<string>AIzaSyBKnkWgAV5bT-KMKPbmDhPSVQNi0Z981xQ</string>
+	<string>AIzaSyDNia3xZHO1OS60KZjTDFYPEFUpH-QlL9I</string>
 	<key>GCM_SENDER_ID</key>
-	<string>120357782926</string>
+	<string>68532369864</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
 	<string>com.example.cashtrack</string>
 	<key>PROJECT_ID</key>
-	<string>cashtrack-838b3</string>
+	<string>cashtrack-c130b</string>
 	<key>STORAGE_BUCKET</key>
-	<string>cashtrack-838b3.firebasestorage.app</string>
+	<string>cashtrack-c130b.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -25,6 +25,10 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:120357782926:ios:27c4571726be95fca190df</string>
+	<string>1:68532369864:ios:1133d06d8587aebbd728fd</string>
+	<key>CLIENT_ID</key>
+	<string>68532369864-j7p196lg0a82u9lqcn5jqncd8lqhtel6.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.68532369864-j7p196lg0a82u9lqcn5jqncd8lqhtel6</string>
 </dict>
 </plist>

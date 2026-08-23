@@ -9,6 +9,7 @@ import '../../core/theme/app_text_styles.dart';
 import '../../core/l10n/app_l10n.dart';
 import '../providers/app_providers.dart';
 import '../../data/models/debt_model.dart';
+import '../../data/models/transaction_model.dart';
 
 class ToolsScreen extends ConsumerStatefulWidget {
   const ToolsScreen({super.key});
@@ -81,10 +82,17 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
     final assets = ref.watch(assetsProvider);
     final now = DateTime.now();
 
-    // Budget
-    final totalBudget = budgets.fold<double>(0, (s, b) => s + b.amount);
-    final totalSpent = budgets.fold<double>(0, (s, b) => s + b.spent);
-    final budgetRemaining = (totalBudget - totalSpent).clamp(0.0, double.infinity);
+    final transactions = ref.watch(transactionsProvider);
+    final budgetCategoryIds = budgets.map((b) => b.categoryId).toSet();
+    
+    final totalBudget = budgets.fold<int>(0, (s, b) => s + b.amount);
+    final totalSpent = transactions
+        .where((t) => t.type == TransactionType.expense && 
+                      t.date.year == now.year && 
+                      t.date.month == now.month &&
+                      budgetCategoryIds.contains(t.categoryId))
+        .fold<int>(0, (s, t) => s + t.amount);
+    final budgetRemaining = totalBudget - totalSpent > 0 ? totalBudget - totalSpent : 0;
     final budgetProgress = totalBudget > 0 ? (totalSpent / totalBudget).clamp(0.0, 1.0) : 0.0;
     final budgetColor = budgetProgress >= 0.9
         ? AppColors.error
@@ -94,18 +102,18 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
 
     // Goals
     final activeGoals = goals.where((g) => !g.isCompleted).toList();
-    final totalGoalTarget = activeGoals.fold<double>(0, (s, g) => s + g.targetAmount);
-    final totalGoalSaved = activeGoals.fold<double>(0, (s, g) => s + g.currentAmount);
+    final totalGoalTarget = activeGoals.fold<int>(0, (s, g) => s + g.targetAmount);
+    final totalGoalSaved = activeGoals.fold<int>(0, (s, g) => s + g.currentAmount);
     final overallGoalProgress = totalGoalTarget > 0
         ? (totalGoalSaved / totalGoalTarget).clamp(0.0, 1.0)
         : 0.0;
 
     // Debts
-    double lent = 0, borrowed = 0;
+    int lent = 0, borrowed = 0;
     int dueSoon = 0;
     for (final d in debts) {
       if (d.isSettled) continue;
-      final rem = (d.amount - d.paidAmount).clamp(0.0, d.amount);
+      final rem = d.amount - d.paidAmount > 0 ? d.amount - d.paidAmount : 0;
       if (d.type == DebtType.lent) {
         lent += rem;
       } else {
@@ -116,13 +124,12 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
       }
     }
 
-    // Investments
-    final totalInvested = investments.fold<double>(0, (s, i) => s + i.investedAmount);
-    final totalCurrent = investments.fold<double>(0, (s, i) => s + i.currentValue);
-    final returns = totalCurrent - totalInvested;
+    // Investments & Assets
+    final totalInvested = investments.fold<int>(0, (s, i) => s + i.investedAmount);
+    final currentInvestValue = investments.fold<int>(0, (s, i) => s + i.currentValue);
+    final investReturn = currentInvestValue - totalInvested;
 
-    // Assets
-    final totalAssetValue = assets.fold<double>(0, (s, a) => s + a.currentValue);
+    final totalAssets = assets.fold<int>(0, (s, a) => s + a.currentValue);
 
     // Subscriptions
     final allTransactions = ref.watch(transactionsProvider);
@@ -145,9 +152,9 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
                 index: 1,
                 child: _buildQuickStatsStrip(
                   context, isDark, primary, currency,
-                  totalBudget, totalSpent, budgetRemaining, budgetProgress, budgetColor,
-                  totalGoalSaved, totalGoalTarget, overallGoalProgress,
-                  activeGoals.length, lent, borrowed, subCount, splitGroups.length,
+                  totalBudget.toDouble(), totalSpent.toDouble(), budgetRemaining.toDouble(), budgetProgress, budgetColor,
+                  totalGoalSaved.toDouble(), totalGoalTarget.toDouble(), overallGoalProgress,
+                  activeGoals.length, lent.toDouble(), borrowed.toDouble(), subCount, splitGroups.length,
                 ),
               ),
             ),
@@ -158,7 +165,7 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
                 index: 2,
                 child: _buildBudgetCard(
                   context, isDark, primary, currency,
-                  budgetProgress, budgetColor, budgetRemaining, totalBudget, totalSpent, budgets,
+                  budgetProgress, budgetColor, budgetRemaining.toDouble(), totalBudget.toDouble(), totalSpent.toDouble(), budgets,
                 ),
               ),
             ),
@@ -169,7 +176,7 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
                 index: 3,
                 child: _buildGoalsCard(
                   context, isDark, primary, currency,
-                  overallGoalProgress, totalGoalSaved, totalGoalTarget, activeGoals,
+                  overallGoalProgress, totalGoalSaved.toDouble(), totalGoalTarget.toDouble(), activeGoals,
                 ),
               ),
             ),
@@ -180,9 +187,9 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
                 index: 4,
                 child: _buildWealthSection(
                   context, isDark, primary, currency,
-                  lent, borrowed, dueSoon,
-                  totalInvested, returns,
-                  totalAssetValue, assets.isEmpty,
+                  lent.toDouble(), borrowed.toDouble(), dueSoon,
+                  totalInvested.toDouble(), investReturn.toDouble(),
+                  totalAssets.toDouble(), assets.isEmpty,
                 ),
               ),
             ),
@@ -1053,17 +1060,6 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
                 ),
                 child: Icon(tool.icon, color: tool.color, size: 18),
               ),
-              if (tool.badge != null) ...[
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: tool.color,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(tool.badge!, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800)),
-                ),
-              ],
             ]),
             const Spacer(),
             Text(
@@ -1114,14 +1110,11 @@ class _ToolItem {
   final String label;
   final String sub;
   final String route;
-  final String? badge;
-
   const _ToolItem({
     required this.icon,
     required this.color,
     required this.label,
     required this.sub,
     required this.route,
-    this.badge,
   });
 }

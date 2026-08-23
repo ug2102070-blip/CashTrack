@@ -58,7 +58,7 @@
 <body>
     <div class="container">
         <h1>Privacy Policy</h1>
-        <p class="last-updated">Last updated: May 23, 2026</p>
+        <p class="last-updated">Last updated: August 10, 2026</p>
 
         <p>CashTrack ("we", "our", or "us") is a personal finance management application designed for users in Bangladesh. This Privacy Policy explains how we collect, use, and protect your information.</p>
 
@@ -81,7 +81,7 @@
         <ul>
             <li>To provide and maintain the CashTrack service</li>
             <li>To sync your financial data across devices (when you enable cloud sync)</li>
-            <li>To provide AI-powered financial insights (using Google Gemini, with anonymized data)</li>
+            <li>To provide AI-powered financial insights when you explicitly use the AI assistant</li>
             <li>To send you budget alerts, bill reminders, and debt notifications</li>
             <li>To improve the app through anonymous analytics</li>
         </ul>
@@ -92,14 +92,14 @@
             <li><strong>Cloud Sync:</strong> If enabled, data is synced to Google Firebase (Firestore), which uses encryption in transit and at rest.</li>
             <li><strong>Biometric Security:</strong> The app supports fingerprint/face authentication for additional security.</li>
             <li><strong>Screenshot Protection:</strong> Optional setting to prevent screenshots of sensitive financial information.</li>
-            <li><strong>API Keys:</strong> Sensitive credentials are stored using Flutter Secure Storage with platform-level encryption.</li>
+            <li><strong>Operational Diagnostics:</strong> Crash reporting is limited to redacted error categories and does not intentionally include transaction content, notification text, account numbers, or API keys.</li>
         </ul>
 
         <h2>4. Data Sharing</h2>
         <p>We do <strong>not</strong> sell, trade, or share your personal financial data with third parties. Data is only shared with:</p>
         <ul>
             <li><strong>Google Firebase:</strong> For authentication, cloud sync, and analytics (governed by <a href="https://firebase.google.com/support/privacy" target="_blank">Google's Privacy Policy</a>)</li>
-            <li><strong>Google Gemini AI:</strong> Anonymized financial summaries for AI insights (no personally identifiable information is sent)</li>
+            <li><strong>Groq:</strong> The question and financial context selected by the AI assistant are sent only when you invoke that feature, to generate a response. Do not include sensitive personal details in free-text questions or transaction notes sent to AI.</li>
         </ul>
 
         <h2>5. Permissions We Request</h2>

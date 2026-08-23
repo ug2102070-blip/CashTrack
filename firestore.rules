@@ -1,17 +1,193 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users can only read/write their own data
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
 
-      // All sub-collections under a user document
-      match /{subcollection}/{docId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+    // --- Helper Functions ---
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isNonEmptyString(val, maxLen) {
+      return val is string && val.size() > 0 && val.size() <= maxLen;
+    }
+
+    function isOptionalString(val, maxLen) {
+      return val == null || (val is string && val.size() <= maxLen);
+    }
+
+    function isValidTimestamp(val) {
+      return val is string && val.size() <= 40;
+    }
+
+    function isValidPaisaAmount(val) {
+      return val is int && val >= 0;
+    }
+
+    function hasOnlyKeys(data, allowed) {
+      return data.keys().hasOnly(allowed);
+    }
+
+    // --- Legacy Snapshot Compatibility (Sync Schema v1) ---
+    function validSnapshot(data) {
+      return hasOnlyKeys(data, ['updated_at', 'version', 'data'])
+          && data.keys().hasAll(['updated_at', 'version', 'data'])
+          && data.updated_at is timestamp
+          && data.version is int
+          && data.version == 1
+          && data.data is map
+          && hasOnlyKeys(
+            data.data,
+            ['transactions', 'categories', 'accounts', 'budgets', 'goals',
+             'debts', 'assets', 'investments']
+          )
+          && data.data.keys().hasAll(
+            ['transactions', 'categories', 'accounts', 'budgets', 'goals',
+             'debts', 'assets', 'investments']
+          )
+          && data.data.transactions is list
+          && data.data.categories is list
+          && data.data.accounts is list
+          && data.data.budgets is list
+          && data.data.goals is list
+          && data.data.debts is list
+          && data.data.assets is list
+          && data.data.investments is list;
+    }
+
+    // --- Entity Specific Validators ---
+    function isValidTransaction(data, docId) {
+      return data.id == docId
+          && isValidTimestamp(data.updatedAt)
+          && (!('amount' in data) || isValidPaisaAmount(data.amount))
+          && (!('type' in data) || data.type in ['income', 'expense', 'transfer'])
+          && (!('note' in data) || isOptionalString(data.note, 1000))
+          && (!('isDeleted' in data) || data.isDeleted is bool)
+          && (!('deletedAt' in data) || isValidTimestamp(data.deletedAt));
+    }
+
+    function isValidAccount(data, docId) {
+      return data.id == docId
+          && isValidTimestamp(data.updatedAt)
+          && (!('name' in data) || isNonEmptyString(data.name, 100))
+          && (!('balance' in data) || data.balance is int)
+          && (!('isDeleted' in data) || data.isDeleted is bool)
+          && (!('deletedAt' in data) || isValidTimestamp(data.deletedAt));
+    }
+
+    function isValidBudget(data, docId) {
+      return data.id == docId
+          && isValidTimestamp(data.updatedAt)
+          && (!('amount' in data) || isValidPaisaAmount(data.amount))
+          && (!('isDeleted' in data) || data.isDeleted is bool)
+          && (!('deletedAt' in data) || isValidTimestamp(data.deletedAt));
+    }
+
+    function isValidGoal(data, docId) {
+      return data.id == docId
+          && isValidTimestamp(data.updatedAt)
+          && (!('targetAmount' in data) || isValidPaisaAmount(data.targetAmount))
+          && (!('currentAmount' in data) || isValidPaisaAmount(data.currentAmount))
+          && (!('isDeleted' in data) || data.isDeleted is bool)
+          && (!('deletedAt' in data) || isValidTimestamp(data.deletedAt));
+    }
+
+    function isValidDebt(data, docId) {
+      return data.id == docId
+          && isValidTimestamp(data.updatedAt)
+          && (!('amount' in data) || isValidPaisaAmount(data.amount))
+          && (!('paidAmount' in data) || isValidPaisaAmount(data.paidAmount))
+          && (!('isDeleted' in data) || data.isDeleted is bool)
+          && (!('deletedAt' in data) || isValidTimestamp(data.deletedAt));
+    }
+
+    function isValidGenericRecord(data, docId) {
+      return data.id == docId
+          && isValidTimestamp(data.updatedAt)
+          && (!('name' in data) || isNonEmptyString(data.name, 120))
+          && (!('title' in data) || isNonEmptyString(data.title, 120))
+          && (!('isDeleted' in data) || data.isDeleted is bool)
+          && (!('deletedAt' in data) || isValidTimestamp(data.deletedAt));
+    }
+
+    // --- User Scope Rules ---
+    match /users/{userId} {
+      // User profile data is private and has an explicit field allow-list
+      allow get: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+          && hasOnlyKeys(
+            request.resource.data,
+            ['displayName', 'photoUrl', 'photoURL', 'email', 'phoneNumber', 'settings', 'createdAt', 'updatedAt']
+          );
+      allow delete: if isOwner(userId);
+
+      // Transitional compatibility for versions older than sync schema v2
+      match /app_data/snapshot {
+        allow get: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+            && validSnapshot(request.resource.data);
+      }
+
+      // Sync metadata tracking
+      match /sync/meta {
+        allow get: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+            && hasOnlyKeys(request.resource.data, ['schemaVersion', 'migratedAt'])
+            && request.resource.data.schemaVersion == 2
+            && request.resource.data.migratedAt is string;
+      }
+
+      // Financial Collections with granular validation
+      match /transactions/{documentId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidTransaction(request.resource.data, documentId);
+        allow delete: if isOwner(userId);
+      }
+
+      match /accounts/{documentId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidAccount(request.resource.data, documentId);
+        allow delete: if isOwner(userId);
+      }
+
+      match /budgets/{documentId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidBudget(request.resource.data, documentId);
+        allow delete: if isOwner(userId);
+      }
+
+      match /goals/{documentId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidGoal(request.resource.data, documentId);
+        allow delete: if isOwner(userId);
+      }
+
+      match /debts/{documentId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidDebt(request.resource.data, documentId);
+        allow delete: if isOwner(userId);
+      }
+
+      // Categories, Assets, Investments, Split Groups & Expenses
+      match /{collection}/{documentId} {
+        allow read: if isOwner(userId)
+            && collection in ['categories', 'assets', 'investments', 'split_groups', 'split_expenses'];
+        allow create, update: if isOwner(userId)
+            && collection in ['categories', 'assets', 'investments', 'split_groups', 'split_expenses']
+            && isValidGenericRecord(request.resource.data, documentId);
+        allow delete: if isOwner(userId);
       }
     }
 
-    // Deny everything else by default
+    // AI rate-limit records are written only by the Admin SDK in Cloud Functions
+    match /_ai_rate_limits/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Default deny all other requests
     match /{document=**} {
       allow read, write: if false;
     }

@@ -173,9 +173,9 @@ class GoalsScreen extends ConsumerWidget {
     final currency = ref.read(settingsProvider)['currency'] ?? '৳';
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final cardColor = theme.colorScheme.surface;
-    final textColor = theme.colorScheme.onSurface;
-    final mutedColor = theme.colorScheme.onSurface.withValues(alpha: 0.72);
+    final cardColor = isDark ? AppColors.darkSurface : AppColors.lightSurface;
+    final textColor = isDark ? AppColors.darkText : AppColors.lightText;
+    final mutedColor = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -185,15 +185,9 @@ class GoalsScreen extends ConsumerWidget {
         border: Border.all(
           color: goal.isCompleted
               ? AppColors.success.withValues(alpha: 0.3)
-              : theme.dividerColor.withValues(alpha: isDark ? 0.45 : 0.75),
+              : (isDark ? AppColors.darkBorder.withValues(alpha: 0.5) : AppColors.lightBorder.withValues(alpha: 0.7)),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: theme.shadowColor.withValues(alpha: isDark ? 0.18 : 0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: isDark ? AppColors.shadowDarkSm : AppColors.shadowSm,
       ),
       child: Column(
         children: [
@@ -512,15 +506,16 @@ class GoalsScreen extends ConsumerWidget {
             ElevatedButton(
               onPressed: () async {
                 final name = nameController.text.trim();
-                final targetAmount =
+                final parsedTarget =
                     double.tryParse(amountController.text.trim());
                 if (name.isNotEmpty &&
-                    targetAmount != null &&
-                    targetAmount > 0) {
+                    parsedTarget != null &&
+                    parsedTarget > 0) {
+                  final targetAmountInPaisa = (parsedTarget * 100).toInt();
                   final goal = GoalModel(
                     id: 'goal_${DateTime.now().millisecondsSinceEpoch}',
                     name: name,
-                    targetAmount: targetAmount,
+                    targetAmount: targetAmountInPaisa,
                     icon: selectedIcon,
                     deadline: deadline,
                     createdAt: DateTime.now(),
@@ -545,7 +540,7 @@ class GoalsScreen extends ConsumerWidget {
       BuildContext context, WidgetRef ref, GoalModel goal) {
     final nameController = TextEditingController(text: goal.name);
     final amountController =
-        TextEditingController(text: goal.targetAmount.toString());
+        TextEditingController(text: (goal.targetAmount / 100).toString());
     final currency = ref.read(settingsProvider)['currency'] ?? '৳';
     String selectedIcon = goal.icon ?? '🎯';
     DateTime? deadline = goal.deadline;
@@ -634,16 +629,18 @@ class GoalsScreen extends ConsumerWidget {
             ElevatedButton(
               onPressed: () async {
                 final name = nameController.text.trim();
-                final targetAmount =
+                final parsedTarget =
                     double.tryParse(amountController.text.trim());
                 if (name.isNotEmpty &&
-                    targetAmount != null &&
-                    targetAmount > 0) {
+                    parsedTarget != null &&
+                    parsedTarget > 0) {
+                  final targetAmountInPaisa = (parsedTarget * 100).toInt();
                   final updatedGoal = goal.copyWith(
                     name: name,
-                    targetAmount: targetAmount,
+                    targetAmount: targetAmountInPaisa,
                     icon: selectedIcon,
                     deadline: deadline,
+                    updatedAt: DateTime.now(),
                   );
                   await ref
                       .read(goalsProvider.notifier)
@@ -689,8 +686,9 @@ class GoalsScreen extends ConsumerWidget {
           ),
           ElevatedButton(
             onPressed: () async {
-              final amount = double.tryParse(amountController.text.trim());
-              if (amount != null && amount > 0) {
+              final parsedDouble = double.tryParse(amountController.text.trim());
+              if (parsedDouble != null && parsedDouble > 0) {
+                final amount = (parsedDouble * 100).toInt();
                 final newAmount = goal.currentAmount + amount;
                 await ref
                     .read(goalsProvider.notifier)

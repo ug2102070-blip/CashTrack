@@ -19,8 +19,8 @@ class AssetModelAdapter extends TypeAdapter<AssetModel> {
     return AssetModel(
       id: fields[0] as String,
       name: fields[1] as String,
-      purchasePrice: fields[2] as double,
-      currentValue: fields[3] as double,
+      purchasePrice: fields[2] as int,
+      currentValue: fields[3] as int,
       purchaseDate: fields[4] as DateTime,
       warrantyExpiry: fields[5] as DateTime?,
       insuranceExpiry: fields[6] as DateTime?,
@@ -78,8 +78,8 @@ _$AssetModelImpl _$$AssetModelImplFromJson(Map<String, dynamic> json) =>
     _$AssetModelImpl(
       id: json['id'] as String,
       name: json['name'] as String,
-      purchasePrice: (json['purchasePrice'] as num).toDouble(),
-      currentValue: (json['currentValue'] as num).toDouble(),
+      purchasePrice: (json['purchasePrice'] as num).toInt(),
+      currentValue: (json['currentValue'] as num).toInt(),
       purchaseDate: DateTime.parse(json['purchaseDate'] as String),
       warrantyExpiry: json['warrantyExpiry'] == null
           ? null

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import '../../core/l10n/app_l10n.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -50,64 +49,97 @@ class AccountsScreen extends ConsumerWidget {
 
   Widget _buildTotalBalanceCard(
     BuildContext context,
-    double totalBalance,
+    int totalBalance,
     String currency,
   ) {
+    final primary = Theme.of(context).colorScheme.primary;
     return Container(
       margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(24),
+      width: double.infinity,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0EA5E9), Color(0xFF0284C7)],
+        gradient: LinearGradient(
+          colors: [
+            primary,
+            Color.lerp(primary, Colors.indigo, 0.4)!,
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0EA5E9).withValues(alpha: 0.3),
+            color: primary.withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                context.t('total_balance'),
-                style: AppTextStyles.body1.copyWith(color: Colors.white70),
+          Positioned(
+            right: -20,
+            top: -20,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
               ),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.account_balance_wallet,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '$currency${totalBalance.toStringAsFixed(2)}',
-            style: AppTextStyles.h1.copyWith(
-              color: Colors.white,
-              fontSize: 32,
-              letterSpacing: -0.5,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            context.t('across_all_accounts'),
-            style: AppTextStyles.caption.copyWith(color: Colors.white70),
+          Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      context.t('total_balance').toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white.withValues(alpha: 0.7),
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.account_balance_wallet_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '$currency ${(totalBalance / 100).toStringAsFixed(2)}',
+                  style: AppTextStyles.h1.copyWith(
+                    color: Colors.white,
+                    fontSize: 36,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -1,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  context.t('across_all_accounts'),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -120,6 +152,25 @@ class AccountsScreen extends ConsumerWidget {
     List<AccountModel> accounts,
     String currency,
   ) {
+    final width = MediaQuery.of(context).size.width;
+    final isWide = width > 700;
+
+    if (isWide) {
+      return GridView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 450,
+          mainAxisExtent: 140,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+        ),
+        itemCount: accounts.length,
+        itemBuilder: (context, index) {
+          return _buildAccountCard(context, ref, accounts[index], currency);
+        },
+      );
+    }
+
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 100),
       itemCount: accounts.length,
@@ -136,121 +187,161 @@ class AccountsScreen extends ConsumerWidget {
     String currency,
   ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primary = Theme.of(context).colorScheme.primary;
+    final accountColor = account.colorHex != null 
+        ? Color(int.parse(account.colorHex!.replaceFirst('#', '0xFF'))) 
+        : primary;
+
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: MediaQuery.of(context).size.width > 700 
+          ? EdgeInsets.zero 
+          : const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isDark
-              ? Colors.white.withValues(alpha: 0.06)
-              : Colors.black.withValues(alpha: 0.04),
+              ? Colors.white.withValues(alpha: 0.08)
+              : const Color(0xFFE8ECF2),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        leading: BrandLogo(
-          name: account.name,
-          icon: account.icon,
-          size: 37,
-        ),
-        title: Text(
-          account.nickname?.isNotEmpty == true
-              ? account.nickname!
-              : account.name,
-          style: AppTextStyles.h5.copyWith(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (account.nickname?.isNotEmpty == true)
-              Text(
-                account.name,
-                style: AppTextStyles.caption.copyWith(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.5),
-                  fontSize: 11,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showAccountDetails(context, ref, account, currency),
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: accountColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Center(
+                    child: BrandLogo(
+                      name: account.name,
+                      icon: account.icon,
+                      size: 24,
+                    ),
+                  ),
                 ),
-              ),
-            if (account.nameBn.trim().isNotEmpty &&
-                account.nameBn != account.name)
-              Text(
-                account.nameBn,
-                style: AppTextStyles.caption.copyWith(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.6),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        account.nickname?.isNotEmpty == true
+                            ? account.nickname!
+                            : account.name,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFF0F2F5),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              _getAccountTypeLabel(context, account.type).toUpperCase(),
+                              style: TextStyle(
+                                color: isDark ? Colors.white54 : Colors.black54,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                          if (account.nickname?.isNotEmpty == true) ...[
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                account.name,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                                  fontSize: 11,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            const SizedBox(height: 4),
-            Text(
-              _getAccountTypeLabel(context, account.type),
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            if (_accountMetaSummary(account) != null) ...[
-              const SizedBox(height: 2),
-              Text(
-                _accountMetaSummary(account)!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.caption.copyWith(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.55),
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(
-              '$currency${account.balance.toStringAsFixed(0)}',
-              style: AppTextStyles.amountSmall.copyWith(
-                color: Theme.of(context).colorScheme.primary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(width: 4),
-            PopupMenuButton<String>(
-              padding: EdgeInsets.zero,
-              icon: const Icon(Icons.more_vert, size: 20),
-              onSelected: (value) {
-                if (value == 'edit') {
-                  _showEditAccountDialog(context, ref, account);
-                } else if (value == 'delete') {
-                  _deleteAccount(context, ref, account);
-                }
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(value: 'edit', child: Text(context.t('edit'))),
-                PopupMenuItem(
-                  value: 'delete',
-                  child: Text(context.t('delete')),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '$currency ${account.balance.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: accountColor,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    PopupMenuButton<String>(
+                      padding: EdgeInsets.zero,
+                      icon: Icon(Icons.more_horiz_rounded, size: 20, color: isDark ? Colors.white30 : Colors.black26),
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          _showEditAccountDialog(context, ref, account);
+                        } else if (value == 'delete') {
+                          _deleteAccount(context, ref, account);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        PopupMenuItem(value: 'edit', child: Row(
+                          children: [
+                            const Icon(Icons.edit_outlined, size: 18),
+                            const SizedBox(width: 12),
+                            Text(context.t('edit')),
+                          ],
+                        )),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+                              const SizedBox(width: 12),
+                              Text(context.t('delete'), style: const TextStyle(color: Colors.red)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
-        onTap: () => _showAccountDetails(context, ref, account, currency),
       ),
     );
   }
@@ -487,6 +578,7 @@ class AccountsScreen extends ConsumerWidget {
             const SizedBox(height: 24),
             Row(
               children: [
+
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () {
@@ -512,20 +604,7 @@ class AccountsScreen extends ConsumerWidget {
     );
   }
 
-  String? _accountMetaSummary(AccountModel account) {
-    final number = account.accountNumber?.trim();
-    if (account.type == AccountType.creditCard) {
-      final parts = [
-        account.cardType?.trim(),
-        account.cardIssuer?.trim(),
-        if (number != null && number.isNotEmpty) '**** ${_lastFour(number)}',
-      ].where((part) => part != null && part.isNotEmpty).cast<String>();
-      final summary = parts.join(' • ');
-      return summary.isEmpty ? null : summary;
-    }
-    if (number == null || number.isEmpty) return null;
-    return '${account.type == AccountType.mfs ? 'Number' : 'Account'}: $number';
-  }
+
 
   List<_AccountDetailRow> _accountDetailRows(AccountModel account) {
     final rows = <_AccountDetailRow>[];
@@ -632,6 +711,274 @@ class _AccountDetailRow {
   final String value;
 }
 
+class _GatewayPaymentDialog extends StatefulWidget {
+  const _GatewayPaymentDialog({
+    required this.account,
+    required this.currency,
+    required this.onPaymentApproved,
+  });
+
+  final AccountModel account;
+  final String currency;
+  final Future<void> Function(
+    double amount,
+    String trxId,
+    String receiverMobile,
+    String reference,
+  ) onPaymentApproved;
+
+  @override
+  State<_GatewayPaymentDialog> createState() => _GatewayPaymentDialogState();
+}
+
+class _GatewayPaymentDialogState extends State<_GatewayPaymentDialog> {
+  final _amountController = TextEditingController();
+  final _senderController = TextEditingController();
+  final _referenceController = TextEditingController(text: 'CashTrack Payment');
+
+  bool _isProcessing = false;
+  String? _trxId;
+  String? _error;
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _senderController.dispose();
+    _referenceController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final providerColor = _providerColor(widget.account);
+    final hasSuccess = _trxId != null;
+
+    return AlertDialog(
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+      contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      title: Row(
+        children: [
+          BrandLogo(
+            name: widget.account.name,
+            icon: widget.account.icon,
+            size: 38,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              '${widget.account.name} Payment',
+              style: AppTextStyles.h4,
+            ),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: providerColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: providerColor.withValues(alpha: 0.24)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    hasSuccess ? Icons.verified_rounded : Icons.lock_rounded,
+                    color: providerColor,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      hasSuccess
+                          ? 'Payment authorized successfully.'
+                          : 'Secure payment session is ready for review.',
+                      style: AppTextStyles.caption.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (!hasSuccess) ...[
+              TextField(
+                controller: _amountController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Amount',
+                  prefixText: widget.currency,
+                  prefixIcon: const Icon(Icons.payments_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _senderController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Receiver mobile number',
+                  hintText: '01XXXXXXXXX',
+                  prefixIcon: Icon(Icons.phone_android_rounded),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _referenceController,
+                decoration: const InputDecoration(
+                  labelText: 'Reference',
+                  prefixIcon: Icon(Icons.receipt_long_rounded),
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _error!,
+                  style: AppTextStyles.caption.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ] else ...[
+              _GatewayStatusRow(label: 'Transaction ID', value: _trxId!),
+              const _GatewayStatusRow(label: 'Status', value: 'Completed'),
+              const _GatewayStatusRow(label: 'Channel', value: 'Mobile wallet'),
+              _GatewayStatusRow(
+                label: 'Account',
+                value: widget.account.nickname?.isNotEmpty == true
+                    ? widget.account.nickname!
+                    : widget.account.name,
+              ),
+              _GatewayStatusRow(
+                label: 'Amount',
+                value:
+                    '${widget.currency}${double.parse(_amountController.text.trim()).toStringAsFixed(2)}',
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isProcessing ? null : () => Navigator.pop(context),
+          child: Text(hasSuccess ? 'Close' : 'Cancel'),
+        ),
+        if (!hasSuccess)
+          ElevatedButton.icon(
+            onPressed: _isProcessing ? null : _approvePayment,
+            icon: _isProcessing
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.check_circle_outline_rounded),
+            label: Text(_isProcessing ? 'Processing' : 'Approve'),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _approvePayment() async {
+    final amount = double.tryParse(_amountController.text.trim());
+    final mobile = _senderController.text.replaceAll(RegExp(r'\D'), '');
+
+    if (amount == null || amount <= 0) {
+      setState(() => _error = 'Enter a valid payment amount.');
+      return;
+    }
+    if (amount > widget.account.balance) {
+      setState(() => _error = 'Insufficient balance for this payment.');
+      return;
+    }
+    if (mobile.length < 11) {
+      setState(() => _error = 'Enter a valid receiver mobile number.');
+      return;
+    }
+
+    setState(() {
+      _error = null;
+      _isProcessing = true;
+    });
+
+    final trxId = _buildTransactionId();
+    final reference = _referenceController.text.trim().isEmpty
+        ? 'CashTrack Payment'
+        : _referenceController.text.trim();
+
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    await widget.onPaymentApproved(amount, trxId, mobile, reference);
+
+    if (!mounted) return;
+    setState(() {
+      _isProcessing = false;
+      _trxId = trxId;
+    });
+  }
+
+  String _buildTransactionId() {
+    final provider = widget.account.name
+        .replaceAll(RegExp(r'[^A-Za-z]'), '')
+        .toUpperCase()
+        .padRight(3, 'X')
+        .substring(0, 3);
+    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+    return '$provider-CT-${timestamp.substring(timestamp.length - 8)}';
+  }
+
+  Color _providerColor(AccountModel account) {
+    final value = account.colorHex?.replaceAll('#', '').trim();
+    if (value == null || value.length != 6) return AppColors.primary;
+    return Color(int.parse('FF$value', radix: 16));
+  }
+}
+
+class _GatewayStatusRow extends StatelessWidget {
+  const _GatewayStatusRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: AppTextStyles.caption.copyWith(
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.55),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: AppTextStyles.body2.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AccountFormData {
   const _AccountFormData({
     required this.name,
@@ -653,7 +1000,7 @@ class _AccountFormData {
   final String name;
   final String nameBn;
   final AccountType type;
-  final double balance;
+  final int balance;
   final String icon;
   final String colorHex;
   final String? nickname;
@@ -661,7 +1008,7 @@ class _AccountFormData {
   final String? cardType;
   final String? cardIssuer;
   final String? cardholderName;
-  final double? creditLimit;
+  final int? creditLimit;
   final int? billingDay;
   final int? paymentDueDay;
 }
@@ -1326,7 +1673,8 @@ class _AccountFormDialogState extends State<_AccountFormDialog> {
   Future<void> _submit() async {
     final name = _nameController.text.trim();
     final nameBn = _nameBnController.text.trim();
-    final balance = double.tryParse(_balanceController.text.trim());
+    final parsedBalance = double.tryParse(_balanceController.text.trim());
+    final balance = parsedBalance != null ? (parsedBalance * 100).toInt() : null;
 
     if (name.isEmpty || balance == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1357,7 +1705,9 @@ class _AccountFormDialogState extends State<_AccountFormDialog> {
               ? _nullableText(_cardholderController)
               : null,
           creditLimit: _selectedType == AccountType.creditCard
-              ? double.tryParse(_creditLimitController.text.trim())
+              ? (double.tryParse(_creditLimitController.text.trim()) != null
+                  ? (double.parse(_creditLimitController.text.trim()) * 100).toInt()
+                  : null)
               : null,
           billingDay: _selectedType == AccountType.creditCard
               ? int.tryParse(_billingDayController.text.trim())

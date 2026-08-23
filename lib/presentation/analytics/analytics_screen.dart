@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'dart:math' as math;
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/amount_mask.dart';
 import '../../core/l10n/app_l10n.dart';
 import '../providers/app_providers.dart';
@@ -110,8 +111,14 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
             SliverToBoxAdapter(
               child: _anim(
                   index: 1,
-                  child: _buildSummaryCards(analytics, currency, effectiveHide,
-                      toggleReveal, isDark, primary)),
+                  child: _buildDailyAllowanceAnalyticsCard(
+                      context,
+                      settings,
+                      transactions,
+                      currency,
+                      effectiveHide,
+                      isDark,
+                      primary)),
             ),
             SliverToBoxAdapter(
               child: _anim(
@@ -156,12 +163,8 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
               children: [
                 Text(
                   context.t('analytics'),
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.8,
-                    color: Theme.of(context).colorScheme.onSurface,
-                    height: 1.1,
+                  style: AppTextStyles.headingLg.copyWith(
+                    color: isDark ? AppColors.darkText : AppColors.lightText,
                   ),
                 ),
                 const SizedBox(height: 5),
@@ -208,6 +211,20 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
           ],
           _iconBtn(
             context,
+            Icons.account_balance_wallet_outlined,
+            isDark,
+            () => _showMonthlySummarySheet(
+              context,
+              analytics,
+              currency,
+              effectiveHide,
+              isDark,
+              primary,
+            ),
+          ),
+          const SizedBox(width: 8),
+          _iconBtn(
+            context,
             Icons.tune_rounded,
             isDark,
             () => _showCalendarSheet(
@@ -235,21 +252,18 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         height: 42,
         decoration: BoxDecoration(
           color: isDark
-              ? Colors.white.withValues(alpha: 0.08)
-              : Colors.black.withValues(alpha: 0.05),
+              ? AppColors.darkSurfaceElevated.withValues(alpha: 0.5)
+              : AppColors.lightSurfaceElevated,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : Colors.black.withValues(alpha: 0.06),
+                ? AppColors.darkBorder.withValues(alpha: 0.4)
+                : AppColors.lightBorder.withValues(alpha: 0.6),
           ),
         ),
         child: Icon(icon,
             size: 20,
-            color: Theme.of(context)
-                .colorScheme
-                .onSurface
-                .withValues(alpha: 0.65)),
+            color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
       ),
     );
   }
@@ -454,7 +468,18 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
   Widget _buildCategoryBreakdown(MonthlyAnalytics analytics,
       List<CategoryModel> categories, bool isDark, Color primary) {
     final breakdown = analytics.getCategoryBreakdown(TransactionType.expense);
-    final categoryMap = {for (final c in categories) c.id: c};
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
+    final categoryMap = {
+      '': CategoryModel(
+        id: '',
+        name: isBangla ? 'শ্রেণীহীন' : 'Uncategorized',
+        nameBn: isBangla ? 'শ্রেণীহীন' : 'Uncategorized',
+        icon: '🏷️',
+        colorHex: '#9E9E9E',
+        type: CategoryType.both,
+      ),
+      for (final c in categories) c.id: c
+    };
     final entries = breakdown.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final top = entries.take(5).toList();
@@ -611,12 +636,12 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     );
   }
 
-  BarChartGroupData _makeGroupData(int x, double y, Color color, double maxY) {
+  BarChartGroupData _makeGroupData(int x, num y, Color color, double maxY) {
     return BarChartGroupData(
       x: x,
       barRods: [
         BarChartRodData(
-          toY: y,
+          toY: (y / 100).toDouble(),
           width: 28,
           gradient: LinearGradient(
             colors: [color, color.withValues(alpha: 0.65)],
@@ -1123,11 +1148,24 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
     final now = DateTime.now();
     final isCurrentMonth = month.year == now.year && month.month == now.month;
-    // Only show up to today's day for current month
-    final visibleDays = isCurrentMonth ? now.day : daysInMonth;
     final isExpenseView = _trendViewIndex == 0;
     final viewType =
         isExpenseView ? TransactionType.expense : TransactionType.income;
+
+    // Find the max day among transactions of this type to support manually added future transactions
+    int maxTxDay = now.day;
+    for (final t in analytics.transactions) {
+      if (t.type == viewType) {
+        if (t.date.day > maxTxDay) {
+          maxTxDay = t.date.day;
+        }
+      }
+    }
+
+    final visibleDays = isCurrentMonth
+        ? math.min(daysInMonth, maxTxDay)
+        : daysInMonth;
+
     final palette = isExpenseView
         ? AppColors.chartPaletteExpense
         : AppColors.chartPaletteIncome;
@@ -1184,7 +1222,18 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
 
     // Read categories for names
     final categories = ref.watch(categoriesProvider);
-    final categoryMap = {for (final c in categories) c.id: c};
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
+    final categoryMap = {
+      '': CategoryModel(
+        id: '',
+        name: isBangla ? 'শ্রেণীহীন' : 'Uncategorized',
+        nameBn: isBangla ? 'শ্রেণীহীন' : 'Uncategorized',
+        icon: '🏷️',
+        colorHex: '#9E9E9E',
+        type: CategoryType.both,
+      ),
+      for (final c in categories) c.id: c
+    };
 
     // Area fill opacities – progressively lighter for lower-ranked categories
     const areaOpacities = [0.32, 0.26, 0.22, 0.18, 0.14];
@@ -1272,7 +1321,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
               child: LineChart(
                 LineChartData(
                   minX: 1,
-                  maxX: visibleDays.toDouble(),
+                  maxX: daysInMonth.toDouble(),
                   minY: 0,
                   maxY: safeMax * 1.15,
                   clipData: const FlClipData.all(),
@@ -1321,7 +1370,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
                         interval: 7,
                         getTitlesWidget: (value, meta) {
                           final v = value.toInt();
-                          if (v % 7 != 0 && v != visibleDays) {
+                          if (v % 7 != 0 && v != daysInMonth) {
                             return const SizedBox.shrink();
                           }
                           return Padding(
@@ -1658,9 +1707,739 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     );
   }
 
+  Widget _buildDailyAllowanceAnalyticsCard(
+    BuildContext context,
+    Map<String, dynamic> settings,
+    List<TransactionModel> transactions,
+    String currency,
+    bool effectiveHide,
+    bool isDark,
+    Color primary,
+  ) {
+    final dailyLimit = (settings['dailyBudgetLimit'] as num?)?.toInt() ?? 0;
+    final dailyRollover = settings['dailyBudgetRollover'] as bool? ?? false;
+    final startDateMs = settings['dailyBudgetStartDate'] as int?;
+
+    if (dailyLimit <= 0) {
+      return Container(
+        margin: const EdgeInsets.fromLTRB(20, 10, 20, 16),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: isDark
+              ? AppColors.darkSurface
+              : Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.06)
+                : Colors.black.withValues(alpha: 0.05),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.analytics_outlined,
+                color: Color(0xFFF59E0B),
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Daily Allowance Analytics',
+                    style: AppTextStyles.body1.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Set a daily limit to track daily pace & unlimited rollover savings.',
+                    style: AppTextStyles.caption.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.55),
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () => _showDailyBudgetDialog(context, settings, currency),
+              style: TextButton.styleFrom(
+                backgroundColor: primary.withValues(alpha: 0.12),
+                foregroundColor: primary,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'Setup',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final todaysSpent = transactions.where((t) {
+      if (t.type != TransactionType.expense || t.isDeleted) return false;
+      final txDay = DateTime(t.date.year, t.date.month, t.date.day);
+      return txDay.isAtSameMomentAs(today);
+    }).fold<int>(0, (sum, t) => sum + t.amount);
+
+    int daysPassed = 1;
+    int expectedLimit = dailyLimit;
+    int totalSpent = 0;
+
+    if (dailyRollover && startDateMs != null) {
+      final start = DateTime.fromMillisecondsSinceEpoch(startDateMs);
+      final startDateNormalized = DateTime(start.year, start.month, start.day);
+      daysPassed = today.difference(startDateNormalized).inDays + 1;
+      if (daysPassed < 1) daysPassed = 1;
+      expectedLimit = dailyLimit * daysPassed;
+
+      totalSpent = transactions.where((t) {
+        if (t.type != TransactionType.expense || t.isDeleted) return false;
+        final txDay = DateTime(t.date.year, t.date.month, t.date.day);
+        return txDay.isAfter(startDateNormalized.subtract(const Duration(days: 1)));
+      }).fold<int>(0, (sum, t) => sum + t.amount);
+    } else {
+      totalSpent = todaysSpent;
+    }
+
+    final remaining = expectedLimit - totalSpent;
+    final percentage = expectedLimit > 0 ? (totalSpent / expectedLimit).clamp(0.0, 1.0) : 0.0;
+    final isOverBudget = remaining < 0;
+
+    final monthStart = DateTime(now.year, now.month, 1);
+    final daysInMonthSoFar = now.day;
+    final monthExpense = transactions.where((t) {
+      if (t.type != TransactionType.expense || t.isDeleted) return false;
+      return t.date.isAfter(monthStart.subtract(const Duration(days: 1))) &&
+          t.date.isBefore(now.add(const Duration(days: 1)));
+    }).fold<int>(0, (sum, t) => sum + t.amount);
+    final avgDailyExpense = daysInMonthSoFar > 0 ? (monthExpense / daysInMonthSoFar).round() : 0;
+
+    String paceStatus;
+    Color paceColor;
+    IconData paceIcon;
+
+    if (isOverBudget) {
+      paceStatus = 'Exceeded Pace';
+      paceColor = AppColors.error;
+      paceIcon = Icons.warning_amber_rounded;
+    } else if (todaysSpent > dailyLimit) {
+      paceStatus = 'Above Target';
+      paceColor = AppColors.warning;
+      paceIcon = Icons.trending_up_rounded;
+    } else if (dailyRollover && daysPassed > 1 && remaining > 0) {
+      paceStatus = 'Savings Rollover';
+      paceColor = const Color(0xFF10B981);
+      paceIcon = Icons.savings_rounded;
+    } else {
+      paceStatus = 'On Track';
+      paceColor = const Color(0xFF10B981);
+      paceIcon = Icons.check_circle_outline_rounded;
+    }
+
+    String formatAmt(num val) =>
+        formatAmount(currency, val, decimals: 0, hide: effectiveHide);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark
+            ? AppColors.darkSurface
+            : Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.07)
+              : Colors.black.withValues(alpha: 0.05),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.speed_rounded,
+                        color: Color(0xFFF59E0B),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Daily Pace & Allowance',
+                            style: AppTextStyles.body1.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            dailyRollover
+                                ? '$daysPassed ${daysPassed == 1 ? 'Day' : 'Days'} Unlimited Carry Forward'
+                                : 'Daily Budget Tracker',
+                            style: AppTextStyles.caption.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.5),
+                              fontSize: 11,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: paceColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: paceColor.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(paceIcon, size: 13, color: paceColor),
+                        const SizedBox(width: 4),
+                        Text(
+                          paceStatus,
+                          style: AppTextStyles.caption.copyWith(
+                            color: paceColor,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () => _showDailyBudgetDialog(context, settings, currency),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.edit_rounded, size: 13, color: primary),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Edit',
+                            style: AppTextStyles.caption.copyWith(
+                              color: primary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: _buildMetricTile(
+                  context,
+                  label: 'Today Spent',
+                  value: formatAmt(todaysSpent),
+                  subText: '/ ${formatAmt(dailyLimit)} limit',
+                  isDark: isDark,
+                  primaryColor: const Color(0xFF0EA5E9),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildMetricTile(
+                  context,
+                  label: 'Available Left',
+                  value: formatAmt(remaining.abs()),
+                  subText: isOverBudget ? 'over target' : 'available',
+                  isDark: isDark,
+                  primaryColor: isOverBudget ? AppColors.error : AppColors.success,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildMetricTile(
+                  context,
+                  label: 'Month Avg/Day',
+                  value: formatAmt(avgDailyExpense),
+                  subText: '$daysInMonthSoFar days tracked',
+                  isDark: isDark,
+                  primaryColor: const Color(0xFF8B5CF6),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Allowance Usage',
+                    style: AppTextStyles.caption.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.6),
+                    ),
+                  ),
+                  Text(
+                    '${(percentage * 100).toStringAsFixed(0)}%',
+                    style: AppTextStyles.caption.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: paceColor,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Stack(
+                children: [
+                  Container(
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: paceColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  FractionallySizedBox(
+                    widthFactor: percentage,
+                    child: Container(
+                      height: 8,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            paceColor.withValues(alpha: 0.7),
+                            paceColor,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricTile(
+    BuildContext context, {
+    required String label,
+    required String value,
+    required String subText,
+    required bool isDark,
+    required Color primaryColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: primaryColor.withValues(alpha: isDark ? 0.08 : 0.05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: primaryColor.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: AppTextStyles.caption.copyWith(
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.55),
+              fontSize: 10.5,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: AppTextStyles.body1.copyWith(
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+                color: primaryColor,
+              ),
+              maxLines: 1,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subText,
+            style: AppTextStyles.caption.copyWith(
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.4),
+              fontSize: 9.5,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMonthlySummarySheet(
+    BuildContext context,
+    MonthlyAnalytics analytics,
+    String currency,
+    bool hideAmounts,
+    bool isDark,
+    Color primary,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark
+          ? AppColors.darkSurface
+          : Theme.of(context).colorScheme.surface,
+      isScrollControlled: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 70),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Monthly Overview',
+                      style: AppTextStyles.h5.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _buildSummaryCards(
+                    analytics, currency, hideAmounts, () {}, isDark, primary),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   String _fmtShort(double v) {
     if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
     if (v >= 1000) return '${(v / 1000).toStringAsFixed(0)}K';
     return v.toStringAsFixed(0);
+  }
+
+  Future<void> _showDailyBudgetDialog(
+    BuildContext context,
+    Map<String, dynamic> settings,
+    String currency,
+  ) async {
+    final dailyLimit = (settings['dailyBudgetLimit'] as num?)?.toInt() ?? 0;
+    final dailyRollover = settings['dailyBudgetRollover'] as bool? ?? false;
+    final controller = TextEditingController(
+      text: dailyLimit > 0 ? (dailyLimit / 100).toStringAsFixed(0) : '',
+    );
+    bool rolloverValue = dailyRollover;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final primary = Theme.of(context).colorScheme.primary;
+
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                top: 24,
+                left: 24,
+                right: 24,
+              ),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? AppColors.darkSurface
+                    : Theme.of(context).colorScheme.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.speed_rounded,
+                              color: Color(0xFFF59E0B),
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Daily Budget Pace & Limit',
+                            style: AppTextStyles.body1.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(sheetContext),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Set your target daily expense limit to automatically track daily spending pace.',
+                    style: AppTextStyles.caption.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.6),
+                      fontSize: 12.5,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  TextField(
+                    controller: controller,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Daily Limit',
+                      prefixText: '$currency ',
+                      hintText: 'e.g. 500',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    autofocus: dailyLimit <= 0,
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.04)
+                          : Colors.black.withValues(alpha: 0.03),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.savings_rounded,
+                            color: Color(0xFF10B981),
+                            size: 18,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Unlimited Carry Forward',
+                                style: AppTextStyles.body2.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                'Rollover unspent daily budget to next days',
+                                style: AppTextStyles.caption.copyWith(
+                                  fontSize: 11,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withValues(alpha: 0.5),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch.adaptive(
+                          value: rolloverValue,
+                          onChanged: (v) {
+                            setSheetState(() => rolloverValue = v);
+                          },
+                          activeTrackColor: primary.withValues(alpha: 0.45),
+                          activeThumbColor: primary,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            context.go('/budget');
+                          },
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: const Text('All Budgets'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            final parsed = double.tryParse(controller.text.trim()) ?? 0.0;
+                            final amount = (parsed * 100).toInt();
+                            await ref.read(settingsProvider.notifier).update('dailyBudgetLimit', amount);
+                            if (rolloverValue != dailyRollover) {
+                              if (rolloverValue && settings['dailyBudgetStartDate'] == null) {
+                                await ref.read(settingsProvider.notifier).update(
+                                  'dailyBudgetStartDate',
+                                  DateTime.now().millisecondsSinceEpoch,
+                                );
+                              }
+                              await ref.read(settingsProvider.notifier).update('dailyBudgetRollover', rolloverValue);
+                            } else if (amount > 0 && settings['dailyBudgetStartDate'] == null) {
+                              await ref.read(settingsProvider.notifier).update(
+                                'dailyBudgetStartDate',
+                                DateTime.now().millisecondsSinceEpoch,
+                              );
+                            }
+                            if (!sheetContext.mounted) return;
+                            Navigator.pop(sheetContext);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: const Text('Save Limit', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }

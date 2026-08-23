@@ -2,6 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 	<dict>
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleTypeRole</key>
+				<string>Editor</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>com.googleusercontent.apps.68532369864-j7p196lg0a82u9lqcn5jqncd8lqhtel6</string>
+				</array>
+			</dict>
+		</array>
+		<key>GIDClientID</key>
+		<string>68532369864-j7p196lg0a82u9lqcn5jqncd8lqhtel6.apps.googleusercontent.com</string>
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>
@@ -92,5 +105,17 @@
 		<true/>
 		<key>UIStatusBarHidden</key>
 		<false/>
+		<!-- URL Schemes for opening apps -->
+		<key>LSApplicationQueriesSchemes</key>
+		<array>
+			<string>https</string>
+			<string>http</string>
+			<string>tel</string>
+			<string>mailto</string>
+			<!-- MFS Apps -->
+			<string>bkash</string>
+			<string>nagad</string>
+			<string>rocket</string>
+		</array>
 	</dict>
 </plist>

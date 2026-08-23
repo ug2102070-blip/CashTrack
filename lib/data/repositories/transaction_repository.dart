@@ -104,7 +104,7 @@ class TransactionRepository {
     }
   }
 
-  double getTotalIncome({DateTime? start, DateTime? end}) {
+  int getTotalIncome({DateTime? start, DateTime? end}) {
     final userId = _getCurrentUserId();
     // Strictly filter by current user only — no null userId fallback
     var transactions = _decodedValues().where((t) =>
@@ -118,10 +118,10 @@ class TransactionRepository {
           t.date.isBefore(end.add(const Duration(days: 1))));
     }
 
-    return transactions.fold<double>(0, (sum, t) => sum + t.amount);
+    return transactions.fold<int>(0, (sum, t) => sum + t.amount);
   }
 
-  double getTotalExpense({DateTime? start, DateTime? end}) {
+  int getTotalExpense({DateTime? start, DateTime? end}) {
     final userId = _getCurrentUserId();
     var transactions = _decodedValues().where((t) =>
         !t.isDeleted &&
@@ -134,7 +134,7 @@ class TransactionRepository {
           t.date.isBefore(end.add(const Duration(days: 1))));
     }
 
-    return transactions.fold<double>(0, (sum, t) => sum + t.amount);
+    return transactions.fold<int>(0, (sum, t) => sum + t.amount);
   }
 
   List<TransactionModel> _decodedValues() {

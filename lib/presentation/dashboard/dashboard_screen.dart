@@ -1,7 +1,9 @@
 // lib/presentation/dashboard/dashboard_screen.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/amount_mask.dart';
@@ -16,6 +18,12 @@ import '../providers/app_providers.dart';
 import 'package:go_router/go_router.dart';
 import 'widgets/expense_chart_dynamic.dart';
 import 'widgets/transaction_list_dynamic.dart';
+import 'widgets/premium_dashboard_widgets.dart';
+import 'dashboard_health_evaluator.dart';
+import 'package:permission_handler/permission_handler.dart';
+import '../../services/sms_service.dart';
+import '../../services/subscription_detector_service.dart';
+import '../../data/models/transaction_model.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -24,7 +32,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _animCtrl;
   bool _revealAmounts = false;
   ImageProvider? _profileImage;
@@ -33,17 +41,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   late final PageController _rightPageController;
   int _leftPageIndex = 0;
   int _rightPageIndex = 0;
+  bool _showAiInsight = true;
 
   // Pre-created animations to avoid creating new CurvedAnimation objects
   // on every build() call — which leaks InheritedWidget dependents and
   // causes '_dependents.isEmpty' assertion failures.
-  static const List<int> _animDelays = [0, 60, 130, 200, 270];
+  static const List<int> _animDelays = [
+    0,
+    50,
+    100,
+    150,
+    200,
+    250,
+    300,
+    350,
+    400,
+    450,
+    500,
+    550
+  ];
   late final List<Animation<double>> _fadeAnims;
   late final List<Animation<Offset>> _slideAnims;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _leftPageController = PageController();
     _rightPageController = PageController();
     _animCtrl = AnimationController(
@@ -68,12 +91,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ref.read(userProfileProvider.notifier).reloadProfile();
+        _checkAndRequestNotificationPermission();
+        _checkAndShowSmsPermissionDialog();
       }
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _leftPageController.dispose();
     _rightPageController.dispose();
     _animCtrl.dispose();
@@ -105,7 +131,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final accounts = ref.watch(accountsProvider);
     final debts = ref.watch(debtsProvider);
     final settings = ref.watch(settingsProvider);
-    final profile = ref.watch(userProfileProvider);
     final currency = (settings['currency'] as String?) ?? '\u09F3';
     final hideAmounts = settings['hideAmounts'] ?? false;
     final rolloverEnabled = settings['rolloverBudget'] ?? false;
@@ -121,7 +146,490 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final budgets =
         ref.watch(budgetsProvider.notifier).getBudgetsForCurrentMonth();
     _scheduleRollover(enabled: rolloverEnabled);
-    final alertCount = _alertCount(summary, budgets, debts);
+    final allTransactions = ref.watch(transactionsProvider);
+    final alertCount = _alertCount(summary, budgets, debts, allTransactions);
+
+    final isWide = MediaQuery.of(context).size.width > 1000;
+
+    if (isWide) {
+      final profile = ref.watch(userProfileProvider);
+      final fullName = (profile['fullName'] ?? '').trim();
+
+      // Calculate this month's stats
+      final savingsAmount = (summary.totalIncome - summary.totalExpense)
+          .clamp(0.0, double.infinity);
+      final savingsRate = summary.totalIncome > 0
+          ? (savingsAmount / summary.totalIncome * 100)
+          : 0.0;
+
+      // Budget stats
+      final totalBudget = budgets.fold<double>(0, (sum, b) => sum + b.amount);
+      final totalBudgetSpent =
+          budgets.fold<double>(0, (sum, b) => sum + b.getSpent(allTransactions));
+      final remainingBudget =
+          (totalBudget - totalBudgetSpent).clamp(0.0, double.infinity);
+      final budgetProgress =
+          totalBudget > 0 ? (totalBudgetSpent / totalBudget) : 0.0;
+
+      // allTransactions already defined above
+      final categories = ref.watch(categoriesProvider);
+      final goals = ref.watch(goalsProvider);
+
+      final health = DashboardHealthEvaluator.evaluate(
+        summary: summary,
+        budgets: budgets,
+        debts: debts,
+        transactions: allTransactions,
+      );
+      final healthScore = health.score;
+      final healthTrendText = health.statusText;
+      final healthDetailText = health.detailText;
+
+      // 2. Generate dynamic AI Insights
+      String aiInsightText =
+          'I will analyze your spending patterns here. Try adding some transactions to get your first insight!';
+      if (allTransactions.isNotEmpty) {
+        final categoryMap = {for (final c in categories) c.id: c.name};
+
+        // Budget overrun check
+        BudgetModel? worstOverrun;
+        int maxOverrun = 0;
+        for (final b in budgets) {
+          if (b.getSpent(allTransactions) > b.amount) {
+            final overrun = b.getSpent(allTransactions) - b.amount;
+            if (overrun > maxOverrun) {
+              maxOverrun = overrun;
+              worstOverrun = b;
+            }
+          }
+        }
+
+        if (worstOverrun != null) {
+          final catName =
+              categoryMap[worstOverrun.categoryId] ?? 'this category';
+          aiInsightText =
+              'Your spending in "$catName" has exceeded your budget by $currency${maxOverrun.toStringAsFixed(0)}. Consider limiting purchases in "$catName" for the rest of the month.';
+        } else {
+          // High spending category check
+          final recentExpenses = allTransactions
+              .where((t) => t.type == TransactionType.expense && !t.isDeleted)
+              .toList();
+          if (recentExpenses.isNotEmpty) {
+            final Map<String, double> categorySums = {};
+            double totalRecentExpense = 0;
+            for (final tx in recentExpenses) {
+              categorySums[tx.categoryId] =
+                  (categorySums[tx.categoryId] ?? 0) + tx.amount;
+              totalRecentExpense += tx.amount;
+            }
+
+            String? highestCatId;
+            double highestCatSum = 0;
+            categorySums.forEach((catId, sum) {
+              if (sum > highestCatSum) {
+                highestCatSum = sum;
+                highestCatId = catId;
+              }
+            });
+
+            if (highestCatId != null && totalRecentExpense > 0) {
+              final ratio = (highestCatSum / totalRecentExpense) * 100;
+              final catName = categoryMap[highestCatId] ?? 'Miscellaneous';
+              if (ratio > 30) {
+                aiInsightText =
+                    '"$catName" accounts for ${ratio.toStringAsFixed(0)}% of your total expenses ($currency${highestCatSum.toStringAsFixed(0)}). Finding cheaper alternatives or buying in bulk could help you save.';
+              } else if (summary.totalIncome > 0) {
+                final sRate = ((summary.totalIncome - summary.totalExpense) /
+                        summary.totalIncome) *
+                    100;
+                if (sRate > 20) {
+                  aiInsightText =
+                      'Amazing! Your savings rate is at ${sRate.toStringAsFixed(0)}% this month. Keep it up to build your wealth/emergency fund faster.';
+                } else if (sRate >= 0) {
+                  aiInsightText =
+                      'You are currently saving ${sRate.toStringAsFixed(0)}% of your income. Try automating a portion of your savings to build consistent habits.';
+                } else {
+                  aiInsightText =
+                      'Your expenses are higher than your income by $currency${(summary.totalExpense - summary.totalIncome).toStringAsFixed(0)}. Let\'s identify non-essential subscriptions or lifestyle costs to cut back.';
+                }
+              } else {
+                aiInsightText =
+                    'Tracking looks good so far! Try setting budgets for categories like Food, Utilities, and Transport to build a complete dashboard.';
+              }
+            }
+          }
+        }
+      }
+
+      // 3. Compute dynamic Weekly Spending Streak
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final currentMonday = today.subtract(Duration(days: now.weekday - 1));
+
+      final dailyBudgetLimit = totalBudget > 0 ? (totalBudget / 30.0) : 100000.0;
+      final List<bool> dailyStatus = List.generate(7, (index) {
+        final dayDate = currentMonday.add(Duration(days: index));
+        if (dayDate.isAfter(today)) {
+          return false;
+        }
+        final dayExpense = allTransactions.where((t) {
+          if (t.type != TransactionType.expense || t.isDeleted) return false;
+          final txDay = DateTime(t.date.year, t.date.month, t.date.day);
+          return txDay.isAtSameMomentAs(dayDate);
+        }).fold<int>(0, (sum, t) => sum + t.amount);
+        return dayExpense <= dailyBudgetLimit;
+      });
+      final streakDays = dailyStatus.where((status) => status).length;
+
+      // 4. Retrieve and sort real upcoming bills
+      final List<UpcomingBillItem> upcomingBills = [];
+      final todayNormalized = DateTime(now.year, now.month, now.day);
+      final thirtyDaysAhead = todayNormalized.add(const Duration(days: 30));
+
+      DateTime advanceDate(DateTime date, RecurringType type, int anchorDay) {
+        switch (type) {
+          case RecurringType.daily:
+            return date.add(const Duration(days: 1));
+          case RecurringType.weekly:
+            return date.add(const Duration(days: 7));
+          case RecurringType.monthly:
+            final nextMonth = DateTime(date.year, date.month + 1, 1);
+            final maxDay = DateTime(nextMonth.year, nextMonth.month + 1, 0).day;
+            final safeDay = anchorDay <= maxDay ? anchorDay : maxDay;
+            return DateTime(nextMonth.year, nextMonth.month, safeDay);
+          case RecurringType.yearly:
+            final nextYear = DateTime(date.year + 1, date.month, 1);
+            final maxDay = DateTime(nextYear.year, nextYear.month + 1, 0).day;
+            final safeDay = anchorDay <= maxDay ? anchorDay : maxDay;
+            return DateTime(nextYear.year, nextYear.month, safeDay);
+        }
+      }
+
+      final recurringTxs = allTransactions.where(
+          (t) => t.isRecurring && t.recurringType != null && !t.isDeleted);
+      for (final tx in recurringTxs) {
+        var currentOccur = DateTime(tx.date.year, tx.date.month, tx.date.day);
+        while (currentOccur.isBefore(todayNormalized)) {
+          currentOccur =
+              advanceDate(currentOccur, tx.recurringType!, tx.date.day);
+        }
+        if (currentOccur.isBefore(thirtyDaysAhead) ||
+            currentOccur.isAtSameMomentAs(thirtyDaysAhead)) {
+          final diffDays = currentOccur.difference(todayNormalized).inDays;
+          String dueMsg = '';
+          Color bColor = AppColors.primary;
+          if (diffDays == 0) {
+            dueMsg = 'Due today';
+            bColor = AppColors.error;
+          } else if (diffDays == 1) {
+            dueMsg = 'Due tomorrow';
+            bColor = AppColors.error;
+          } else if (diffDays <= 3) {
+            dueMsg = 'Due in $diffDays days';
+            bColor = AppColors.warning;
+          } else {
+            dueMsg = 'Due in $diffDays days';
+            bColor = AppColors.success;
+          }
+
+          final categoryMap = {for (final c in categories) c.id: c.name};
+          final nameLabel = tx.note?.isNotEmpty == true
+              ? tx.note!
+              : (categoryMap[tx.categoryId] ?? 'Recurring Bill');
+
+          upcomingBills.add(UpcomingBillItem(
+            name: nameLabel,
+            amount: formatAmount(currency, tx.amount),
+            dueDate: dueMsg,
+            color: bColor,
+          ));
+        }
+      }
+
+      final detectedSubs =
+          SubscriptionDetectorService().detectSubscriptions(allTransactions);
+      for (final sub in detectedSubs) {
+        final alreadyAdded = upcomingBills
+            .any((b) => b.name.toLowerCase() == sub.merchantName.toLowerCase());
+        if (alreadyAdded) continue;
+
+        final nextDate = DateTime(sub.nextExpectedDate.year,
+            sub.nextExpectedDate.month, sub.nextExpectedDate.day);
+        if (nextDate
+                .isAfter(todayNormalized.subtract(const Duration(days: 1))) &&
+            nextDate.isBefore(thirtyDaysAhead.add(const Duration(days: 1)))) {
+          final diffDays = nextDate.difference(todayNormalized).inDays;
+          String dueMsg = '';
+          Color bColor = AppColors.primary;
+          if (diffDays == 0) {
+            dueMsg = 'Due today';
+            bColor = AppColors.error;
+          } else if (diffDays == 1) {
+            dueMsg = 'Due tomorrow';
+            bColor = AppColors.error;
+          } else if (diffDays <= 3) {
+            dueMsg = 'Due in $diffDays days';
+            bColor = AppColors.warning;
+          } else {
+            dueMsg = 'Due in $diffDays days';
+            bColor = AppColors.success;
+          }
+
+          upcomingBills.add(UpcomingBillItem(
+            name: sub.merchantName,
+            amount: formatAmount(currency, sub.amount),
+            dueDate: dueMsg,
+            color: bColor,
+          ));
+        }
+      }
+
+      int getDays(String msg) {
+        if (msg.contains('today')) return 0;
+        if (msg.contains('tomorrow')) return 1;
+        final reg = RegExp(r'\d+');
+        final match = reg.firstMatch(msg);
+        if (match != null) {
+          return int.parse(match.group(0)!);
+        }
+        return 99;
+      }
+
+      upcomingBills
+          .sort((a, b) => getDays(a.dueDate).compareTo(getDays(b.dueDate)));
+
+      // 5. Compute real spending intensity heatmap data
+      final startMonday = currentMonday.subtract(const Duration(days: 21));
+      double maxDailySpend = 0.0;
+      final List<double> dailySpends = List.generate(28, (index) {
+        final dayDate = startMonday.add(Duration(days: index));
+        final dayExpense = allTransactions.where((t) {
+          if (t.type != TransactionType.expense || t.isDeleted) return false;
+          final txDay = DateTime(t.date.year, t.date.month, t.date.day);
+          return txDay.isAtSameMomentAs(dayDate);
+        }).fold<double>(0, (sum, t) => sum + t.amount);
+
+        if (dayExpense > maxDailySpend) {
+          maxDailySpend = dayExpense;
+        }
+        return dayExpense;
+      });
+
+      final List<int> heatmapData = dailySpends.map((spend) {
+        if (spend == 0) return 0;
+        if (maxDailySpend == 0) return 0;
+        final ratio = spend / maxDailySpend;
+        if (ratio <= 0.33) return 1;
+        if (ratio <= 0.66) return 2;
+        return 3;
+      }).toList();
+
+      // 6. Generate dynamic Smart Recommendations
+      final List<SmartRecommendationItem> recommendations = [];
+
+      if (budgets.isEmpty) {
+        recommendations.add(SmartRecommendationItem(
+          icon: Icons.pie_chart_rounded,
+          title: 'Create a monthly budget',
+          desc:
+              'You haven\'t set any budgets for this month. Setting limits is key to saving.',
+          color: AppColors.primary,
+        ));
+      }
+
+      final hasEmergencyGoal =
+          goals.any((g) => g.name.toLowerCase().contains('emergency'));
+      if (!hasEmergencyGoal) {
+        final recommendedAmount =
+            summary.totalIncome > 0 ? (summary.totalIncome * 0.15) : 3000.0;
+        recommendations.add(SmartRecommendationItem(
+          icon: Icons.savings_rounded,
+          title: 'Start a goal for Emergency Fund',
+          desc:
+              'Based on your profile, saving $currency${recommendedAmount.toStringAsFixed(0)} monthly is recommended.',
+          color: AppColors.success,
+        ));
+      }
+
+      if (totalBudget > 0 && (totalBudgetSpent / totalBudget) >= 0.85) {
+        recommendations.add(SmartRecommendationItem(
+          icon: Icons.warning_amber_rounded,
+          title: 'Review category spending',
+          desc:
+              'You have utilized over 85% of your total budget. Trim down on leisure categories.',
+          color: AppColors.warning,
+        ));
+      }
+
+      final hasBorrowedDebt =
+          debts.any((d) => d.type == DebtType.borrowed && !d.isSettled);
+      if (hasBorrowedDebt) {
+        recommendations.add(SmartRecommendationItem(
+          icon: Icons.payment_rounded,
+          title: 'Clear outstanding debts',
+          desc:
+              'You have active borrowed debts. Paying them off will improve your trust score.',
+          color: AppColors.error,
+        ));
+      }
+
+      if (recommendations.length < 2) {
+        recommendations.add(SmartRecommendationItem(
+          icon: Icons.security_rounded,
+          title: 'Track subscription services',
+          desc:
+              'Check your recurring tab to detect unused subscriptions and save up to 15% in costs.',
+          color: AppColors.primary,
+        ));
+      }
+
+      return Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: SafeArea(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              ref.read(transactionsProvider.notifier).loadTransactions();
+              ref.read(accountsProvider.notifier).loadAccounts();
+              ref.read(budgetsProvider.notifier).loadBudgets();
+              ref.read(debtsProvider.notifier).loadDebts();
+              ref.read(categoriesProvider.notifier).loadCategories();
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1400),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header welcome banner
+                      _anim(
+                        index: 0,
+                        child: _webWelcomeHeader(context, fullName, alertCount),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // 1. Top Stats Row (4 Cards)
+                      _anim(
+                        index: 1,
+                        child: _webStatsGrid(
+                          context,
+                          summary.totalBalance,
+                          summary.totalIncome,
+                          summary.totalExpense,
+                          savingsAmount,
+                          savingsRate,
+                          currency,
+                          effectiveHide,
+                          toggleReveal,
+                          primary,
+                          isDark,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+
+                      // 2. Core Layout (Two Columns)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Left Column (flex 5): Chart + Transactions
+                          Expanded(
+                            flex: 5,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _anim(
+                                  index: 2,
+                                  child: const ExpenseChartDynamic(
+                                    compact: false,
+                                    showLegend: true,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                _anim(
+                                  index: 3,
+                                  child: TransactionListDynamic(
+                                    transactions: summary.recentTransactions,
+                                    currency: currency,
+                                    hideAmounts: effectiveHide,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 24),
+
+                          // Right Column (flex 3): Budget & Financial Widgets
+                          Expanded(
+                            flex: 3,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _anim(
+                                  index: 4,
+                                  child: FinancialHealthScore(
+                                    score: healthScore,
+                                    statusText: healthTrendText,
+                                    detailText: healthDetailText,
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                if (_showAiInsight) ...[
+                                  _anim(
+                                    index: 5,
+                                    child: AiFinancialInsightsCard(
+                                      insightText: aiInsightText,
+                                      onSetLimit: () => context.go('/budget'),
+                                      onDismiss: () => setState(
+                                          () => _showAiInsight = false),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+                                ],
+                                _anim(
+                                  index: 6,
+                                  child: _webBudgetProgressSection(
+                                    context,
+                                    budgets,
+                                    totalBudget,
+                                    totalBudgetSpent,
+                                    remainingBudget,
+                                    budgetProgress,
+                                    currency,
+                                    effectiveHide,
+                                    isDark,
+                                    primary,
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                _anim(
+                                  index: 7,
+                                  child: WeeklySpendingStreak(
+                                    streakDays: streakDays,
+                                    dailyStatus: dailyStatus,
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                _anim(
+                                  index: 8,
+                                  child: SpendingHeatmap(
+                                      simulatedData: heatmapData),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -504,7 +1012,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  Widget _heroStat(String label, double amount, IconData icon, Color amtColor,
+  Widget _heroStat(String label, num amount, IconData icon, Color amtColor,
       String currency, bool hideAmounts, VoidCallback onTap, bool alignRight) {
     return Padding(
       padding: EdgeInsets.only(
@@ -571,11 +1079,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final splitGroups = ref.watch(splitGroupsProvider);
     final goals = ref.watch(goalsProvider);
     final allBudgets = ref.watch(budgetsProvider);
+    final allTransactions = ref.watch(transactionsProvider);
     final profile = ref.watch(userProfileProvider);
 
     final now = DateTime.now();
-    final monthBudgets = allBudgets.where((b) =>
-        b.month.year == now.year && b.month.month == now.month).toList();
+    final monthBudgets = allBudgets
+        .where((b) => b.month.year == now.year && b.month.month == now.month)
+        .toList();
 
     // Accounts totals
     final totalBalance = accounts.fold<double>(0, (sum, a) => sum + a.balance);
@@ -605,7 +1115,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           final share = expense.splitAmong.isEmpty
               ? 0.0
               : expense.amount / expense.splitAmong.length;
-          return expense.splitAmong.contains(userMemberName) ? sum + share : sum;
+          return expense.splitAmong.contains(userMemberName)
+              ? sum + share
+              : sum;
         });
         yourSplitShare += groupYourShare;
 
@@ -632,20 +1144,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       }
     }
     final activeDebts = debts.where((d) => !d.isSettled).length;
-    final lentCount = debts.where((d) => !d.isSettled && d.type == DebtType.lent).length;
-    final borrowedCount = debts.where((d) => !d.isSettled && d.type == DebtType.borrowed).length;
+    final lentCount =
+        debts.where((d) => !d.isSettled && d.type == DebtType.lent).length;
+    final borrowedCount =
+        debts.where((d) => !d.isSettled && d.type == DebtType.borrowed).length;
 
     // Goals totals
     final activeGoals = goals.where((g) => !g.isCompleted).toList();
-    final totalGoalTarget = activeGoals.fold<double>(0, (sum, g) => sum + g.targetAmount);
-    final totalGoalSaved = activeGoals.fold<double>(0, (sum, g) => sum + g.currentAmount);
-    final goalPercentage = totalGoalTarget > 0 ? (totalGoalSaved / totalGoalTarget) : 0.0;
+    final totalGoalTarget =
+        activeGoals.fold<double>(0, (sum, g) => sum + g.targetAmount);
+    final totalGoalSaved =
+        activeGoals.fold<double>(0, (sum, g) => sum + g.currentAmount);
+    final goalPercentage =
+        totalGoalTarget > 0 ? (totalGoalSaved / totalGoalTarget) : 0.0;
 
     // Budget totals
-    final totalBudget = monthBudgets.fold<double>(0, (sum, b) => sum + b.amount);
-    final totalBudgetSpent = monthBudgets.fold<double>(0, (sum, b) => sum + b.spent);
-    final remainingBudget = (totalBudget - totalBudgetSpent).clamp(0.0, double.infinity);
-    final budgetProgress = totalBudget > 0 ? (totalBudgetSpent / totalBudget) : 0.0;
+    final totalBudget =
+        monthBudgets.fold<double>(0, (sum, b) => sum + b.amount);
+    final totalBudgetSpent =
+        monthBudgets.fold<double>(0, (sum, b) => sum + b.getSpent(allTransactions));
+    final remainingBudget =
+        (totalBudget - totalBudgetSpent).clamp(0.0, double.infinity);
+    final budgetProgress =
+        totalBudget > 0 ? (totalBudgetSpent / totalBudget) : 0.0;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
@@ -664,10 +1185,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     Expanded(
                       child: PageView(
                         controller: _leftPageController,
-                        onPageChanged: (idx) => setState(() => _leftPageIndex = idx),
+                        onPageChanged: (idx) =>
+                            setState(() => _leftPageIndex = idx),
                         children: [
-                          _accountsCardContent(context, accounts, totalBalance, cashTotal, onlineTotal, currency, hideAmounts, toggleReveal, primary),
-                          _splitExpensesCardContent(context, splitGroups, totalSplitSpent, yourSplitShare, netOwedAmount, currency, hideAmounts, toggleReveal, primary),
+                          _accountsCardContent(
+                              context,
+                              accounts,
+                              totalBalance,
+                              cashTotal,
+                              onlineTotal,
+                              currency,
+                              hideAmounts,
+                              toggleReveal,
+                              primary),
+                          _splitExpensesCardContent(
+                              context,
+                              splitGroups,
+                              totalSplitSpent,
+                              yourSplitShare,
+                              netOwedAmount,
+                              currency,
+                              hideAmounts,
+                              toggleReveal,
+                              primary),
                         ],
                       ),
                     ),
@@ -693,11 +1233,41 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     Expanded(
                       child: PageView(
                         controller: _rightPageController,
-                        onPageChanged: (idx) => setState(() => _rightPageIndex = idx),
+                        onPageChanged: (idx) =>
+                            setState(() => _rightPageIndex = idx),
                         children: [
-                          _debtsCardContent(context, lent, borrowed, activeDebts, lentCount, borrowedCount, currency, hideAmounts, toggleReveal, primary),
-                          _goalsCardContent(context, goals, totalGoalTarget, totalGoalSaved, goalPercentage, currency, hideAmounts, toggleReveal, primary),
-                          _budgetsCardContent(context, monthBudgets, totalBudget, totalBudgetSpent, remainingBudget, budgetProgress, currency, hideAmounts, toggleReveal, primary),
+                          _debtsCardContent(
+                              context,
+                              lent,
+                              borrowed,
+                              activeDebts,
+                              lentCount,
+                              borrowedCount,
+                              currency,
+                              hideAmounts,
+                              toggleReveal,
+                              primary),
+                          _goalsCardContent(
+                              context,
+                              goals,
+                              totalGoalTarget,
+                              totalGoalSaved,
+                              goalPercentage,
+                              currency,
+                              hideAmounts,
+                              toggleReveal,
+                              primary),
+                          _budgetsCardContent(
+                              context,
+                              monthBudgets,
+                              totalBudget,
+                              totalBudgetSpent,
+                              remainingBudget,
+                              budgetProgress,
+                              currency,
+                              hideAmounts,
+                              toggleReveal,
+                              primary),
                         ],
                       ),
                     ),
@@ -728,7 +1298,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       children: [
         Row(children: [
           Container(
-            width: 28, height: 28,
+            width: 28,
+            height: 28,
             decoration: BoxDecoration(
                 color: primary.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8)),
@@ -747,8 +1318,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
               onTap: () => context.push('/accounts'),
-              child: Icon(Icons.chevron_right_rounded,
-                  size: 16, color: primary),
+              child:
+                  Icon(Icons.chevron_right_rounded, size: 16, color: primary),
             ),
           ),
         ]),
@@ -763,15 +1334,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 child: Text(
                   accounts.isEmpty
                       ? context.t('no_accounts')
-                      : formatAmount(currency, totalBalance,
-                          hide: hideAmounts),
+                      : formatAmount(currency, totalBalance, hide: hideAmounts),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: accounts.isEmpty ? 12 : 18,
-                    fontWeight: accounts.isEmpty
-                        ? FontWeight.w600
-                        : FontWeight.w800,
+                    fontWeight:
+                        accounts.isEmpty ? FontWeight.w600 : FontWeight.w800,
                     letterSpacing: -0.4,
                     color: Theme.of(context).colorScheme.onSurface,
                   ),
@@ -784,8 +1353,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 child: GestureDetector(
                   onTap: () => _showTransferPicker(accounts, currency),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 7, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: BoxDecoration(
                       color: primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(7),
@@ -819,19 +1388,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: Theme.of(context)
-                .colorScheme
-                .onSurface
-                .withValues(alpha: 0.45),
+            color:
+                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45),
           ),
         ),
         if (accounts.isNotEmpty) ...[
           const SizedBox(height: 6),
-          _accountMiniLine(context, context.t('cash'),
-              cashTotal, currency, hideAmounts, toggleReveal),
+          _accountMiniLine(context, context.t('cash'), cashTotal, currency,
+              hideAmounts, toggleReveal),
           const SizedBox(height: 3),
-          _accountMiniLine(context, context.t('online'),
-              onlineTotal, currency, hideAmounts, toggleReveal),
+          _accountMiniLine(context, context.t('online'), onlineTotal, currency,
+              hideAmounts, toggleReveal),
         ],
       ],
     );
@@ -856,7 +1423,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       children: [
         Row(children: [
           Container(
-            width: 28, height: 28,
+            width: 28,
+            height: 28,
             decoration: BoxDecoration(
                 color: Colors.blue.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8)),
@@ -865,8 +1433,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-                bn ? 'স্প্লিট খরচ' : 'Split Expenses',
+            child: Text(bn ? 'স্প্লিট খরচ' : 'Split Expenses',
                 style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -907,10 +1474,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: Theme.of(context)
-                .colorScheme
-                .onSurface
-                .withValues(alpha: 0.45),
+            color:
+                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45),
           ),
         ),
         if (splitGroups.isNotEmpty) ...[
@@ -928,7 +1493,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             context,
             absOwed < 0.01
                 ? (bn ? 'নিষ্পত্তি করা হয়েছে' : 'Settled')
-                : (isOwed ? (bn ? 'পাবেন' : 'To Receive') : (bn ? 'দেবেন' : 'To Pay')),
+                : (isOwed
+                    ? (bn ? 'পাবেন' : 'To Receive')
+                    : (bn ? 'দেবেন' : 'To Pay')),
             absOwed,
             absOwed < 0.01
                 ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)
@@ -956,12 +1523,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _cardHeader2(
-            context,
-            context.t('debts'),
-            Icons.handshake_rounded,
-            AppColors.warning,
-            () => context.push('/debts')),
+        _cardHeader2(context, context.t('debts'), Icons.handshake_rounded,
+            AppColors.warning, () => context.push('/debts')),
         const SizedBox(height: 6),
         GestureDetector(
           onTap: toggleReveal,
@@ -980,26 +1543,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         Text(
           activeDebts == 0
               ? (bn ? 'কোনো সক্রিয় ঋণ নেই' : 'No active debts')
-              : context.t('due_count',
-                  params: {'count': activeDebts.toString()}),
+              : context
+                  .t('due_count', params: {'count': activeDebts.toString()}),
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: Theme.of(context)
-                .colorScheme
-                .onSurface
-                .withValues(alpha: 0.45),
+            color:
+                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45),
           ),
         ),
         if (lent > 0 || borrowed > 0) ...[
           const SizedBox(height: 6),
-          _debtMiniLine(context, context.t('to_receive'),
-              lent, AppColors.success, currency, hideAmounts,
-              lentCount),
+          _debtMiniLine(context, context.t('to_receive'), lent,
+              AppColors.success, currency, hideAmounts, lentCount),
           const SizedBox(height: 3),
-          _debtMiniLine(context, context.t('to_pay'),
-              borrowed, AppColors.error, currency, hideAmounts,
-              borrowedCount),
+          _debtMiniLine(context, context.t('to_pay'), borrowed, AppColors.error,
+              currency, hideAmounts, borrowedCount),
         ],
       ],
     );
@@ -1051,10 +1610,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: Theme.of(context)
-                .colorScheme
-                .onSurface
-                .withValues(alpha: 0.45),
+            color:
+                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45),
           ),
         ),
         if (goals.isNotEmpty) ...[
@@ -1124,10 +1681,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: Theme.of(context)
-                .colorScheme
-                .onSurface
-                .withValues(alpha: 0.45),
+            color:
+                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45),
           ),
         ),
         if (monthBudgets.isNotEmpty) ...[
@@ -1165,9 +1720,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           height: 4,
           width: isActive ? 12 : 4,
           decoration: BoxDecoration(
-            color: isActive
-                ? activeColor
-                : activeColor.withValues(alpha: 0.25),
+            color: isActive ? activeColor : activeColor.withValues(alpha: 0.25),
             borderRadius: BorderRadius.circular(2),
           ),
         );
@@ -1186,7 +1739,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     return Row(
       children: [
         Container(
-          width: 6, height: 6,
+          width: 6,
+          height: 6,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 5),
@@ -1221,8 +1775,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     return Row(
       children: [
         Container(
-          width: 6, height: 6,
-          decoration: const BoxDecoration(color: Colors.purple, shape: BoxShape.circle),
+          width: 6,
+          height: 6,
+          decoration:
+              const BoxDecoration(color: Colors.purple, shape: BoxShape.circle),
         ),
         const SizedBox(width: 5),
         Text(label,
@@ -1254,8 +1810,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     return Row(
       children: [
         Container(
-          width: 6, height: 6,
-          decoration: const BoxDecoration(color: Colors.purpleAccent, shape: BoxShape.circle),
+          width: 6,
+          height: 6,
+          decoration: const BoxDecoration(
+              color: Colors.purpleAccent, shape: BoxShape.circle),
         ),
         const SizedBox(width: 5),
         Text(label,
@@ -1290,7 +1848,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     return Row(
       children: [
         Container(
-          width: 6, height: 6,
+          width: 6,
+          height: 6,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 5),
@@ -1327,8 +1886,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         builder: (ctx, setModalState) => Container(
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           padding: EdgeInsets.only(
             left: 20,
@@ -1342,7 +1900,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             children: [
               Center(
                 child: Container(
-                  width: 36, height: 4,
+                  width: 36,
+                  height: 4,
                   decoration: BoxDecoration(
                     color: Theme.of(context).dividerColor,
                     borderRadius: BorderRadius.circular(2),
@@ -1350,8 +1909,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 ),
               ),
               const SizedBox(height: 16),
-              Text(context.t('transfer_funds'),
-                  style: AppTextStyles.h5),
+              Text(context.t('transfer_funds'), style: AppTextStyles.h5),
               const SizedBox(height: 16),
               // From account
               Text('From',
@@ -1364,7 +1922,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                           .withValues(alpha: 0.45))),
               const SizedBox(height: 8),
               _buildAccountChips(
-                  ctx, accounts, fromAccount, currency,
+                  ctx,
+                  accounts,
+                  fromAccount,
+                  currency,
                   (a) => setModalState(() {
                         fromAccount = a;
                         if (toAccount == a) toAccount = null;
@@ -1393,8 +1954,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   onPressed: fromAccount != null && toAccount != null
                       ? () {
                           Navigator.pop(ctx);
-                          _showTransfer(
-                              fromAccount!, toAccount!, currency);
+                          _showTransfer(fromAccount!, toAccount!, currency);
                         }
                       : null,
                   style: ElevatedButton.styleFrom(
@@ -1435,16 +1995,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       children: accounts.map((a) {
         final isSelected = selected == a;
         final nickname = a.nickname?.isNotEmpty == true ? a.nickname! : a.name;
-        final accountNumberSuffix = a.accountNumber?.isNotEmpty == true 
-            ? ' (${a.accountNumber!.length > 4 ? a.accountNumber!.substring(a.accountNumber!.length - 4) : a.accountNumber})' 
+        final accountNumberSuffix = a.accountNumber?.isNotEmpty == true
+            ? ' (${a.accountNumber!.length > 4 ? a.accountNumber!.substring(a.accountNumber!.length - 4) : a.accountNumber})'
             : '';
         final displayName = '$nickname$accountNumberSuffix';
         return GestureDetector(
           onTap: () => onSelect(a),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: isSelected
                   ? primary.withValues(alpha: 0.12)
@@ -1454,9 +2013,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       .withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: isSelected
-                    ? primary
-                    : Colors.transparent,
+                color: isSelected ? primary : Colors.transparent,
                 width: 1.5,
               ),
             ),
@@ -1466,8 +2023,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(a.icon ?? '💳',
-                        style: const TextStyle(fontSize: 14)),
+                    Text(a.icon ?? '💳', style: const TextStyle(fontSize: 14)),
                     const SizedBox(width: 6),
                     Text(displayName,
                         style: TextStyle(
@@ -1522,30 +2078,407 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
+  Widget _webWelcomeHeader(
+      BuildContext context, String fullName, int alertCount) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final greetingPrefix = _greeting(context);
+    final greetingName = fullName.isNotEmpty ? fullName : 'User';
+    final dateStr = DateFormat('EEEE, MMMM dd').format(DateTime.now());
+
+    return Row(
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$greetingPrefix, $greetingName',
+              style: AppTextStyles.headingLg.copyWith(
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(Icons.calendar_today_rounded,
+                    size: 13,
+                    color: isDark
+                        ? AppColors.darkTextTertiary
+                        : AppColors.lightTextTertiary),
+                const SizedBox(width: 8),
+                Text(
+                  dateStr,
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: isDark
+                        ? AppColors.darkTextTertiary
+                        : AppColors.lightTextTertiary,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                if (alertCount > 0)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline_rounded,
+                            size: 12, color: AppColors.error),
+                        const SizedBox(width: 6),
+                        Text(
+                          '$alertCount active alerts',
+                          style: AppTextStyles.caption.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _webStatsGrid(
+    BuildContext context,
+    num totalBalance,
+    num income,
+    num expense,
+    num savings,
+    num savingsRate,
+    String currency,
+    bool hideAmounts,
+    VoidCallback toggleReveal,
+    Color primary,
+    bool isDark,
+  ) {
+    return Row(
+      children: [
+        Expanded(
+          child: _webStatCard(
+            context,
+            title: context.t('total_balance'),
+            value: totalBalance,
+            currency: currency,
+            hideAmounts: hideAmounts,
+            icon: Icons.account_balance_wallet_rounded,
+            iconColor: primary,
+            trendLabel: 'Balance',
+            trendColor: primary,
+            onTap: toggleReveal,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _webStatCard(
+            context,
+            title: context.t('income'),
+            value: income,
+            currency: currency,
+            hideAmounts: hideAmounts,
+            icon: Icons.arrow_downward_rounded,
+            iconColor: AppColors.success,
+            trendLabel: 'Income',
+            trendColor: AppColors.success,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _webStatCard(
+            context,
+            title: context.t('expense'),
+            value: expense,
+            currency: currency,
+            hideAmounts: hideAmounts,
+            icon: Icons.arrow_upward_rounded,
+            iconColor: AppColors.error,
+            trendLabel: 'Expense',
+            trendColor: AppColors.error,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _webStatCard(
+            context,
+            title: 'Net Savings',
+            value: savings,
+            currency: currency,
+            hideAmounts: hideAmounts,
+            icon: Icons.savings_rounded,
+            iconColor: Colors.purple,
+            trendLabel: '${savingsRate.toStringAsFixed(0)}% saved',
+            trendColor: Colors.purple,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _webStatCard(
+    BuildContext context, {
+    required String title,
+    required num value,
+    required String currency,
+    required bool hideAmounts,
+    required IconData icon,
+    required Color iconColor,
+    required String trendLabel,
+    required Color trendColor,
+    VoidCallback? onTap,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? AppColors.darkBorder.withValues(alpha: 0.5)
+              : AppColors.lightBorder.withValues(alpha: 0.7),
+        ),
+        boxShadow: isDark ? AppColors.shadowDarkSm : AppColors.shadowSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: isDark ? 0.15 : 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: iconColor, size: 18),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: trendColor.withValues(alpha: isDark ? 0.15 : 0.06),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  trendLabel,
+                  style: AppTextStyles.caption.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: trendColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            title.toUpperCase(),
+            style: AppTextStyles.overline.copyWith(
+              color: isDark
+                  ? AppColors.darkTextTertiary
+                  : AppColors.lightTextTertiary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          GestureDetector(
+            onTap: onTap,
+            behavior: HitTestBehavior.translucent,
+            child: Text(
+              formatAmount(currency, value, decimals: 0, hide: hideAmounts),
+              style: AppTextStyles.amountMedium.copyWith(
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _webBudgetProgressSection(
+    BuildContext context,
+    List budgets,
+    double totalBudget,
+    double totalBudgetSpent,
+    double remainingBudget,
+    double budgetProgress,
+    String currency,
+    bool hideAmounts,
+    bool isDark,
+    Color primary,
+  ) {
+    final percentage = (budgetProgress * 100).toStringAsFixed(0);
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? AppColors.darkBorder.withValues(alpha: 0.5)
+              : AppColors.lightBorder.withValues(alpha: 0.7),
+        ),
+        boxShadow: isDark ? AppColors.shadowDarkSm : AppColors.shadowSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Monthly Budget Status',
+                style: AppTextStyles.headingSm.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: (budgetProgress > 0.9 ? AppColors.error : primary)
+                      .withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$percentage%',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    color: budgetProgress > 0.9 ? AppColors.error : primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Stack(
+            children: [
+              Container(
+                height: 8,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? AppColors.darkSurfaceElevated
+                      : AppColors.lightSurfaceElevated,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              FractionallySizedBox(
+                widthFactor: budgetProgress.clamp(0.0, 1.0),
+                child: Container(
+                  height: 10,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: budgetProgress > 0.9
+                          ? [
+                              AppColors.error,
+                              AppColors.error.withValues(alpha: 0.7)
+                            ]
+                          : [primary, primary.withValues(alpha: 0.7)],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color:
+                            (budgetProgress > 0.9 ? AppColors.error : primary)
+                                .withValues(alpha: 0.3),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      )
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: _webBudgetMiniStat(
+                  context,
+                  'Total Limit',
+                  formatAmount(currency, totalBudget, hide: hideAmounts),
+                  isDark ? Colors.white38 : Colors.black38,
+                ),
+              ),
+              Container(
+                  width: 1,
+                  height: 30,
+                  color: isDark ? Colors.white10 : Colors.black12),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _webBudgetMiniStat(
+                  context,
+                  'Total Spent',
+                  formatAmount(currency, totalBudgetSpent, hide: hideAmounts),
+                  budgetProgress > 0.9 ? AppColors.error : primary,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _webBudgetMiniStat(
+      BuildContext context, String label, String value, Color valueColor) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: AppTextStyles.overline.copyWith(
+            color: isDark
+                ? AppColors.darkTextTertiary
+                : AppColors.lightTextTertiary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: AppTextStyles.amountSmall.copyWith(
+            fontSize: 16,
+            color: valueColor,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _cardHeader2(BuildContext context, String title, IconData icon,
       Color iconColor, VoidCallback onTap) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(children: [
       Container(
           width: 28,
           height: 28,
           decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.12),
+              color: iconColor.withValues(alpha: isDark ? 0.15 : 0.08),
               borderRadius: BorderRadius.circular(8)),
           child: Icon(icon, color: iconColor, size: 14)),
       const SizedBox(width: 8),
       Expanded(
           child: Text(title,
-              style: TextStyle(
-                  fontSize: 12,
+              style: AppTextStyles.bodySm.copyWith(
                   fontWeight: FontWeight.w700,
                   color: Theme.of(context).colorScheme.onSurface))),
       MouseRegion(
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
             onTap: onTap,
-            child: Icon(Icons.chevron_right_rounded,
-                size: 16,
-                color: iconColor)),
+            child:
+                Icon(Icons.chevron_right_rounded, size: 16, color: iconColor)),
       ),
     ]);
   }
@@ -1562,7 +2495,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     return Row(
       children: [
         Container(
-          width: 6, height: 6,
+          width: 6,
+          height: 6,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 5),
@@ -1615,10 +2549,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,
-            color: Theme.of(context)
-                .colorScheme
-                .onSurface
-                .withValues(alpha: 0.5),
+            color:
+                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
           ),
         ),
         const Spacer(),
@@ -1720,13 +2652,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  int _alertCount(DashboardSummary summary, List budgets, List debts) {
+  int _alertCount(DashboardSummary summary, List budgets, List debts, List transactions) {
     final accounts = ref.read(accountsProvider);
     int n = 0;
     if (accounts.isNotEmpty && summary.totalBalance < 0) {
       n++;
     }
-    if (budgets.any((b) => b.amount > 0 && b.spent / b.amount >= 0.9)) {
+    if (budgets.any((b) => b.amount > 0 && b.getSpent(transactions) / b.amount >= 0.9)) {
       n++;
     }
     final now = DateTime.now();
@@ -1767,5 +2699,255 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       _profileImageCacheKey = null;
       return null;
     }
+  }
+
+  void _checkAndRequestNotificationPermission() async {
+    if (kIsWeb) return;
+
+    // Check if permission is already granted
+    if (await Permission.notification.isGranted) return;
+
+    // Request permission, which will trigger the OS dialog on Android 13+
+    await Permission.notification.request();
+  }
+
+  void _checkAndShowSmsPermissionDialog() async {
+    if (kIsWeb) return;
+    // Wait a short moment to let screen transition complete smoothly
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+
+    final settings = ref.read(settingsProvider);
+    final dialogShown = settings['smsPermissionDialogShown'] ?? false;
+    final smsTrack = settings['smsTrack'] ?? false;
+
+    // Show only if dialog hasn't been shown before and SMS tracking is disabled
+    if (!dialogShown && !smsTrack) {
+      if (!mounted) return;
+
+      // Mark dialog as shown first so we don't show it again even if permission is denied or dismissed
+      await ref
+          .read(settingsProvider.notifier)
+          .updateSmsPermissionDialogShown(true);
+
+      if (!mounted) return;
+      _showSmsPermissionExplanationDialog();
+    }
+  }
+
+  void _showSmsPermissionExplanationDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Ensure they make a choice
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return AlertDialog(
+          constraints: const BoxConstraints(maxWidth: 500),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          icon: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.auto_awesome_rounded,
+              size: 40,
+              color: AppColors.primary,
+            ),
+          ),
+          title: Text(
+            ctx.t('sms_permission_dialog_title'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                ctx.t('sms_permission_dialog_body'),
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.5,
+                  color: isDark ? Colors.grey[300] : Colors.grey[800],
+                ),
+              ),
+            ],
+          ),
+          actionsAlignment: MainAxisAlignment.spaceEvenly,
+          actionsPadding:
+              const EdgeInsets.only(bottom: 20, left: 16, right: 16),
+          actions: [
+            // Maybe Later
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: TextButton.styleFrom(
+                foregroundColor: isDark ? Colors.grey[400] : Colors.grey[600],
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              child: Text(
+                ctx.t('sms_permission_dialog_deny'),
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            // Enable Now
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _enableSmsTrackingFlow();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 2,
+              ),
+              child: Text(
+                ctx.t('sms_permission_dialog_allow'),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _enableSmsTrackingFlow() async {
+    // Persist true first to handle process kills on permission grant
+    await ref.read(settingsProvider.notifier).updateSmsTrack(true);
+
+    final granted = await SmsService.requestPermission();
+    if (!granted) {
+      // Revert to false if not granted/cancelled
+      await ref.read(settingsProvider.notifier).updateSmsTrack(false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.t('sms_permission_denied'))),
+        );
+      }
+      return;
+    }
+
+    // Check and request standard notification permission on Android 13+
+    final notifGranted = await Permission.notification.request().isGranted;
+    if (!notifGranted && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.t('language') == 'bn'
+                ? 'লেনদেন নিশ্চিতকরণের জন্য নোটিফিকেশন পারমিশন প্রয়োজন'
+                : 'Notification permission is required to ask for transaction confirmation',
+          ),
+        ),
+      );
+    }
+
+    // Request ignore battery optimizations exemption
+    final batteryIgnored =
+        await Permission.ignoreBatteryOptimizations.request().isGranted;
+    if (!batteryIgnored && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.t('language') == 'bn'
+                ? 'ব্যাটারি অপ্টিমাইজেশন সচল থাকায় ব্যাকগ্রাউন্ডে লেনদেন ট্র্যাকিং বিঘ্নিত হতে পারে।'
+                : 'Battery optimization is active. Auto-import might not be 100% reliable in the background.',
+          ),
+        ),
+      );
+    }
+
+    // If still running (or returning granted), start listening
+    await SmsService().init();
+    if (mounted) {
+      _showBackgroundRunningTipsDialog(context);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _syncSmsTrackPermission();
+    }
+  }
+
+  Future<void> _syncSmsTrackPermission() async {
+    final settings = ref.read(settingsProvider);
+    final smsTrack = settings['smsTrack'] ?? false;
+    if (smsTrack) {
+      final isGranted = await SmsService.isPermissionGranted();
+      if (!isGranted && mounted) {
+        await ref.read(settingsProvider.notifier).updateSmsTrack(false);
+        SmsService().stopListening();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              context.t('language') == 'bn'
+                  ? 'এসএমএস অটো-ইমপোর্ট অনুমতি না পাওয়ায় এটি বন্ধ করা হয়েছে।'
+                  : 'SMS Auto-Import has been disabled as permission was not granted.',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  void _showBackgroundRunningTipsDialog(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          constraints: const BoxConstraints(maxWidth: 480),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          icon: const Icon(
+            Icons.info_outline_rounded,
+            size: 40,
+            color: AppColors.info,
+          ),
+          title: Text(
+            ctx.t('language') == 'bn'
+                ? 'ব্যাকগ্রাউন্ড রানিং টিপস'
+                : 'Background Run Tips',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            ctx.t('background_running_tips'),
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.5,
+              color: isDark ? Colors.grey[300] : Colors.grey[800],
+            ),
+          ),
+          actions: [
+            Center(
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                child: Text(
+                  ctx.t('language') == 'bn' ? 'ঠিক আছে' : 'OK',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

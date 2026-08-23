@@ -40,6 +40,14 @@ class CategoryRepository {
     final box = _currentBoxOrNull();
     if (box == null) return;
 
+    // Clean up old MFS categories that were moved to Accounts
+    final oldMfsIds = ['cat_bkash', 'cat_nagad', 'cat_rocket', 'cat_upay'];
+    for (final id in oldMfsIds) {
+      if (box.containsKey(id)) {
+        await box.delete(id);
+      }
+    }
+
     for (final category in [
       ...DefaultCategories.expenseCategories,
       ...DefaultCategories.incomeCategories,

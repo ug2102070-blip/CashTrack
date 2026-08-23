@@ -28,6 +28,7 @@
     <!-- Background work -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 
     <!-- Audio for voice input -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
@@ -94,14 +95,15 @@
             android:value="2"/>
 
         <!-- Notification Listener Service for SMS Auto-Import -->
-        <service android:label="CashTrack SMS Listener" 
-                 android:name="notification.listener.service.NotificationListener" 
-                 android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" 
+        <service android:label="CashTrack SMS Listener"
+                 android:name="notification.listener.service.NotificationListener"
+                 android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
                  android:exported="true">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
     </application>
 
     <!-- Required to query activities that can process text -->

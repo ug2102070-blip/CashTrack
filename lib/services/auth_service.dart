@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:hive/hive.dart';
 
+import 'telemetry_service.dart';
+
 class AuthService {
   AuthService._internal() {
     if (Hive.isBoxOpen(_settingsBoxName)) {
@@ -14,7 +16,12 @@ class AuthService {
     }
 
     try {
-      _firebaseAuthSubscription = _auth.authStateChanges().listen((_) {
+      _firebaseAuthSubscription = _auth.authStateChanges().listen((user) {
+        if (user != null) {
+          unawaited(TelemetryService.setUserId(user.uid));
+        } else {
+          unawaited(TelemetryService.setUserId(''));
+        }
         _authEvents.add(null);
       });
     } catch (_) {
@@ -236,12 +243,12 @@ class AuthService {
   GoogleSignIn _createGoogleSignIn() {
     const webClientId = String.fromEnvironment(
       'GOOGLE_WEB_CLIENT_ID',
-      defaultValue: '',
+      defaultValue: '68532369864-2dq9itj0j9chhigl0sll7pcvnocbsj6q.apps.googleusercontent.com',
     );
 
     if (kIsWeb) {
       return GoogleSignIn(
-        clientId: webClientId.isEmpty ? null : webClientId,
+        clientId: webClientId,
         scopes: [
           'email',
           'profile',
@@ -250,6 +257,7 @@ class AuthService {
     }
 
     return GoogleSignIn(
+      serverClientId: webClientId,
       scopes: [
         'email',
         'profile',

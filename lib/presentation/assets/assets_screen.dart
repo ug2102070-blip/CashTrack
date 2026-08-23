@@ -154,14 +154,14 @@ class AssetsScreen extends ConsumerWidget {
                 Text(asset.category!, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45))),
             ])),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('$cur${_f(asset.currentValue)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurface)),
-              Text('${pos ? '+' : '-'}$cur${_f(app.abs())}',
+              Text('$cur${_f(asset.currentValue / 100)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurface)),
+              Text('${pos ? '+' : '-'}$cur${_f(app.abs() / 100)}',
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: pos ? AppColors.success : AppColors.error)),
             ]),
           ]),
           const SizedBox(height: 8),
           Row(children: [
-            Text('${context.t('purchase_price')}: $cur${_f(asset.purchasePrice)}',
+            Text('${context.t('purchase_price')}: $cur${_f(asset.purchasePrice / 100)}',
                 style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4))),
             const Spacer(),
             if (hasWarranty) Container(
@@ -261,8 +261,10 @@ class AssetsScreen extends ConsumerWidget {
               ],
               Expanded(child: ElevatedButton(
                 onPressed: () {
-                  final pp = double.tryParse(pc.text.trim()) ?? 0;
-                  final cv = double.tryParse(cc.text.trim()) ?? 0;
+                  final parsedPp = double.tryParse(pc.text.trim());
+                  final pp = parsedPp != null ? (parsedPp * 100).toInt() : 0;
+                  final parsedCv = double.tryParse(cc.text.trim());
+                  final cv = parsedCv != null ? (parsedCv * 100).toInt() : 0;
                   if (nc.text.trim().isEmpty || pp <= 0) return;
                   final now = DateTime.now();
                   final m = AssetModel(id: ex?.id ?? const Uuid().v4(), name: nc.text.trim(),

@@ -69,9 +69,6 @@ void registerCashtrackHiveAdapters() {
   if (!Hive.isAdapterRegistered(15)) {
     Hive.registerAdapter(UserSettingsAdapter());
   }
-  if (!Hive.isAdapterRegistered(16)) {
-    Hive.registerAdapter(UserStatsAdapter());
-  }
 }
 
 /// Minimal Hive setup for repository unit tests (transactions only).

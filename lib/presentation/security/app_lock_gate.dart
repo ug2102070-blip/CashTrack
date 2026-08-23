@@ -1,12 +1,18 @@
-import 'package:flutter/material.dart';
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
+
+import '../../core/constants/app_constants.dart';
 import '../../core/l10n/app_l10n.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
-import '../providers/app_providers.dart';
 import '../../services/sms_service.dart';
+import '../providers/app_providers.dart';
 
 class AppLockGate extends ConsumerStatefulWidget {
   const AppLockGate({super.key, required this.child});
@@ -18,7 +24,7 @@ class AppLockGate extends ConsumerStatefulWidget {
 }
 
 class _AppLockGateState extends ConsumerState<AppLockGate>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   final LocalAuthentication _localAuth = LocalAuthentication();
   static const String _pinKey = 'app_lock_pin';
@@ -28,22 +34,38 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
   String? _error;
   DateTime? _lastInactiveAt;
   String? _pin;
+  String _enteredPin = '';
+
+  late final AnimationController _shakeController;
+  late final Animation<double> _shakeAnimation;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    _shakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _shakeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _shakeController, curve: Curves.easeInOut),
+    );
+
     _loadPin();
-    // ref.listen cannot be called in initState; it is called in build() below.
-    // We read the initial settings once synchronously here.
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _syncLockState(ref.read(settingsProvider));
+      if (mounted) {
+        final settings = ref.read(settingsProvider);
+        _syncLockState(settings);
+      }
     });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _shakeController.dispose();
     super.dispose();
   }
 
@@ -55,17 +77,23 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
       return;
     }
     if (state == AppLifecycleState.resumed) {
-      // Check for active notifications that arrived while app was in background
-      SmsService().checkActiveNotifications();
-      
+      if (!_locked) {
+        SmsService().checkActiveNotifications();
+      }
+
       final settings = ref.read(settingsProvider);
       final autoLockMinutes = settings['autoLockMinutes'] ?? 5;
       if (autoLockMinutes == 0) return;
       if (_lockRequired(settings) &&
           _lastInactiveAt != null &&
-          DateTime.now().difference(_lastInactiveAt!).inMinutes >=
-              autoLockMinutes) {
-        setState(() => _locked = true);
+          DateTime.now().difference(_lastInactiveAt!).inSeconds >=
+              autoLockMinutes * 60) {
+        setState(() {
+          _locked = true;
+          _enteredPin = '';
+          _error = null;
+        });
+        _attemptAutoBiometric();
       }
     }
   }
@@ -86,7 +114,12 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
       return;
     }
     if (!_locked) {
-      setState(() => _locked = true);
+      setState(() {
+        _locked = true;
+        _enteredPin = '';
+        _error = null;
+      });
+      _attemptAutoBiometric();
     }
   }
 
@@ -96,8 +129,19 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
     return biometricLock || pinSet;
   }
 
+  void _attemptAutoBiometric() {
+    final settings = ref.read(settingsProvider);
+    if (!kIsWeb && settings['biometricLock'] == true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _locked && !_checking) {
+          _unlockWithBiometric(context);
+        }
+      });
+    }
+  }
+
   Future<void> _unlockWithBiometric(BuildContext context) async {
-    if (_checking) return;
+    if (_checking || kIsWeb) return;
     setState(() {
       _checking = true;
       _error = null;
@@ -107,53 +151,130 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
         localizedReason: context.t('biometric_unlock_reason'),
       );
       if (ok) {
-        if (mounted) setState(() => _locked = false);
+        HapticFeedback.mediumImpact();
+        if (mounted) {
+          setState(() {
+            _locked = false;
+            _enteredPin = '';
+            _error = null;
+          });
+        }
       } else {
+        HapticFeedback.heavyImpact();
         if (mounted) setState(() => _error = context.t('biometric_failed'));
       }
     } catch (_) {
+      HapticFeedback.heavyImpact();
       if (mounted) setState(() => _error = context.t('biometric_failed'));
     } finally {
       if (mounted) setState(() => _checking = false);
     }
   }
 
-  void _unlockWithPin(BuildContext context, String entered) {
+  void _onDigitPressed(String digit, BuildContext context) {
+    if (_enteredPin.length >= 4) return;
+    HapticFeedback.selectionClick();
+
+    setState(() {
+      _enteredPin += digit;
+      _error = null;
+    });
+
+    if (_enteredPin.length == 4) {
+      _validatePin(context);
+    }
+  }
+
+  void _onDeletePressed() {
+    if (_enteredPin.isEmpty) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _enteredPin = _enteredPin.substring(0, _enteredPin.length - 1);
+      _error = null;
+    });
+  }
+
+  void _validatePin(BuildContext context) {
     if (_pin == null || _pin!.isEmpty) {
       setState(() => _error = context.t('pin_invalid'));
+      _shakeAndReset();
       return;
     }
-    if (entered == _pin) {
+
+    if (_enteredPin == _pin) {
+      HapticFeedback.mediumImpact();
       setState(() {
         _locked = false;
+        _enteredPin = '';
         _error = null;
       });
     } else {
-      setState(() => _error = context.t('pin_incorrect'));
+      HapticFeedback.heavyImpact();
+      setState(() {
+        _error = context.t('pin_incorrect');
+      });
+      _shakeAndReset();
     }
+  }
+
+  void _shakeAndReset() {
+    _shakeController.forward(from: 0.0).then((_) {
+      if (mounted) {
+        setState(() => _enteredPin = '');
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
 
-    // ref.listen must be called inside build, not initState.
     ref.listen<Map<String, dynamic>>(settingsProvider, (prev, next) {
-      _syncLockState(next);
+      final wasRequired = prev != null && _lockRequired(prev);
+      final isRequired = _lockRequired(next);
+      _loadPin();
+      if (!isRequired) {
+        if (_locked) setState(() => _locked = false);
+      } else if (!wasRequired && isRequired) {
+        setState(() {
+          _locked = true;
+          _enteredPin = '';
+          _error = null;
+        });
+        _attemptAutoBiometric();
+      }
     });
 
+    final bool isLockedScreen = _lockRequired(settings) && _locked;
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 320),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.98, end: 1.0).animate(animation),
+            child: child,
+          ),
+        );
+      },
+      child: isLockedScreen
+          ? _buildLockScreen(context, settings)
+          : widget.child,
+    );
+  }
+
+  Widget _buildLockScreen(BuildContext context, Map<String, dynamic> settings) {
     final biometricLock = settings['biometricLock'] == true;
     final pinSet = settings['appLockPinSet'] == true;
-    if (!_lockRequired(settings) || !_locked) {
-      return widget.child;
-    }
-
-    final pinController = TextEditingController();
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
     final isDark = theme.brightness == Brightness.dark;
 
     return Material(
+      key: const ValueKey('lock_screen'),
       child: Container(
         width: double.infinity,
         height: double.infinity,
@@ -163,78 +284,77 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
             end: Alignment.bottomCenter,
             colors: isDark
                 ? [
-                    const Color(0xFF0F1419),
-                    const Color(0xFF1A2332),
-                    Color.lerp(primary, const Color(0xFF0F1419), 0.8)!,
+                    const Color(0xFF0D1117),
+                    const Color(0xFF161B22),
+                    Color.lerp(primary, const Color(0xFF0D1117), 0.85)!,
                   ]
                 : [
-                    const Color(0xFFF8FAFE),
+                    const Color(0xFFF6F8FA),
                     Colors.white,
-                    Color.lerp(primary, Colors.white, 0.92)!,
+                    Color.lerp(primary, Colors.white, 0.94)!,
                   ],
           ),
         ),
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(32),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Logo
+                  // App Icon
                   Container(
-                    width: 88,
-                    height: 88,
+                    width: 76,
+                    height: 76,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(24),
+                      color: primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
-                          color: primary.withValues(alpha: 0.25),
-                          blurRadius: 30,
-                          offset: const Offset(0, 10),
+                          color: primary.withValues(alpha: 0.2),
+                          blurRadius: 24,
+                          offset: const Offset(0, 8),
                         ),
                       ],
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: Image.asset(
-                        'assets/images/app_icon.png',
-                        fit: BoxFit.cover,
+                    child: Center(
+                      child: Icon(
+                        Icons.shield_rounded,
+                        color: primary,
+                        size: 38,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
-                  // App name
                   Text(
-                    'CashTrack',
+                    AppConstants.appName,
                     style: AppTextStyles.h4.copyWith(
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.5,
                       color: theme.colorScheme.onSurface,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
 
-                  // Lock status
+                  // Lock Pill
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 6),
+                        horizontal: 12, vertical: 5),
                     decoration: BoxDecoration(
                       color: primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.lock_rounded,
-                            size: 14, color: primary),
-                        const SizedBox(width: 6),
+                        Icon(Icons.lock_rounded, size: 13, color: primary),
+                        const SizedBox(width: 5),
                         Text(
                           context.t('app_locked'),
                           style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
                             color: primary,
                           ),
                         ),
@@ -243,87 +363,28 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
                   ),
                   const SizedBox(height: 28),
 
-                  // Biometric button
-                  if (biometricLock)
-                    SizedBox(
-                      width: 240,
-                      height: 50,
-                      child: ElevatedButton.icon(
-                        onPressed: _checking
-                            ? null
-                            : () => _unlockWithBiometric(context),
-                        icon: const Icon(Icons.fingerprint_rounded, size: 22),
-                        label: Text(
-                          context.t('unlock_with_biometrics'),
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          elevation: 4,
-                          shadowColor: primary.withValues(alpha: 0.3),
-                        ),
-                      ),
-                    ),
-
-                  // PIN input
+                  // PIN Dots
                   if (pinSet) ...[
+                    AnimatedBuilder(
+                      animation: _shakeAnimation,
+                      builder: (context, child) {
+                        final offset = sin(_shakeAnimation.value * pi * 4) * 8;
+                        return Transform.translate(
+                          offset: Offset(offset, 0),
+                          child: child,
+                        );
+                      },
+                      child: _buildPinDots(primary),
+                    ),
                     const SizedBox(height: 16),
-                    SizedBox(
-                      width: 240,
-                      child: TextField(
-                        controller: pinController,
-                        keyboardType: TextInputType.number,
-                        obscureText: true,
-                        maxLength: 4,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 12,
-                        ),
-                        decoration: InputDecoration(
-                          labelText: context.t('enter_pin'),
-                          counterText: '',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(color: primary, width: 2),
-                          ),
-                        ),
-                        onSubmitted: (v) => _unlockWithPin(context, v.trim()),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: 240,
-                      height: 46,
-                      child: OutlinedButton.icon(
-                        onPressed: () =>
-                            _unlockWithPin(context, pinController.text.trim()),
-                        icon: const Icon(Icons.lock_open_rounded, size: 18),
-                        label: Text(context.t('unlock')),
-                        style: OutlinedButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          side: BorderSide(color: primary),
-                        ),
-                      ),
-                    ),
                   ],
 
-                  // Error message
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
+                  // Error Message
+                  if (_error != null)
                     Container(
+                      margin: const EdgeInsets.only(bottom: 16),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 8),
+                          horizontal: 14, vertical: 7),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.error.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
@@ -332,17 +393,49 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.error_outline_rounded,
-                              size: 16, color: theme.colorScheme.error),
+                              size: 15, color: theme.colorScheme.error),
                           const SizedBox(width: 6),
                           Text(
                             _error!,
                             style: TextStyle(
                               color: theme.colorScheme.error,
                               fontSize: 12,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
+                      ),
+                    ),
+
+                  // Numeric Keypad
+                  if (pinSet)
+                    _buildNumpad(context, primary, biometricLock, isDark),
+
+                  // Biometric-only fallback button
+                  if (!pinSet && biometricLock) ...[
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: 240,
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        onPressed: _checking
+                            ? null
+                            : () => _unlockWithBiometric(context),
+                        icon: const Icon(Icons.fingerprint_rounded, size: 22),
+                        label: Text(
+                          context.t('unlock_with_biometrics'),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 14),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 3,
+                          shadowColor: primary.withValues(alpha: 0.3),
+                        ),
                       ),
                     ),
                   ],
@@ -350,6 +443,145 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPinDots(Color primary) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(4, (index) {
+        final isFilled = index < _enteredPin.length;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutBack,
+          margin: const EdgeInsets.symmetric(horizontal: 10),
+          width: isFilled ? 18 : 14,
+          height: isFilled ? 18 : 14,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isFilled ? primary : Colors.transparent,
+            border: Border.all(
+              color: isFilled ? primary : primary.withValues(alpha: 0.4),
+              width: 2,
+            ),
+            boxShadow: isFilled
+                ? [
+                    BoxShadow(
+                      color: primary.withValues(alpha: 0.4),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : [],
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildNumpad(
+    BuildContext context,
+    Color primary,
+    bool showBiometric,
+    bool isDark,
+  ) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 280),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildNumpadRow(['1', '2', '3'], context, isDark),
+          const SizedBox(height: 12),
+          _buildNumpadRow(['4', '5', '6'], context, isDark),
+          const SizedBox(height: 12),
+          _buildNumpadRow(['7', '8', '9'], context, isDark),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              // Bottom Left: Biometric or blank
+              if (showBiometric && !kIsWeb)
+                _buildActionKey(
+                  icon: Icons.fingerprint_rounded,
+                  color: primary,
+                  onTap: () => _unlockWithBiometric(context),
+                  isDark: isDark,
+                )
+              else
+                const SizedBox(width: 64, height: 64),
+
+              // Zero
+              _buildDigitKey('0', context, isDark),
+
+              // Bottom Right: Backspace
+              _buildActionKey(
+                icon: Icons.backspace_outlined,
+                color: isDark ? Colors.white70 : Colors.black54,
+                onTap: _onDeletePressed,
+                isDark: isDark,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNumpadRow(List<String> digits, BuildContext context, bool isDark) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: digits.map((d) => _buildDigitKey(d, context, isDark)).toList(),
+    );
+  }
+
+  Widget _buildDigitKey(String digit, BuildContext context, bool isDark) {
+    return InkWell(
+      onTap: () => _onDigitPressed(digit, context),
+      borderRadius: BorderRadius.circular(32),
+      child: Container(
+        width: 64,
+        height: 64,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : Colors.black.withValues(alpha: 0.04),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.1)
+                : Colors.black.withValues(alpha: 0.06),
+          ),
+        ),
+        child: Center(
+          child: Text(
+            digit,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: isDark ? Colors.white : AppColors.lightText,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionKey({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+    required bool isDark,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(32),
+      child: SizedBox(
+        width: 64,
+        height: 64,
+        child: Center(
+          child: Icon(icon, color: color, size: 26),
         ),
       ),
     );

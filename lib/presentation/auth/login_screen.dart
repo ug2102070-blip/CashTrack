@@ -3,6 +3,9 @@ import 'dart:math';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import '../../services/sync_service.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_text_styles.dart';
 import '../../core/l10n/app_l10n.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -74,6 +77,7 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isLoading = true);
     try {
       await AuthService().signInWithGoogle();
+      await SyncService().syncData();
     } catch (e) {
       if (mounted) _showError('$e');
     } finally {
@@ -302,9 +306,10 @@ class _LoginScreenState extends State<LoginScreen>
             behavior: HitTestBehavior.opaque,
             child: GestureDetector(
               onTap: () {}, // prevent tap-through
-              child: Align(
+                child: Align(
                 alignment: Alignment.bottomCenter,
                 child: Container(
+                  constraints: const BoxConstraints(maxWidth: 480),
                   padding: EdgeInsets.fromLTRB(
                       24, 16, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
                   decoration: BoxDecoration(
@@ -659,6 +664,7 @@ class _LoginScreenState extends State<LoginScreen>
                                     } else {
                                       await AuthService()
                                           .signInWithEmail(email, pass);
+                                      await SyncService().syncData();
                                       if (ctx.mounted) {
                                         Navigator.of(ctx).pop();
                                       }
@@ -767,6 +773,7 @@ class _LoginScreenState extends State<LoginScreen>
               child: Align(
                 alignment: Alignment.bottomCenter,
                 child: Container(
+                  constraints: const BoxConstraints(maxWidth: 480),
                   padding: EdgeInsets.fromLTRB(
                       24, 16, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
                   decoration: BoxDecoration(
@@ -1037,7 +1044,9 @@ class _LoginScreenState extends State<LoginScreen>
     final primary = theme.colorScheme.primary;
     final isDark = theme.brightness == Brightness.dark;
     final size = MediaQuery.of(context).size;
-    final bottom = MediaQuery.of(context).padding.bottom;
+    
+    // Compact spacing for web/desktop to prevent scrollbars
+    const double elementSpacing = kIsWeb ? 14.0 : 20.0;
 
     return Scaffold(
         body: Stack(children: [
@@ -1053,13 +1062,13 @@ class _LoginScreenState extends State<LoginScreen>
                   end: Alignment(1, 1 - _bgAnimCtrl.value * 0.3),
                   colors: isDark
                       ? [
-                          const Color(0xFF0A0E14),
+                          AppColors.darkBg,
                           const Color(0xFF111927),
-                          Color.lerp(primary, const Color(0xFF0A0E14), 0.82)!,
+                          Color.lerp(primary, AppColors.darkBg, 0.82)!,
                           const Color(0xFF0F1419)
                         ]
                       : [
-                          const Color(0xFFF0F4FF),
+                          AppColors.lightBg,
                           Colors.white,
                           Color.lerp(primary, Colors.white, 0.92)!,
                           const Color(0xFFF8FAFF)
@@ -1072,33 +1081,34 @@ class _LoginScreenState extends State<LoginScreen>
       SafeArea(
           child: Center(
               child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(28, 20, 28, max(bottom + 16, 24)),
+        // Allow scrolling only if height is extremely small (< 550px)
+        physics: size.height < 580 ? const BouncingScrollPhysics() : const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: kIsWeb ? 10 : 20),
         child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
+            constraints: const BoxConstraints(maxWidth: 400),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                SizedBox(height: size.height * 0.03),
                 // Logo
                 ScaleTransition(
                     scale: _logoScale,
                     child: Container(
-                      width: 100,
-                      height: 100,
+                      width: 80,
+                      height: 80,
                       decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(28),
+                          borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                                color: primary.withValues(alpha: 0.3),
-                                blurRadius: 40,
-                                offset: const Offset(0, 16))
+                                color: primary.withValues(alpha: 0.25),
+                                blurRadius: 30,
+                                offset: const Offset(0, 12))
                           ]),
                       child: ClipRRect(
-                          borderRadius: BorderRadius.circular(28),
+                          borderRadius: BorderRadius.circular(24),
                           child: Image.asset('assets/images/app_icon.png',
                               fit: BoxFit.cover)),
                     )),
-                const SizedBox(height: 24),
+                const SizedBox(height: elementSpacing),
                 // Title
                 FadeTransition(
                     opacity: _titleFade,
@@ -1106,35 +1116,31 @@ class _LoginScreenState extends State<LoginScreen>
                         position: _titleSlide,
                         child: Column(children: [
                           Text('CashTrack',
-                              style: TextStyle(
-                                  fontSize: 36,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -1.2,
-                                  color: theme.colorScheme.onSurface)),
-                          const SizedBox(height: 8),
+                              style: AppTextStyles.headingLg.copyWith(
+                                  fontSize: 32,
+                                  color: isDark ? AppColors.darkText : AppColors.lightText)),
+                          const SizedBox(height: 6),
                           Text(context.t('login_tagline'),
                               textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  fontSize: 14,
-                                  color: theme.colorScheme.onSurface
-                                      .withValues(alpha: 0.5),
-                                  height: 1.4)),
+                              style: AppTextStyles.bodySm.copyWith(
+                                  color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
+                                  height: 1.35)),
                         ]))),
-                SizedBox(height: size.height * 0.03),
+                const SizedBox(height: elementSpacing),
                 // Features
                 FadeTransition(
                     opacity: _featuresFade,
                     child: Container(
-                      padding: const EdgeInsets.all(18),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                       decoration: BoxDecoration(
                         color: isDark
-                            ? Colors.white.withValues(alpha: 0.04)
-                            : primary.withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(18),
+                            ? AppColors.darkSurfaceElevated.withValues(alpha: 0.3)
+                            : primary.withValues(alpha: 0.03),
+                        borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                             color: isDark
-                                ? Colors.white.withValues(alpha: 0.06)
-                                : primary.withValues(alpha: 0.08)),
+                                ? AppColors.darkBorder.withValues(alpha: 0.3)
+                                : primary.withValues(alpha: 0.06)),
                       ),
                       child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -1158,7 +1164,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 isDark),
                           ]),
                     )),
-                SizedBox(height: size.height * 0.04),
+                const SizedBox(height: elementSpacing + 2),
                 // Buttons
                 FadeTransition(
                     opacity: _buttonsFade,
@@ -1172,7 +1178,7 @@ class _LoginScreenState extends State<LoginScreen>
                               const Color(0xFF4285F4),
                               Colors.white,
                               _signInGoogle),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           // Email sign-in
                           _authBtn(
                               Icons.email_rounded,
@@ -1180,7 +1186,7 @@ class _LoginScreenState extends State<LoginScreen>
                               primary,
                               Colors.white,
                               _showEmailDialog),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           // Phone sign-in
                           _authBtn(
                               Icons.phone_rounded,
@@ -1188,7 +1194,7 @@ class _LoginScreenState extends State<LoginScreen>
                               const Color(0xFF10B981),
                               Colors.white,
                               _showPhoneDialog),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           // Divider
                           Row(children: [
                             Expanded(
@@ -1198,10 +1204,10 @@ class _LoginScreenState extends State<LoginScreen>
                                         : Colors.black12)),
                             Padding(
                                 padding:
-                                    const EdgeInsets.symmetric(horizontal: 16),
+                                    const EdgeInsets.symmetric(horizontal: 14),
                                 child: Text(context.t('or'),
                                     style: TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 11,
                                         color: theme.colorScheme.onSurface
                                             .withValues(alpha: 0.4)))),
                             Expanded(
@@ -1210,27 +1216,28 @@ class _LoginScreenState extends State<LoginScreen>
                                         ? Colors.white12
                                         : Colors.black12)),
                           ]),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           // Guest
                           SizedBox(
                             width: double.infinity,
-                            height: 50,
+                            height: 46,
                             child: OutlinedButton.icon(
                               onPressed: _isLoading ? null : _signInGuest,
                               icon: _isLoading
                                   ? const SizedBox(
-                                      height: 18,
-                                      width: 18,
+                                      height: 16,
+                                      width: 16,
                                       child: CircularProgressIndicator(
                                           strokeWidth: 2))
                                   : const Icon(Icons.person_outline_rounded,
-                                      size: 18),
+                                      size: 16),
                               label: Text(context.t('continue_guest'),
                                   style: const TextStyle(
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w600)),
                               style: OutlinedButton.styleFrom(
                                 shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14)),
+                                    borderRadius: BorderRadius.circular(12)),
                                 side: BorderSide(
                                     color: isDark
                                         ? Colors.white12
@@ -1238,14 +1245,13 @@ class _LoginScreenState extends State<LoginScreen>
                               ),
                             ),
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 14),
                           Text(context.t('login_terms_hint'),
                               textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: theme.colorScheme.onSurface
-                                      .withValues(alpha: 0.3),
-                                  height: 1.5)),
+                              style: AppTextStyles.caption.copyWith(
+                                  fontSize: 10.5,
+                                  color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
+                                  height: 1.4)),
                         ]))),
               ],
             )),

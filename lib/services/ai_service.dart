@@ -1,6 +1,4 @@
-// lib/services/ai_service.dart
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hive/hive.dart';
@@ -8,132 +6,38 @@ import 'package:hive/hive.dart';
 import '../core/l10n/app_l10n.dart';
 import '../core/utils/logger.dart';
 
+/// Sends finance-assistant requests only through the protected backend.
+///
+/// Provider keys must never be embedded in an app binary or sent from a
+/// device. The Cloud Function enforces Firebase Authentication, App Check,
+/// payload limits, and per-user rate limits before it calls the AI provider.
 class AiService {
-  AiService({String? apiKey}) : _explicitKey = apiKey;
-
-  // Removed compile-time _useBackend flag — it always evaluated to true at
-  // runtime even when USE_AI_BACKEND was not set, causing the "check backend
-  // configuration" error.  We now prefer the stored API key and only fall back
-  // to Firebase Functions when explicitly requested via dart-define.
-  static const bool _useBackendOverride =
-      bool.fromEnvironment('USE_AI_BACKEND', defaultValue: false);
-  static const String _defaultModel = 'llama-3.1-8b-instant';
   static const String _functionsRegion = 'us-central1';
   static const String _settingsBoxName = 'settingsBox';
-  static const String _apiKeySettingKey = 'geminiApiKey'; // Reused for Groq API key compatibility
-  static const String _secureApiKeyKey = 'gemini_api_key_secure'; // Reused for Groq API key compatibility
+  static const String _legacyApiKeySettingKey = 'geminiApiKey';
+  static const String _legacySecureApiKeyKey = 'gemini_api_key_secure';
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
-  /// In-memory cache so the sync getter can work without awaiting.
-  static String _cachedApiKey = '';
+  bool get isConfigured => true;
 
-  /// Key passed directly at construction (e.g. via --dart-define compile flag)
-  final String? _explicitKey;
-  final Dio _dio = Dio();
-
-  /// Reads the cached API key (populated by [init] or [loadApiKey]).
-  String _storedKey() {
-    return _cachedApiKey;
-  }
-
-  /// Returns the effective API key: explicit > dart-define > stored in settings.
-  String get _apiKey {
-    final explicit = _explicitKey;
-    if (explicit != null && explicit.trim().isNotEmpty) {
-      return explicit.trim();
-    }
-    const envKey = String.fromEnvironment(
-      'GROQ_API_KEY',
-      defaultValue: String.fromEnvironment('GEMINI_API_KEY', defaultValue: ''),
-    );
-    if (envKey.trim().isNotEmpty) return envKey.trim();
-    final stored = _storedKey().trim();
-    if (stored.isNotEmpty) return stored;
-    return '';
-  }
-
-  bool get isConfigured => _useBackendOverride || _apiKey.isNotEmpty;
-
-  Future<String> _getEffectiveApiKey() async {
-    final explicit = _explicitKey;
-    if (explicit != null && explicit.trim().isNotEmpty) {
-      return explicit.trim();
-    }
-
-    const envKey = String.fromEnvironment(
-      'GROQ_API_KEY',
-      defaultValue: String.fromEnvironment('GEMINI_API_KEY', defaultValue: ''),
-    );
-    if (envKey.trim().isNotEmpty) return envKey.trim();
-
-    final stored = (await loadApiKey()).trim();
-    if (stored.isNotEmpty) return stored;
-
-    return '';
-  }
-
-  /// Pre-loads the API key from secure storage into the in-memory cache.
-  /// Call this once at app startup.
+  /// Removes keys saved by older app versions. Keeping a user-supplied AI key
+  /// in browser storage is not a safe production design.
   Future<void> init() async {
-    _cachedApiKey = await loadApiKey();
-  }
-
-  /// Saves a Gemini API key — secure storage on native, Hive on web.
-  static Future<void> saveApiKey(String key) async {
-    final trimmed = key.trim();
-    if (kIsWeb) {
-      // Web: flutter_secure_storage has no hardware-backed encryption,
-      // fall back to Hive.
-      final box = Hive.isBoxOpen(_settingsBoxName)
-          ? Hive.box(_settingsBoxName)
-          : await Hive.openBox(_settingsBoxName);
-      await box.put(_apiKeySettingKey, trimmed);
-    } else {
-      await _secureStorage.write(key: _secureApiKeyKey, value: trimmed);
-      // Clean up old plain-text Hive copy if it exists.
-      try {
+    try {
+      if (kIsWeb) {
         final box = Hive.isBoxOpen(_settingsBoxName)
             ? Hive.box(_settingsBoxName)
             : await Hive.openBox(_settingsBoxName);
-        if (box.containsKey(_apiKeySettingKey)) {
-          await box.delete(_apiKeySettingKey);
+        await box.delete(_legacyApiKeySettingKey);
+      } else {
+        await _secureStorage.delete(key: _legacySecureApiKeyKey);
+        if (Hive.isBoxOpen(_settingsBoxName)) {
+          await Hive.box(_settingsBoxName).delete(_legacyApiKeySettingKey);
         }
-      } catch (_) {}
-    }
-    _cachedApiKey = trimmed;
-  }
-
-  /// Reads the saved Gemini API key — secure storage on native, Hive on web.
-  static Future<String> loadApiKey() async {
-    if (kIsWeb) {
-      final box = Hive.isBoxOpen(_settingsBoxName)
-          ? Hive.box(_settingsBoxName)
-          : await Hive.openBox(_settingsBoxName);
-      final key = (box.get(_apiKeySettingKey) as String?) ?? '';
-      _cachedApiKey = key;
-      return key;
-    } else {
-      // Try secure storage first, then fall back to Hive for migration.
-      final secureKey = await _secureStorage.read(key: _secureApiKeyKey) ?? '';
-      if (secureKey.isNotEmpty) {
-        _cachedApiKey = secureKey;
-        return secureKey;
       }
-      // Migration: read from old Hive location, move to secure storage.
-      try {
-        final box = Hive.isBoxOpen(_settingsBoxName)
-            ? Hive.box(_settingsBoxName)
-            : await Hive.openBox(_settingsBoxName);
-        final hiveKey = (box.get(_apiKeySettingKey) as String?) ?? '';
-        if (hiveKey.isNotEmpty) {
-          await _secureStorage.write(key: _secureApiKeyKey, value: hiveKey);
-          await box.delete(_apiKeySettingKey);
-          _cachedApiKey = hiveKey;
-          return hiveKey;
-        }
-      } catch (_) {}
-      _cachedApiKey = '';
-      return '';
+    } catch (error) {
+      // A cleanup failure must not block app start. No key is read or used.
+      AppLogger.w('Unable to remove legacy AI credentials: $error');
     }
   }
 
@@ -143,51 +47,42 @@ class AiService {
     AppL10n? l10n,
   }) async {
     try {
-      final effectiveApiKey = await _getEffectiveApiKey();
+      final callable = FirebaseFunctions.instanceFor(
+        region: _functionsRegion,
+      ).httpsCallable(
+        'generateAiResponse',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 35)),
+      );
 
-      // Priority 1: Direct Groq API (user's own key — most reliable path)
-      if (effectiveApiKey.isNotEmpty) {
-        return await _getResponseFromGroq(
-          query: query,
-          financialContext: financialContext,
-          l10n: l10n,
-          apiKey: effectiveApiKey,
-        );
+      final result = await callable.call(<String, String>{
+        'query': query,
+        'financialContext': financialContext ?? '',
+      });
+      final data = result.data;
+      if (data is Map && data['text'] is String) {
+        final text = (data['text'] as String).trim();
+        if (text.isNotEmpty) return text;
       }
-
-      // Priority 2: Firebase Cloud Functions backend (optional, needs deployment)
-      if (_useBackendOverride) {
-        try {
-          return await _getResponseFromBackend(
-            query: query,
-            financialContext: financialContext,
-            l10n: l10n,
-          );
-        } catch (e) {
-          AppLogger.w('AiService: Firebase backend failed: $e');
-          rethrow;
-        }
+      return l10n?.t('ai_service_no_response') ??
+          'No response from AI service.';
+    } on FirebaseFunctionsException catch (error) {
+      AppLogger.w('AI backend rejected request: ${error.code}');
+      if (error.code == 'resource-exhausted') {
+        return 'AI request limit reached. Please try again in a minute.';
       }
-
-      // No key and no backend → guide user
-      return l10n?.t('ai_service_not_configured') ??
-          'AI service is not configured. Please set your Gemini API key in Settings → AI Assistant.';
-    } catch (e) {
-      AppLogger.e('AiService error: $e');
-      if (e is DioException) {
-        final statusCode = e.response?.statusCode;
-        if (statusCode == 429) {
-          return 'API Quota Exceeded: Your API key has reached its request limit. Please check your quota.';
-        } else if (statusCode == 400) {
-          return 'API Error: Bad request. Please check if the API key is correct.';
-        } else if (statusCode == 401 || statusCode == 403) {
-          return 'API Error: Invalid API key or permission denied. Please check your settings.';
-        } else if (statusCode == 404) {
-          return 'API Error: Model version not found or deprecated.';
-        }
+      if (error.code == 'unauthenticated' ||
+          error.code == 'permission-denied') {
+        return 'Please sign in with a verified account to use the AI assistant.';
+      }
+      if (error.code == 'invalid-argument') {
+        return 'Your AI request is too large or invalid. Please shorten it.';
       }
       return l10n?.t('ai_service_error_api_key') ??
-          'AI service error. Please check your Gemini API key in Settings → AI Assistant.';
+          'AI service is temporarily unavailable. Please try again later.';
+    } catch (error) {
+      AppLogger.w('AI backend request failed: $error');
+      return l10n?.t('ai_service_error_api_key') ??
+          'AI service is temporarily unavailable. Please try again later.';
     }
   }
 
@@ -196,116 +91,18 @@ class AiService {
     double? expense,
     String? currency,
     AppL10n? l10n,
-  }) async {
+  }) {
     final cur = currency ?? 'BDT';
-    final prompt = (income != null && expense != null)
+    final prompt = income != null && expense != null
         ? 'Analyze this budget. Income: $income $cur, Expense: $expense $cur. '
             'Give a short summary and one actionable tip.'
         : 'Analyze my budget and give one actionable tip.';
     return getResponse(prompt, l10n: l10n);
   }
 
-  Future<List<String>> getSuggestions() async {
-    return const [
-      'How is my spending this month?',
-      'Show me budget breakdown',
-      'Tips for saving money',
-    ];
-  }
-
-  String _buildPrompt({
-    required String query,
-    String? financialContext,
-  }) {
-    final contextBlock =
-        (financialContext == null || financialContext.trim().isEmpty)
-            ? 'No app financial data context was provided.'
-            : financialContext.trim();
-
-    return '''
-You are CashTrack's finance assistant.
-Use the user's app data context below when answering.
-If data is missing for a claim, clearly say it is unavailable instead of guessing.
-Keep the answer practical and concise.
-
-App Financial Context:
-$contextBlock
-
-User Question:
-$query
-''';
-  }
-
-  Future<String> _getResponseFromBackend({
-    required String query,
-    String? financialContext,
-    AppL10n? l10n,
-  }) async {
-    final callable =
-        FirebaseFunctions.instanceFor(region: _functionsRegion).httpsCallable(
-      'generateAiResponse',
-      options: HttpsCallableOptions(
-        timeout: const Duration(seconds: 30),
-      ),
-    );
-
-    final result = await callable.call({
-      'query': query,
-      'financialContext': financialContext ?? '',
-    });
-
-    final data = result.data;
-    if (data is Map && data['text'] is String) {
-      final text = (data['text'] as String).trim();
-      if (text.isNotEmpty) return text;
-    }
-
-    return l10n?.t('ai_service_no_response') ?? 'No response from AI service.';
-  }
-
-  Future<String> _getResponseFromGroq({
-    required String query,
-    String? financialContext,
-    AppL10n? l10n,
-    required String apiKey,
-  }) async {
-    final prompt = _buildPrompt(
-      query: query,
-      financialContext: financialContext,
-    );
-
-    final response = await _dio.post(
-      'https://api.groq.com/openai/v1/chat/completions',
-      options: Options(
-        headers: {
-          'Authorization': 'Bearer $apiKey',
-          'Content-Type': 'application/json',
-        },
-      ),
-      data: {
-        'model': _defaultModel,
-        'messages': [
-          {
-            'role': 'user',
-            'content': prompt,
-          },
-        ],
-        'temperature': 0.7,
-      },
-    );
-
-    final data = response.data;
-    final choices = data is Map<String, dynamic> ? data['choices'] : null;
-    if (choices is List && choices.isNotEmpty) {
-      final message = choices.first['message'];
-      if (message is Map) {
-        final content = message['content'];
-        if (content is String && content.trim().isNotEmpty) {
-          return content.trim();
-        }
-      }
-    }
-
-    return l10n?.t('ai_service_no_response') ?? 'No response from AI service.';
-  }
+  Future<List<String>> getSuggestions() async => const <String>[
+        'How is my spending this month?',
+        'Show me budget breakdown',
+        'Tips for saving money',
+      ];
 }

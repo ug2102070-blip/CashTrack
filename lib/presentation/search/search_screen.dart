@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -33,8 +33,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final settings = ref.watch(settingsProvider);
     final currency = (settings['currency'] as String?) ?? '৳';
 
-    final categoryMap = {for (final c in categories) c.id: c.name};
-    final accountMap = {for (final a in accounts) a.id: a.name};
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
+    final categoryMap = {
+      '': isBangla ? 'শ্রেণীহীন' : 'Uncategorized',
+      for (final c in categories) c.id: isBangla ? (c.nameBn.isNotEmpty ? c.nameBn : c.name) : c.name
+    };
+    final accountMap = {
+      '': isBangla ? 'কোন অ্যাকাউন্ট নেই' : 'No Account',
+      for (final a in accounts) a.id: a.name
+    };
     final filtered = _filterTransactions(
       transactions: transactions,
       query: _query,

@@ -1,4 +1,6 @@
-// lib/presentation/transactions/transactions_screen.dart
+import 'dart:io';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -31,7 +33,11 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
     final categories = ref.watch(categoriesProvider);
     final settings = ref.watch(settingsProvider);
     final currency = (settings['currency'] as String?) ?? '৳';
-    final categoryMap = {for (final c in categories) c.id: c.name};
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
+    final categoryMap = {
+      '': isBangla ? 'শ্রেণীহীন' : 'Uncategorized',
+      for (final c in categories) c.id: isBangla ? (c.nameBn.isNotEmpty ? c.nameBn : c.name) : c.name
+    };
     final filtered = _applyFilters(transactions);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -159,7 +165,6 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
       );
 
       await txNotifier.deleteTransaction(id);
-      await _syncBudgetOnDelete(t);
       await _syncAccountOnDelete(t);
     }
 
@@ -412,7 +417,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
     );
   }
 
-  // â”€â”€ Summary Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  //  Summary Banner 
 
   Widget _buildSummaryBanner(
     List<TransactionModel> txs,
@@ -421,10 +426,10 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   ) {
     final income = txs
         .where((t) => t.type == TransactionType.income)
-        .fold<double>(0, (s, t) => s + t.amount);
+        .fold<int>(0, (s, t) => s + t.amount);
     final expense = txs
         .where((t) => t.type == TransactionType.expense)
-        .fold<double>(0, (s, t) => s + t.amount);
+        .fold<int>(0, (s, t) => s + t.amount);
     final primary = Theme.of(context).colorScheme.primary;
 
     return Container(
@@ -558,7 +563,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   ) {
     final grouped = <String, List<TransactionModel>>{};
     for (final t in txs) {
-      final key = DateFormat('yyyy-MM-dd').format(t.date);
+      final key = DateFormat('yyyy-MM-dd', 'en').format(t.date);
       grouped[key] = [...(grouped[key] ?? []), t];
     }
 
@@ -598,7 +603,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
             ? context.t('yesterday')
             : DateFormat('EEEE, MMM dd').format(date);
 
-    final dayTotal = txs.fold<double>(0, (s, t) {
+    final dayTotal = txs.fold<int>(0, (s, t) {
       return t.type == TransactionType.expense ? s - t.amount : s + t.amount;
     });
     final totalColor = dayTotal >= 0 ? AppColors.success : AppColors.error;
@@ -839,7 +844,6 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   // â”€â”€ Filter Sheet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   void _showFilterSheet() {
-    final now = DateTime.now();
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -1148,6 +1152,10 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                     .withValues(alpha: 0.4),
               ),
             ),
+            if (t.receiptUrl != null && t.receiptUrl!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _buildReceiptDetailTile(context, t.receiptUrl!),
+            ],
             const SizedBox(height: 24),
             Row(
               children: [
@@ -1227,8 +1235,6 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
     if (t == null) return;
 
     await ref.read(transactionsProvider.notifier).deleteTransaction(id);
-    await _syncBudgetOnDelete(t);
-
     await _syncAccountOnDelete(t);
 
     if (!mounted) return;
@@ -1237,14 +1243,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
     );
   }
 
-  Future<void> _syncBudgetOnDelete(TransactionModel t) async {
-    if (t.type != TransactionType.expense) return;
-    final notifier = ref.read(budgetsProvider.notifier);
-    final budget = notifier.getBudgetByCategory(t.categoryId, t.date);
-    if (budget == null) return;
-    final next = (budget.spent - t.amount).clamp(0.0, double.infinity);
-    await notifier.updateSpent(budget.id, next);
-  }
+
 
   Future<void> _syncAccountOnDelete(TransactionModel t) async {
     final accountsNotifier = ref.read(accountsProvider.notifier);
@@ -1312,9 +1311,147 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   String _typeLabel(BuildContext context, TransactionType t) =>
       t == TransactionType.income ? context.t('income') : context.t('expense');
 
-  String _fmt(double v) {
+  String _fmt(int paisa) {
+    double v = paisa / 100;
     if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
     if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}K';
     return v.toStringAsFixed(0);
+  }
+
+  Widget _buildReceiptDetailTile(BuildContext context, String path) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final file = !kIsWeb ? File(path) : null;
+    final exists = file != null && file.existsSync();
+
+    return InkWell(
+      onTap: () => _openReceiptViewer(context, path),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: isDark ? 0.12 : 0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 36,
+                height: 36,
+                child: exists
+                    ? Image.file(file, fit: BoxFit.cover)
+                    : Icon(
+                        Icons.receipt_long_rounded,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 20,
+                      ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    context.t('receipt_photo_option'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  Text(
+                    'Tap to view receipt image',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.zoom_in_rounded,
+              size: 18,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openReceiptViewer(BuildContext context, String path) {
+    final file = !kIsWeb ? File(path) : null;
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    context.t('receipt_photo_option'),
+                    style: AppTextStyles.h5,
+                  ),
+                  const SizedBox(height: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(context).size.height * 0.65,
+                        maxWidth: MediaQuery.of(context).size.width * 0.85,
+                      ),
+                      child: InteractiveViewer(
+                        minScale: 0.5,
+                        maxScale: 4.0,
+                        child: file != null && file.existsSync()
+                            ? Image.file(file, fit: BoxFit.contain)
+                            : const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(32),
+                                  child: Text('Receipt image not found on this device'),
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                onPressed: () => Navigator.pop(ctx),
+                icon: const Icon(Icons.close_rounded),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black45,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

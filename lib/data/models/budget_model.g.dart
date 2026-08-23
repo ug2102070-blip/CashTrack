@@ -19,11 +19,10 @@ class BudgetModelAdapter extends TypeAdapter<BudgetModel> {
     return BudgetModel(
       id: fields[0] as String,
       categoryId: fields[1] as String,
-      amount: fields[2] as double,
+      amount: fields[2] as int,
       month: fields[3] as DateTime,
-      spent: fields[4] as double,
       rollover: fields[5] as bool,
-      rolledAmount: fields[6] as double,
+      rolledAmount: fields[6] as int,
       createdAt: fields[7] as DateTime?,
       updatedAt: fields[8] as DateTime?,
     );
@@ -32,7 +31,7 @@ class BudgetModelAdapter extends TypeAdapter<BudgetModel> {
   @override
   void write(BinaryWriter writer, BudgetModel obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -41,8 +40,6 @@ class BudgetModelAdapter extends TypeAdapter<BudgetModel> {
       ..write(obj.amount)
       ..writeByte(3)
       ..write(obj.month)
-      ..writeByte(4)
-      ..write(obj.spent)
       ..writeByte(5)
       ..write(obj.rollover)
       ..writeByte(6)
@@ -72,11 +69,10 @@ _$BudgetModelImpl _$$BudgetModelImplFromJson(Map<String, dynamic> json) =>
     _$BudgetModelImpl(
       id: json['id'] as String,
       categoryId: json['categoryId'] as String,
-      amount: (json['amount'] as num).toDouble(),
+      amount: (json['amount'] as num).toInt(),
       month: DateTime.parse(json['month'] as String),
-      spent: (json['spent'] as num?)?.toDouble() ?? 0,
       rollover: json['rollover'] as bool? ?? false,
-      rolledAmount: (json['rolledAmount'] as num?)?.toDouble() ?? 0,
+      rolledAmount: (json['rolledAmount'] as num?)?.toInt() ?? 0,
       createdAt: json['createdAt'] == null
           ? null
           : DateTime.parse(json['createdAt'] as String),
@@ -91,7 +87,6 @@ Map<String, dynamic> _$$BudgetModelImplToJson(_$BudgetModelImpl instance) =>
       'categoryId': instance.categoryId,
       'amount': instance.amount,
       'month': instance.month.toIso8601String(),
-      'spent': instance.spent,
       'rollover': instance.rollover,
       'rolledAmount': instance.rolledAmount,
       'createdAt': instance.createdAt?.toIso8601String(),

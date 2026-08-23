@@ -19,8 +19,8 @@ class GoalModelAdapter extends TypeAdapter<GoalModel> {
     return GoalModel(
       id: fields[0] as String,
       name: fields[1] as String,
-      targetAmount: fields[2] as double,
-      currentAmount: fields[3] as double,
+      targetAmount: fields[2] as int,
+      currentAmount: fields[3] as int,
       deadline: fields[4] as DateTime?,
       icon: fields[5] as String?,
       colorHex: fields[6] as String?,
@@ -75,8 +75,8 @@ _$GoalModelImpl _$$GoalModelImplFromJson(Map<String, dynamic> json) =>
     _$GoalModelImpl(
       id: json['id'] as String,
       name: json['name'] as String,
-      targetAmount: (json['targetAmount'] as num).toDouble(),
-      currentAmount: (json['currentAmount'] as num?)?.toDouble() ?? 0,
+      targetAmount: (json['targetAmount'] as num).toInt(),
+      currentAmount: (json['currentAmount'] as num?)?.toInt() ?? 0,
       deadline: json['deadline'] == null
           ? null
           : DateTime.parse(json['deadline'] as String),

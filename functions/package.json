@@ -8,10 +8,11 @@
   "scripts": {
     "serve": "firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
-    "lint": "echo \"No lint configured\""
+    "lint": "node --check src/index.js",
+    "audit": "npm audit --omit=dev --audit-level=high"
   },
   "dependencies": {
-    "firebase-admin": "^12.7.0",
-    "firebase-functions": "^5.1.1"
+    "firebase-admin": "^14.2.0",
+    "firebase-functions": "^7.3.2"
   }
 }

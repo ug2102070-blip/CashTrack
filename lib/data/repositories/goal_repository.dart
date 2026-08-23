@@ -2,6 +2,7 @@ import 'package:hive/hive.dart';
 
 import '../models/goal_model.dart';
 import 'hive_box_recovery.dart';
+import 'sync_tombstone_repository.dart';
 
 class GoalRepository {
   GoalRepository._internal();
@@ -54,7 +55,7 @@ class GoalRepository {
     await _box!.put(goal.id, goal.toJson());
   }
 
-  Future<void> updateProgress(String goalId, double newAmount) async {
+  Future<void> updateProgress(String goalId, int newAmount) async {
     await init();
     final goal = _decode(_box!.get(goalId));
     if (goal != null) {
@@ -75,6 +76,7 @@ class GoalRepository {
   Future<void> deleteGoal(String id) async {
     await init();
     await _box!.delete(id);
+    await SyncTombstoneRepository().record(_boxName, id);
   }
 
   List<GoalModel> _decodedValues() {

@@ -22,6 +22,7 @@ import '../../core/l10n/app_l10n.dart';
 import '../../services/auth_service.dart';
 import '../../services/sms_service.dart';
 import '../../services/sync_service.dart';
+import '../../services/backup_restore_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../services/notification_service.dart';
 import '../../services/screenshot_protection_service.dart';
@@ -38,7 +39,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _animCtrl;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   final LocalAuthentication _localAuth = LocalAuthentication();
@@ -120,6 +121,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _syncSmsTrackPermission();
     _animCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
@@ -135,6 +138,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _animCtrl.dispose();
     super.dispose();
   }
@@ -154,7 +158,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     final smsTrack = settings['smsTrack'] ?? false;
     final rawCurrency = settings['currency'] as String?;
     final currency = _normalizeCurrency(rawCurrency);
-    final smsMode = settings['smsMode'] ?? 'ask';
+    final smsMode = settings['smsMode'] ?? 'daily_summary';
     final hideAmounts = settings['hideAmounts'] ?? false;
     final screenIsDark = Theme.of(context).brightness == Brightness.dark;
     final language = settings['language'] ?? 'en';
@@ -209,13 +213,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               SliverToBoxAdapter(
                 child: _anim(
                     index: 4,
-                    child: _sectionLabel(context, context.t('notifications'))),
+                    child: _sectionLabel(context, context.t('general'))),
               ),
               SliverToBoxAdapter(
                 child: _anim(
                   index: 5,
-                  child: _buildNotificationsSection(context, notifEnabled,
-                      weeklyReport, dailyReminderTime, screenIsDark),
+                  child: _buildGeneralSection(
+                      context, smsTrack, smsMode, language, screenIsDark),
                 ),
               ),
 
@@ -223,13 +227,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               SliverToBoxAdapter(
                 child: _anim(
                     index: 6,
-                    child: _sectionLabel(context, context.t('general'))),
+                    child: _sectionLabel(context, context.t('notifications'))),
               ),
               SliverToBoxAdapter(
                 child: _anim(
                   index: 7,
-                  child: _buildGeneralSection(
-                      context, smsTrack, smsMode, language, screenIsDark),
+                  child: _buildNotificationsSection(context, notifEnabled,
+                      weeklyReport, dailyReminderTime, screenIsDark),
                 ),
               ),
 
@@ -324,21 +328,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               children: [
                 Text(
                   context.t('settings'),
-                  style: AppTextStyles.h2.copyWith(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 26,
-                    letterSpacing: -0.6,
-                    color: Theme.of(context).colorScheme.onSurface,
+                  style: AppTextStyles.headingLg.copyWith(
+                    color: isDark ? AppColors.darkText : AppColors.lightText,
                   ),
                 ),
+                const SizedBox(height: 2),
                 Text(
                   context.t('customize_experience'),
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.45),
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
                   ),
                 ),
               ],
@@ -671,68 +669,87 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     final languageLabel =
         language == 'bn' ? context.t('bangla') : context.t('english');
     return _settingsGroup(context, isDark, [
-      _settingsTile(
-        context,
-        icon: Icons.notifications_active_rounded,
-        iconColor: AppColors.success,
-        title: context.t('sms_auto_import'),
-        subtitle: context.t('import_sms'),
-        trailing: Switch.adaptive(
-          value: smsTrack,
-          onChanged: (v) async {
-            if (v) {
-              // Persist true first to handle process kills on permission grant
-              await ref.read(settingsProvider.notifier).updateSmsTrack(true);
-              
-              final granted = await SmsService.requestPermission();
-              if (!granted) {
-                // Revert to false if not granted/cancelled
-                await ref.read(settingsProvider.notifier).updateSmsTrack(false);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(context.t('sms_permission_denied'))),
-                  );
-                }
-                return;
-              }
-
-              // Check and request standard notification permission on Android 13+
-              final notifGranted = await Permission.notification.request().isGranted;
-              if (!notifGranted && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      _isBangla(context)
-                          ? 'লেনদেন নিশ্চিতকরণের জন্য নোটিফিকেশন পারমিশন প্রয়োজন'
-                          : 'Notification permission is required to ask for transaction confirmation',
-                    ),
-                  ),
-                );
-              }
-
-              // If still running (or returning granted), start listening
-              await SmsService().init();
-            } else {
-              SmsService().stopListening();
-              await ref.read(settingsProvider.notifier).updateSmsTrack(false);
-            }
-          },
-          thumbColor: _switchThumbColor(context),
-          trackColor: _switchTrackColor(context),
-        ),
-      ),
-      if (smsTrack) ...[
-        _divider(context),
+      if (!kIsWeb) ...[
         _settingsTile(
           context,
-          icon: Icons.tune_rounded,
-          iconColor: AppColors.info,
-          title: context.t('sms_import_mode'),
-          subtitle: _smsModeLabel(smsMode),
-          onTap: () => _showSmsModeDialog(context, smsMode),
+          icon: Icons.notifications_active_rounded,
+          iconColor: AppColors.success,
+          title: context.t('sms_auto_import'),
+          subtitle: context.t('import_sms'),
+          trailing: Switch.adaptive(
+            value: smsTrack,
+            onChanged: (v) async {
+              if (v) {
+                // Persist true first to handle process kills on permission grant
+                await ref.read(settingsProvider.notifier).updateSmsTrack(true);
+                
+                final granted = await SmsService.requestPermission();
+                if (!granted) {
+                  // Revert to false if not granted/cancelled
+                  await ref.read(settingsProvider.notifier).updateSmsTrack(false);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(context.t('sms_permission_denied'))),
+                    );
+                  }
+                  return;
+                }
+
+                // Check and request standard notification permission on Android 13+
+                final notifGranted = await Permission.notification.request().isGranted;
+                if (!notifGranted && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        _isBangla(context)
+                            ? 'লেনদেন নিশ্চিতকরণের জন্য নোটিফিকেশন পারমিশন প্রয়োজন'
+                            : 'Notification permission is required to ask for transaction confirmation',
+                      ),
+                    ),
+                  );
+                }
+
+                // Request ignore battery optimizations exemption
+                final batteryIgnored = await Permission.ignoreBatteryOptimizations.request().isGranted;
+                if (!batteryIgnored && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        _isBangla(context)
+                            ? 'ব্যাটারি অপ্টিমাইজেশন সচল থাকায় ব্যাকগ্রাউন্ডে লেনদেন ট্র্যাকিং বিঘ্নিত হতে পারে।'
+                            : 'Battery optimization is active. Auto-import might not be 100% reliable in the background.',
+                      ),
+                    ),
+                  );
+                }
+
+                // If still running (or returning granted), start listening
+                await SmsService().init();
+                if (context.mounted) {
+                  _showBackgroundRunningTipsDialog(context);
+                }
+              } else {
+                SmsService().stopListening();
+                await ref.read(settingsProvider.notifier).updateSmsTrack(false);
+              }
+            },
+            thumbColor: _switchThumbColor(context),
+            trackColor: _switchTrackColor(context),
+          ),
         ),
+        if (smsTrack) ...[
+          _divider(context),
+          _settingsTile(
+            context,
+            icon: Icons.tune_rounded,
+            iconColor: AppColors.info,
+            title: context.t('sms_import_mode'),
+            subtitle: _smsModeLabel(smsMode),
+            onTap: () => _showSmsModeDialog(context, smsMode),
+          ),
+        ],
+        _divider(context),
       ],
-      _divider(context),
       _settingsTile(
         context,
         icon: Icons.language_rounded,
@@ -901,11 +918,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       _divider(context),
       _settingsTile(
         context,
+        icon: Icons.save_alt_rounded,
+        iconColor: AppColors.accent,
+        title: context.t('backup_local'),
+        subtitle: context.t('backup_local_sub'),
+        onTap: () => _handleLocalBackup(context),
+      ),
+      _divider(context),
+      _settingsTile(
+        context,
         icon: Icons.cloud_download_rounded,
         iconColor: AppColors.success,
         title: context.t('restore_cloud'),
         subtitle: context.t('restore_data'),
         onTap: () => _confirmRestore(context),
+      ),
+      _divider(context),
+      _settingsTile(
+        context,
+        icon: Icons.restore_page_rounded,
+        iconColor: const Color(0xFF10B981),
+        title: context.t('restore_local'),
+        subtitle: context.t('restore_local_sub'),
+        onTap: () => _confirmLocalRestore(context),
       ),
       _divider(context),
       _settingsTile(
@@ -1087,19 +1122,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
             color: isDark
-                ? Colors.white.withValues(alpha: 0.06)
-                : Colors.black.withValues(alpha: 0.04)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+                ? AppColors.darkBorder.withValues(alpha: 0.5)
+                : AppColors.lightBorder.withValues(alpha: 0.7)),
+        boxShadow: isDark ? AppColors.shadowDarkSm : AppColors.shadowSm,
       ),
       child: Column(children: children),
     );
@@ -1116,6 +1145,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     bool showChevron = true,
     Color? titleColor,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -1127,7 +1157,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
+                color: iconColor.withValues(alpha: isDark ? 0.15 : 0.08),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon, color: iconColor, size: 19),
@@ -1139,23 +1169,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 children: [
                   Text(
                     title,
-                    style: TextStyle(
-                      fontSize: 14,
+                    style: AppTextStyles.bodyMd.copyWith(
                       fontWeight: FontWeight.w600,
-                      color:
-                          titleColor ?? Theme.of(context).colorScheme.onSurface,
+                      color: titleColor ?? (isDark ? AppColors.darkText : AppColors.lightText),
                     ),
                   ),
                   if (subtitle.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.45),
+                      style: AppTextStyles.caption.copyWith(
+                        color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
                       ),
                     ),
                   ],
@@ -1166,10 +1190,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 (showChevron && onTap != null
                     ? Icon(Icons.chevron_right_rounded,
                         size: 20,
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.3))
+                        color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary)
                     : const SizedBox.shrink()),
           ],
         ),
@@ -1178,25 +1199,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   Widget _divider(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.only(left: 67),
       child: Divider(
         height: 1,
-        color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
+        color: isDark ? AppColors.darkBorder.withValues(alpha: 0.4) : AppColors.lightBorder.withValues(alpha: 0.5),
       ),
     );
   }
 
   Widget _sectionLabel(BuildContext context, String label) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
       child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-          letterSpacing: 0.3,
+        label.toUpperCase(),
+        style: AppTextStyles.overline.copyWith(
+          color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
         ),
       ),
     );
@@ -1956,10 +1976,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   String _buildExportCsv() {
     final categories = {
+      '': 'Uncategorized',
       for (final category in ref.read(categoriesProvider))
         category.id: category.name,
     };
     final accounts = {
+      '': 'No Account',
       for (final account in ref.read(accountsProvider))
         account.id: account.name,
     };
@@ -1971,7 +1993,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           transaction.date.toIso8601String(),
           transaction.type.name,
           categories[transaction.categoryId] ?? transaction.categoryId,
-          transaction.amount.toStringAsFixed(2),
+          (transaction.amount / 100).toStringAsFixed(2),
           accounts[transaction.accountId] ?? transaction.accountId,
           transaction.note ?? '',
         ];
@@ -1984,10 +2006,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   pw.Document _buildExportPdf() {
     final transactions = ref.read(transactionsProvider);
     final categories = {
+      '': 'Uncategorized',
       for (final category in ref.read(categoriesProvider))
         category.id: category.name,
     };
     final accounts = {
+      '': 'No Account',
       for (final account in ref.read(accountsProvider))
         account.id: account.name,
     };
@@ -1999,8 +2023,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         ? 'Tk '
         : '$rawCurrency ';
 
-    double income = 0;
-    double expense = 0;
+    int income = 0;
+    int expense = 0;
     for (final transaction in transactions) {
       if (transaction.type == TransactionType.income) {
         income += transaction.amount;
@@ -2016,7 +2040,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         DateFormat('dd MMM yyyy').format(transaction.date),
         transaction.type.name,
         categories[transaction.categoryId] ?? transaction.categoryId,
-        '$sign$currency${transaction.amount.toStringAsFixed(2)}',
+        '$sign$currency${(transaction.amount / 100).toStringAsFixed(2)}',
         accounts[transaction.accountId] ?? transaction.accountId,
       ];
     }).toList();
@@ -2038,9 +2062,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           pw.Text(
               'Exported: ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}'),
           pw.SizedBox(height: 12),
-          pw.Text('Income: $currency${income.toStringAsFixed(2)}'),
-          pw.Text('Expense: $currency${expense.toStringAsFixed(2)}'),
-          pw.Text('Net: $currency${(income - expense).toStringAsFixed(2)}'),
+          pw.Text('Income: $currency${(income / 100).toStringAsFixed(2)}'),
+          pw.Text('Expense: $currency${(expense / 100).toStringAsFixed(2)}'),
+          pw.Text('Net: $currency${((income - expense) / 100).toStringAsFixed(2)}'),
           pw.SizedBox(height: 16),
           pw.Text(
             'Recent Transactions',
@@ -2063,6 +2087,88 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
 
     return pdf;
+  }
+
+  Future<void> _handleLocalBackup(BuildContext context) async {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.t('backup_started'))),
+      );
+      await BackupRestoreService().exportBackupFile();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.t('backup_complete'))),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Backup failed: $e')),
+      );
+    }
+  }
+
+  void _confirmLocalRestore(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(context.t('restore_local')),
+        content: Text(
+          _isBangla(context)
+              ? 'আপনার সিলেক্ট করা CashTrack JSON ফাইল থেকে সমস্ত অ্যাকাউন্ট ও লেনদেন রিস্টোর হবে।'
+              : 'Restore all accounts, budgets, and transactions from a CashTrack JSON backup file.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.t('cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _restoreFromLocalFile(context);
+            },
+            child: Text(context.t('restore')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _restoreFromLocalFile(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(content: Text(context.t('restore_data'))),
+    );
+
+    final result = await BackupRestoreService().pickAndRestoreBackup();
+    if (!result.success && result.message == 'No backup file selected') {
+      return;
+    }
+
+    await _reloadAppDataProviders();
+    if (!context.mounted) return;
+
+    if (result.success) {
+      final total = result.restoredCounts.values.fold<int>(0, (sum, count) => sum + count);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            _isBangla(context)
+                ? 'সফলভাবে $total টি রেকর্ড রিস্টোর করা হয়েছে!'
+                : 'Successfully restored $total records from backup!',
+          ),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } else {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(result.message),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   Future<void> _restoreFromCloud(BuildContext context) async {
@@ -2626,6 +2732,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     }
   }
 
+  Future<void> _syncSmsTrackPermission() async {
+    final settings = ref.read(settingsProvider);
+    final smsTrack = settings['smsTrack'] ?? false;
+    if (smsTrack) {
+      final messenger = ScaffoldMessenger.of(context);
+      final disabledMessage = context.t('language') == 'bn'
+          ? 'এসএমএস অটো-ইমপোর্ট অনুমতি না পাওয়ায় এটি বন্ধ করা হয়েছে.'
+          : 'SMS Auto-Import has been disabled as permission was not granted.';
+
+      final isGranted = await SmsService.isPermissionGranted();
+      if (!isGranted && mounted) {
+        await ref.read(settingsProvider.notifier).updateSmsTrack(false);
+        SmsService().stopListening();
+        messenger.showSnackBar(
+          SnackBar(content: Text(disabledMessage)),
+        );
+      }
+    }
+  }
+
   Future<void> _importFromCsv(BuildContext context) async {
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -2730,7 +2856,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Future<void> _applyAccountAndBudget(TransactionModel tx) async {
     final accountNotifier = ref.read(accountsProvider.notifier);
-    final budgetNotifier = ref.read(budgetsProvider.notifier);
     final delta = tx.type == TransactionType.income ? tx.amount : -tx.amount;
     final account = accountNotifier.getAccountById(tx.accountId);
     if (account != null) {
@@ -2738,16 +2863,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         tx.accountId,
         account.balance + delta,
       );
-    }
-
-    if (tx.type == TransactionType.expense) {
-      final budget = budgetNotifier.getBudgetByCategory(tx.categoryId, tx.date);
-      if (budget != null) {
-        await budgetNotifier.updateSpent(
-          budget.id,
-          (budget.spent + tx.amount).clamp(0.0, double.infinity),
-        );
-      }
     }
   }
 
@@ -2778,9 +2893,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     return null;
   }
 
-  double? _parseAmount(String raw) {
+  int? _parseAmount(String raw) {
     final cleaned = raw.replaceAll(RegExp(r'[^0-9\\.-]'), '');
-    return double.tryParse(cleaned);
+    final d = double.tryParse(cleaned);
+    return d != null ? (d * 100).toInt() : null;
   }
 
   DateTime? _parseDate(String raw) {
@@ -2847,5 +2963,60 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       return '\u09F3';
     }
     return rawCurrency;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _syncSmsTrackPermission();
+    }
+  }
+
+
+
+  void _showBackgroundRunningTipsDialog(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          icon: const Icon(
+            Icons.info_outline_rounded,
+            size: 40,
+            color: AppColors.info,
+          ),
+          title: Text(
+            ctx.t('language') == 'bn' ? 'ব্যাকগ্রাউন্ড রানিং টিপস' : 'Background Run Tips',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            ctx.t('background_running_tips'),
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.5,
+              color: isDark ? Colors.grey[300] : Colors.grey[800],
+            ),
+          ),
+          actions: [
+            Center(
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: Text(
+                  ctx.t('language') == 'bn' ? 'ঠিক আছে' : 'OK',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

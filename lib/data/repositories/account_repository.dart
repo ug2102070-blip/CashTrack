@@ -2,6 +2,7 @@ import 'package:hive/hive.dart';
 
 import '../models/account_model.dart';
 import 'hive_box_recovery.dart';
+import 'sync_tombstone_repository.dart';
 import '../../services/auth_service.dart';
 
 class AccountRepository {
@@ -49,7 +50,8 @@ class AccountRepository {
     final userId = _getCurrentUserId();
 
     // Check if the user already has any accounts. If they do, do not re-seed default accounts.
-    final userAccounts = _decodedValues().where((a) => a.userId == userId).toList();
+    final userAccounts =
+        _decodedValues().where((a) => a.userId == userId).toList();
     if (userAccounts.isNotEmpty) {
       return;
     }
@@ -59,7 +61,8 @@ class AccountRepository {
       // Use user-specific key so each user has isolated default accounts
       final userSpecificId =
           userId != null ? '${account.id}_$userId' : account.id;
-      final legacyExisting = userId == null ? null : _decode(box.get(account.id));
+      final legacyExisting =
+          userId == null ? null : _decode(box.get(account.id));
       if (legacyExisting != null &&
           legacyExisting.userId == userId &&
           _decode(box.get(userSpecificId)) == null) {
@@ -138,7 +141,7 @@ class AccountRepository {
     await _box!.put(accountWithUser.id, accountWithUser.toJson());
   }
 
-  Future<void> updateBalance(String accountId, double newBalance) async {
+  Future<void> updateBalance(String accountId, int newBalance) async {
     await init();
     final account = _decode(_box!.get(accountId));
     if (account != null) {
@@ -160,16 +163,16 @@ class AccountRepository {
   Future<void> deleteAccount(String id) async {
     await init();
     await _box!.delete(id);
+    await SyncTombstoneRepository().record(_boxName, id);
   }
 
-  double getTotalBalance() {
+  int getTotalBalance() {
     final userId = _getCurrentUserId();
     // Strictly filter by current user only
     return _dedupeDefaultAccounts(
       _decodedValues().where((a) => a.userId == userId).toList(),
       userId,
-    )
-        .fold<double>(0, (sum, account) => sum + account.balance);
+    ).fold<int>(0, (sum, account) => sum + account.balance);
   }
 
   List<AccountModel> _dedupeDefaultAccounts(

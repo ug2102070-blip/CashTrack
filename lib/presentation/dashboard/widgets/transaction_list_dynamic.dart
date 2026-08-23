@@ -25,7 +25,11 @@ class TransactionListDynamic extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final categories = ref.watch(categoriesProvider);
-    final catMap = {for (final c in categories) c.id: c.name};
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
+    final catMap = {
+      '': isBangla ? 'শ্রেণীহীন' : 'Uncategorized',
+      for (final c in categories) c.id: isBangla ? (c.nameBn.isNotEmpty ? c.nameBn : c.name) : c.name
+    };
     final isDark = Theme.of(context).brightness == Brightness.dark;
     const compact = false;
 

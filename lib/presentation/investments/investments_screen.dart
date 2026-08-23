@@ -156,14 +156,14 @@ class InvestmentsScreen extends ConsumerWidget {
               Text(_tLabel(context, inv.type), style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45))),
             ])),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('$cur${_f(inv.currentValue)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurface)),
+              Text('$cur${_f(inv.currentValue / 100)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurface)),
               Text('${pos ? '+' : ''}${pct.toStringAsFixed(1)}%',
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: pos ? AppColors.success : AppColors.error)),
             ]),
           ]),
           const SizedBox(height: 8),
           Row(children: [
-            Text('${context.t('invested_amount')}: $cur${_f(inv.investedAmount)}',
+            Text('${context.t('invested_amount')}: $cur${_f(inv.investedAmount / 100)}',
                 style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4))),
             const Spacer(),
             Text(DateFormat('dd MMM yy').format(inv.startDate),
@@ -261,12 +261,16 @@ class InvestmentsScreen extends ConsumerWidget {
               ],
               Expanded(child: ElevatedButton(
                 onPressed: () {
-                  final inv = double.tryParse(ic.text.trim()) ?? 0;
-                  final cur = double.tryParse(cc.text.trim()) ?? 0;
+                  final parsedInv = double.tryParse(ic.text.trim());
+                  final inv = parsedInv != null ? (parsedInv * 100).toInt() : 0;
+                  final parsedCur = double.tryParse(cc.text.trim());
+                  final cur = parsedCur != null ? (parsedCur * 100).toInt() : 0;
                   if (nc.text.trim().isEmpty || inv <= 0) return;
                   final now = DateTime.now();
+                  final parsedExpectedReturn = double.tryParse(rc.text.trim());
+                  final expectedReturn = parsedExpectedReturn != null ? (parsedExpectedReturn * 100).toInt() : 0;
                   final m = InvestmentModel(id: ex?.id ?? const Uuid().v4(), name: nc.text.trim(), type: selType,
-                    investedAmount: inv, currentValue: cur > 0 ? cur : inv, expectedReturn: double.tryParse(rc.text.trim()) ?? 0,
+                    investedAmount: inv, currentValue: cur > 0 ? cur : inv, expectedReturn: expectedReturn,
                     startDate: startDate, maturityDate: matDate, note: notec.text.trim().isEmpty ? null : notec.text.trim(),
                     createdAt: ex?.createdAt ?? now, updatedAt: now);
                   if (isEdit) { ref.read(investmentsProvider.notifier).updateInvestment(m); }

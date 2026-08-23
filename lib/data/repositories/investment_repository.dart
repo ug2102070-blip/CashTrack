@@ -2,6 +2,7 @@ import 'package:hive/hive.dart';
 
 import '../models/investment_model.dart';
 import 'hive_box_recovery.dart';
+import 'sync_tombstone_repository.dart';
 
 class InvestmentRepository {
   InvestmentRepository._internal();
@@ -57,7 +58,7 @@ class InvestmentRepository {
     await _box!.put(investment.id, investment.toJson());
   }
 
-  Future<void> updateCurrentValue(String investmentId, double newValue) async {
+  Future<void> updateCurrentValue(String investmentId, int newValue) async {
     await init();
     final investment = _decode(_box!.get(investmentId));
     if (investment != null) {
@@ -73,19 +74,20 @@ class InvestmentRepository {
   Future<void> deleteInvestment(String id) async {
     await init();
     await _box!.delete(id);
+    await SyncTombstoneRepository().record(_boxName, id);
   }
 
-  double getTotalInvested() {
+  int getTotalInvested() {
     return _decodedValues()
-        .fold<double>(0, (sum, inv) => sum + inv.investedAmount);
+        .fold<int>(0, (sum, inv) => sum + inv.investedAmount);
   }
 
-  double getTotalCurrentValue() {
+  int getTotalCurrentValue() {
     return _decodedValues()
-        .fold<double>(0, (sum, inv) => sum + inv.currentValue);
+        .fold<int>(0, (sum, inv) => sum + inv.currentValue);
   }
 
-  double getTotalReturns() {
+  int getTotalReturns() {
     return getTotalCurrentValue() - getTotalInvested();
   }
 
@@ -95,14 +97,11 @@ class InvestmentRepository {
     return ((getTotalCurrentValue() - invested) / invested) * 100;
   }
 
-  Map<InvestmentType, double> getInvestmentsByTypeBreakdown() {
-    final Map<InvestmentType, double> breakdown = {};
-
-    for (final investment in _decodedValues()) {
-      breakdown[investment.type] =
-          (breakdown[investment.type] ?? 0) + investment.currentValue;
+  Map<InvestmentType, int> getInvestmentsByTypeBreakdown() {
+    final breakdown = <InvestmentType, int>{};
+    for (final inv in _decodedValues()) {
+      breakdown[inv.type] = (breakdown[inv.type] ?? 0) + inv.currentValue;
     }
-
     return breakdown;
   }
 

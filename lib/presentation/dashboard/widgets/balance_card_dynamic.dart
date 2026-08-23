@@ -4,7 +4,7 @@ import '../../../core/l10n/app_l10n.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/amount_mask.dart';
 
-class BalanceCardDynamic extends StatelessWidget {
+class BalanceCardDynamic extends StatefulWidget {
   final double totalBalance;
   final double income;
   final double expense;
@@ -21,6 +21,33 @@ class BalanceCardDynamic extends StatelessWidget {
     required this.hideAmounts,
     this.onToggleReveal,
   });
+
+  @override
+  State<BalanceCardDynamic> createState() => _BalanceCardDynamicState();
+}
+
+class _BalanceCardDynamicState extends State<BalanceCardDynamic>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _shimmerCtrl;
+  late Animation<double> _shimmerAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat();
+    _shimmerAnim = Tween<double>(begin: -1.0, end: 2.0).animate(
+      CurvedAnimation(parent: _shimmerCtrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _shimmerCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,6 +103,43 @@ class BalanceCardDynamic extends StatelessWidget {
                 ),
               ),
             ),
+            // Shimmer overlay
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: AnimatedBuilder(
+                  animation: _shimmerAnim,
+                  builder: (context, _) {
+                    return ShaderMask(
+                      shaderCallback: (bounds) {
+                        return LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.white.withValues(alpha: 0.0),
+                            Colors.white.withValues(alpha: 0.03),
+                            Colors.white.withValues(alpha: 0.08),
+                            Colors.white.withValues(alpha: 0.03),
+                            Colors.white.withValues(alpha: 0.0),
+                          ],
+                          stops: [
+                            (_shimmerAnim.value - 0.3).clamp(0.0, 1.0),
+                            (_shimmerAnim.value - 0.1).clamp(0.0, 1.0),
+                            _shimmerAnim.value.clamp(0.0, 1.0),
+                            (_shimmerAnim.value + 0.1).clamp(0.0, 1.0),
+                            (_shimmerAnim.value + 0.3).clamp(0.0, 1.0),
+                          ],
+                        ).createShader(bounds);
+                      },
+                      blendMode: BlendMode.srcATop,
+                      child: Container(
+                        color: Colors.white,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
             // Content
             Padding(
               padding: const EdgeInsets.all(24),
@@ -111,9 +175,9 @@ class BalanceCardDynamic extends StatelessWidget {
                           ),
                         ],
                       ),
-                      if (onToggleReveal != null)
+                      if (widget.onToggleReveal != null)
                         GestureDetector(
-                          onTap: onToggleReveal,
+                          onTap: widget.onToggleReveal,
                           child: Container(
                             padding: const EdgeInsets.all(7),
                             decoration: BoxDecoration(
@@ -121,7 +185,7 @@ class BalanceCardDynamic extends StatelessWidget {
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Icon(
-                              hideAmounts
+                              widget.hideAmounts
                                   ? Icons.visibility_off_rounded
                                   : Icons.visibility_rounded,
                               color: Colors.white.withValues(alpha: 0.8),
@@ -134,24 +198,34 @@ class BalanceCardDynamic extends StatelessWidget {
 
                   const SizedBox(height: 16),
 
-                  // Balance amount
+                  // Balance amount with animated number
                   GestureDetector(
-                    onTap: onToggleReveal,
+                    onTap: widget.onToggleReveal,
                     behavior: HitTestBehavior.translucent,
-                    child: Text(
-                      formatAmount(
-                        currency,
-                        totalBalance,
-                        decimals: 2,
-                        hide: hideAmounts,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween<double>(
+                        begin: 0,
+                        end: widget.hideAmounts ? 0 : widget.totalBalance,
                       ),
-                      style: AppTextStyles.h1.copyWith(
-                        color: Colors.white,
-                        fontSize: 38,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -1,
-                        height: 1.1,
-                      ),
+                      duration: const Duration(milliseconds: 800),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, value, _) {
+                        return Text(
+                          formatAmount(
+                            widget.currency,
+                            widget.hideAmounts ? widget.totalBalance : value,
+                            decimals: 2,
+                            hide: widget.hideAmounts,
+                          ),
+                          style: AppTextStyles.h1.copyWith(
+                            color: Colors.white,
+                            fontSize: 38,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -1,
+                            height: 1.1,
+                          ),
+                        );
+                      },
                     ),
                   ),
 
@@ -171,7 +245,7 @@ class BalanceCardDynamic extends StatelessWidget {
                       Expanded(
                         child: _buildStatItem(
                           label: context.t('income'),
-                          amount: income,
+                          amount: widget.income,
                           icon: Icons.arrow_downward_rounded,
                           iconBg: Colors.white.withValues(alpha: 0.18),
                           amountColor: Colors.greenAccent.shade100,
@@ -185,7 +259,7 @@ class BalanceCardDynamic extends StatelessWidget {
                       Expanded(
                         child: _buildStatItem(
                           label: context.t('expense'),
-                          amount: expense,
+                          amount: widget.expense,
                           icon: Icons.arrow_upward_rounded,
                           iconBg: Colors.white.withValues(alpha: 0.18),
                           amountColor: Colors.red.shade100,
@@ -231,35 +305,48 @@ class BalanceCardDynamic extends StatelessWidget {
               ),
               child: Icon(icon, color: Colors.white, size: 17),
             ),
-          Column(
-            crossAxisAlignment:
-                alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.72),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 0.3,
-                ),
-              ),
-              const SizedBox(height: 2),
-              GestureDetector(
-                onTap: onToggleReveal,
-                behavior: HitTestBehavior.translucent,
-                child: Text(
-                  formatAmount(currency, amount,
-                      decimals: 0, hide: hideAmounts),
+          Flexible(
+            child: Column(
+              crossAxisAlignment:
+                  alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
                   style: TextStyle(
-                    color: amountColor,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.3,
+                    color: Colors.white.withValues(alpha: 0.72),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.3,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 2),
+                GestureDetector(
+                  onTap: widget.onToggleReveal,
+                  behavior: HitTestBehavior.translucent,
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween<double>(
+                      begin: 0,
+                      end: widget.hideAmounts ? 0 : amount,
+                    ),
+                    duration: const Duration(milliseconds: 900),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, _) {
+                      return Text(
+                        formatAmount(widget.currency,
+                            widget.hideAmounts ? amount : value,
+                            decimals: 0, hide: widget.hideAmounts),
+                        style: TextStyle(
+                          color: amountColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.3,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
           if (alignRight)
             Container(

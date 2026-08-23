@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../core/l10n/app_l10n.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../data/models/budget_model.dart';
 import '../../data/models/category_model.dart';
 import '../../data/models/transaction_model.dart';
 import '../../presentation/providers/app_providers.dart';
@@ -839,7 +840,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen>
         .where((b) => b.month.year == now.year && b.month.month == now.month)
         .toList();
     final totalBudget = mBudgets.fold<double>(0, (s, b) => s + b.amount);
-    final totalSpent = mBudgets.fold<double>(0, (s, b) => s + b.spent);
+    final totalSpent = mBudgets.fold<double>(0, (s, b) => s + b.getSpent(txs));
     final totalBal = accounts.fold<double>(0, (s, a) => s + a.balance);
 
     final topExpCat =
@@ -856,13 +857,13 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen>
         'type': typeLabel,
         'amount': '$currency${t.amount.toStringAsFixed(0)}',
         'category': catName,
-        'date': DateFormat('yyyy-MM-dd').format(t.date),
+        'date': DateFormat('yyyy-MM-dd', 'en').format(t.date),
       });
     }).join('\n');
 
     return '''
 ${l10n.t('ai_context_currency', params: {'currency': currency})}
-${l10n.t('ai_context_today', params: {'date': DateFormat('yyyy-MM-dd').format(now)})}
+${l10n.t('ai_context_today', params: {'date': DateFormat('yyyy-MM-dd', 'en').format(now)})}
 
 ${l10n.t('ai_context_this_month', params: {'month': DateFormat('MMMM yyyy').format(now)})}
 ${l10n.t('ai_context_income_line', params: {'amount': '$currency${income.toStringAsFixed(2)}'})}

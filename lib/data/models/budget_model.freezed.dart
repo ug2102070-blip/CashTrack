@@ -25,15 +25,13 @@ mixin _$BudgetModel {
   @HiveField(1)
   String get categoryId => throw _privateConstructorUsedError;
   @HiveField(2)
-  double get amount => throw _privateConstructorUsedError;
+  int get amount => throw _privateConstructorUsedError;
   @HiveField(3)
   DateTime get month => throw _privateConstructorUsedError;
-  @HiveField(4)
-  double get spent => throw _privateConstructorUsedError;
   @HiveField(5)
   bool get rollover => throw _privateConstructorUsedError;
   @HiveField(6)
-  double get rolledAmount => throw _privateConstructorUsedError;
+  int get rolledAmount => throw _privateConstructorUsedError;
   @HiveField(7)
   DateTime? get createdAt => throw _privateConstructorUsedError;
   @HiveField(8)
@@ -54,11 +52,10 @@ abstract class $BudgetModelCopyWith<$Res> {
   $Res call(
       {@HiveField(0) String id,
       @HiveField(1) String categoryId,
-      @HiveField(2) double amount,
+      @HiveField(2) int amount,
       @HiveField(3) DateTime month,
-      @HiveField(4) double spent,
       @HiveField(5) bool rollover,
-      @HiveField(6) double rolledAmount,
+      @HiveField(6) int rolledAmount,
       @HiveField(7) DateTime? createdAt,
       @HiveField(8) DateTime? updatedAt});
 }
@@ -80,7 +77,6 @@ class _$BudgetModelCopyWithImpl<$Res, $Val extends BudgetModel>
     Object? categoryId = null,
     Object? amount = null,
     Object? month = null,
-    Object? spent = null,
     Object? rollover = null,
     Object? rolledAmount = null,
     Object? createdAt = freezed,
@@ -98,15 +94,11 @@ class _$BudgetModelCopyWithImpl<$Res, $Val extends BudgetModel>
       amount: null == amount
           ? _value.amount
           : amount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       month: null == month
           ? _value.month
           : month // ignore: cast_nullable_to_non_nullable
               as DateTime,
-      spent: null == spent
-          ? _value.spent
-          : spent // ignore: cast_nullable_to_non_nullable
-              as double,
       rollover: null == rollover
           ? _value.rollover
           : rollover // ignore: cast_nullable_to_non_nullable
@@ -114,7 +106,7 @@ class _$BudgetModelCopyWithImpl<$Res, $Val extends BudgetModel>
       rolledAmount: null == rolledAmount
           ? _value.rolledAmount
           : rolledAmount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -138,11 +130,10 @@ abstract class _$$BudgetModelImplCopyWith<$Res>
   $Res call(
       {@HiveField(0) String id,
       @HiveField(1) String categoryId,
-      @HiveField(2) double amount,
+      @HiveField(2) int amount,
       @HiveField(3) DateTime month,
-      @HiveField(4) double spent,
       @HiveField(5) bool rollover,
-      @HiveField(6) double rolledAmount,
+      @HiveField(6) int rolledAmount,
       @HiveField(7) DateTime? createdAt,
       @HiveField(8) DateTime? updatedAt});
 }
@@ -162,7 +153,6 @@ class __$$BudgetModelImplCopyWithImpl<$Res>
     Object? categoryId = null,
     Object? amount = null,
     Object? month = null,
-    Object? spent = null,
     Object? rollover = null,
     Object? rolledAmount = null,
     Object? createdAt = freezed,
@@ -180,15 +170,11 @@ class __$$BudgetModelImplCopyWithImpl<$Res>
       amount: null == amount
           ? _value.amount
           : amount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       month: null == month
           ? _value.month
           : month // ignore: cast_nullable_to_non_nullable
               as DateTime,
-      spent: null == spent
-          ? _value.spent
-          : spent // ignore: cast_nullable_to_non_nullable
-              as double,
       rollover: null == rollover
           ? _value.rollover
           : rollover // ignore: cast_nullable_to_non_nullable
@@ -196,7 +182,7 @@ class __$$BudgetModelImplCopyWithImpl<$Res>
       rolledAmount: null == rolledAmount
           ? _value.rolledAmount
           : rolledAmount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -217,7 +203,6 @@ class _$BudgetModelImpl implements _BudgetModel {
       @HiveField(1) required this.categoryId,
       @HiveField(2) required this.amount,
       @HiveField(3) required this.month,
-      @HiveField(4) this.spent = 0,
       @HiveField(5) this.rollover = false,
       @HiveField(6) this.rolledAmount = 0,
       @HiveField(7) this.createdAt,
@@ -234,14 +219,10 @@ class _$BudgetModelImpl implements _BudgetModel {
   final String categoryId;
   @override
   @HiveField(2)
-  final double amount;
+  final int amount;
   @override
   @HiveField(3)
   final DateTime month;
-  @override
-  @JsonKey()
-  @HiveField(4)
-  final double spent;
   @override
   @JsonKey()
   @HiveField(5)
@@ -249,7 +230,7 @@ class _$BudgetModelImpl implements _BudgetModel {
   @override
   @JsonKey()
   @HiveField(6)
-  final double rolledAmount;
+  final int rolledAmount;
   @override
   @HiveField(7)
   final DateTime? createdAt;
@@ -259,7 +240,7 @@ class _$BudgetModelImpl implements _BudgetModel {
 
   @override
   String toString() {
-    return 'BudgetModel(id: $id, categoryId: $categoryId, amount: $amount, month: $month, spent: $spent, rollover: $rollover, rolledAmount: $rolledAmount, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'BudgetModel(id: $id, categoryId: $categoryId, amount: $amount, month: $month, rollover: $rollover, rolledAmount: $rolledAmount, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -272,7 +253,6 @@ class _$BudgetModelImpl implements _BudgetModel {
                 other.categoryId == categoryId) &&
             (identical(other.amount, amount) || other.amount == amount) &&
             (identical(other.month, month) || other.month == month) &&
-            (identical(other.spent, spent) || other.spent == spent) &&
             (identical(other.rollover, rollover) ||
                 other.rollover == rollover) &&
             (identical(other.rolledAmount, rolledAmount) ||
@@ -286,7 +266,7 @@ class _$BudgetModelImpl implements _BudgetModel {
   @JsonKey(ignore: true)
   @override
   int get hashCode => Object.hash(runtimeType, id, categoryId, amount, month,
-      spent, rollover, rolledAmount, createdAt, updatedAt);
+      rollover, rolledAmount, createdAt, updatedAt);
 
   @JsonKey(ignore: true)
   @override
@@ -306,11 +286,10 @@ abstract class _BudgetModel implements BudgetModel {
   const factory _BudgetModel(
       {@HiveField(0) required final String id,
       @HiveField(1) required final String categoryId,
-      @HiveField(2) required final double amount,
+      @HiveField(2) required final int amount,
       @HiveField(3) required final DateTime month,
-      @HiveField(4) final double spent,
       @HiveField(5) final bool rollover,
-      @HiveField(6) final double rolledAmount,
+      @HiveField(6) final int rolledAmount,
       @HiveField(7) final DateTime? createdAt,
       @HiveField(8) final DateTime? updatedAt}) = _$BudgetModelImpl;
 
@@ -325,19 +304,16 @@ abstract class _BudgetModel implements BudgetModel {
   String get categoryId;
   @override
   @HiveField(2)
-  double get amount;
+  int get amount;
   @override
   @HiveField(3)
   DateTime get month;
-  @override
-  @HiveField(4)
-  double get spent;
   @override
   @HiveField(5)
   bool get rollover;
   @override
   @HiveField(6)
-  double get rolledAmount;
+  int get rolledAmount;
   @override
   @HiveField(7)
   DateTime? get createdAt;

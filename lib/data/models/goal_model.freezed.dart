@@ -25,9 +25,9 @@ mixin _$GoalModel {
   @HiveField(1)
   String get name => throw _privateConstructorUsedError;
   @HiveField(2)
-  double get targetAmount => throw _privateConstructorUsedError;
+  int get targetAmount => throw _privateConstructorUsedError;
   @HiveField(3)
-  double get currentAmount => throw _privateConstructorUsedError;
+  int get currentAmount => throw _privateConstructorUsedError;
   @HiveField(4)
   DateTime? get deadline => throw _privateConstructorUsedError;
   @HiveField(5)
@@ -55,8 +55,8 @@ abstract class $GoalModelCopyWith<$Res> {
   $Res call(
       {@HiveField(0) String id,
       @HiveField(1) String name,
-      @HiveField(2) double targetAmount,
-      @HiveField(3) double currentAmount,
+      @HiveField(2) int targetAmount,
+      @HiveField(3) int currentAmount,
       @HiveField(4) DateTime? deadline,
       @HiveField(5) String? icon,
       @HiveField(6) String? colorHex,
@@ -101,11 +101,11 @@ class _$GoalModelCopyWithImpl<$Res, $Val extends GoalModel>
       targetAmount: null == targetAmount
           ? _value.targetAmount
           : targetAmount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       currentAmount: null == currentAmount
           ? _value.currentAmount
           : currentAmount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       deadline: freezed == deadline
           ? _value.deadline
           : deadline // ignore: cast_nullable_to_non_nullable
@@ -145,8 +145,8 @@ abstract class _$$GoalModelImplCopyWith<$Res>
   $Res call(
       {@HiveField(0) String id,
       @HiveField(1) String name,
-      @HiveField(2) double targetAmount,
-      @HiveField(3) double currentAmount,
+      @HiveField(2) int targetAmount,
+      @HiveField(3) int currentAmount,
       @HiveField(4) DateTime? deadline,
       @HiveField(5) String? icon,
       @HiveField(6) String? colorHex,
@@ -189,11 +189,11 @@ class __$$GoalModelImplCopyWithImpl<$Res>
       targetAmount: null == targetAmount
           ? _value.targetAmount
           : targetAmount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       currentAmount: null == currentAmount
           ? _value.currentAmount
           : currentAmount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       deadline: freezed == deadline
           ? _value.deadline
           : deadline // ignore: cast_nullable_to_non_nullable
@@ -248,11 +248,11 @@ class _$GoalModelImpl implements _GoalModel {
   final String name;
   @override
   @HiveField(2)
-  final double targetAmount;
+  final int targetAmount;
   @override
   @JsonKey()
   @HiveField(3)
-  final double currentAmount;
+  final int currentAmount;
   @override
   @HiveField(4)
   final DateTime? deadline;
@@ -335,8 +335,8 @@ abstract class _GoalModel implements GoalModel {
   const factory _GoalModel(
       {@HiveField(0) required final String id,
       @HiveField(1) required final String name,
-      @HiveField(2) required final double targetAmount,
-      @HiveField(3) final double currentAmount,
+      @HiveField(2) required final int targetAmount,
+      @HiveField(3) final int currentAmount,
       @HiveField(4) final DateTime? deadline,
       @HiveField(5) final String? icon,
       @HiveField(6) final String? colorHex,
@@ -355,10 +355,10 @@ abstract class _GoalModel implements GoalModel {
   String get name;
   @override
   @HiveField(2)
-  double get targetAmount;
+  int get targetAmount;
   @override
   @HiveField(3)
-  double get currentAmount;
+  int get currentAmount;
   @override
   @HiveField(4)
   DateTime? get deadline;

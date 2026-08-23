@@ -59,24 +59,31 @@ extension DateTimeExtension on DateTime {
   DateTime get endOfMonth => DateTime(year, month + 1, 0, 23, 59, 59, 999);
 }
 
-// Double Extensions
-extension DoubleExtension on double {
+// Money Extension (Paisa to Currency)
+extension MoneyExtension on int {
   String toCurrency({String symbol = AppConstants.currencySymbol}) {
-    final formatter = NumberFormat('#,##,###.00', 'en_IN');
-    return '$symbol${formatter.format(this)}';
+    final formatter = NumberFormat('#,##,##0.00', 'en_IN');
+    return '$symbol${formatter.format(this / 100)}';
   }
 
   String toCompact() {
-    if (this >= 10000000) {
-      return '${(this / 10000000).toStringAsFixed(1)} কোটি';
-    } else if (this >= 100000) {
-      return '${(this / 100000).toStringAsFixed(1)} লাখ';
-    } else if (this >= 1000) {
-      return '${(this / 1000).toStringAsFixed(1)} হাজার';
+    final doubleValue = this / 100;
+    if (doubleValue >= 10000000) {
+      return '${(doubleValue / 10000000).toStringAsFixed(1)} কোটি';
+    } else if (doubleValue >= 100000) {
+      return '${(doubleValue / 100000).toStringAsFixed(1)} লাখ';
+    } else if (doubleValue >= 1000) {
+      return '${(doubleValue / 1000).toStringAsFixed(1)} হাজার';
     }
-    return toStringAsFixed(0);
+    return doubleValue.toStringAsFixed(0);
   }
 
+  String toPercentage() {
+    return '${(this / 100).toStringAsFixed(1)}%';
+  }
+}
+
+extension DoublePercentageExtension on double {
   String toPercentage() {
     return '${toStringAsFixed(1)}%';
   }

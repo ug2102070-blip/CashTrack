@@ -28,7 +28,7 @@ class SplitExpense with _$SplitExpense {
     @HiveField(0) required String id,
     @HiveField(1) required String groupId,
     @HiveField(2) required String description,
-    @HiveField(3) required double amount,
+    @HiveField(3) required int amount,
     @HiveField(4) required String paidBy,
     @HiveField(5) required List<String> splitAmong,
     @HiveField(6) required DateTime date,
@@ -43,7 +43,7 @@ class SplitExpense with _$SplitExpense {
 class SplitSettlement {
   final String from;
   final String to;
-  final double amount;
+  final int amount;
 
   SplitSettlement({
     required this.from,
@@ -55,15 +55,15 @@ class SplitSettlement {
     List<SplitExpense> expenses,
     List<String> members,
   ) {
-    final balances = <String, double>{};
+    final balances = <String, int>{};
     for (final member in members) {
-      balances[member] = 0.0;
+      balances[member] = 0;
     }
 
     for (final expense in expenses) {
       final share = expense.splitAmong.isEmpty
-          ? 0.0
-          : expense.amount / expense.splitAmong.length;
+          ? 0
+          : (expense.amount / expense.splitAmong.length).round();
       final payer = expense.paidBy;
       balances[payer] = (balances[payer] ?? 0) + expense.amount;
       for (final member in expense.splitAmong) {
@@ -72,12 +72,12 @@ class SplitSettlement {
     }
 
     final debtors = balances.entries
-        .where((entry) => entry.value < -0.01)
+        .where((entry) => entry.value < 0)
         .map((entry) => MapEntry(entry.key, -entry.value))
         .toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final creditors = balances.entries
-        .where((entry) => entry.value > 0.01)
+        .where((entry) => entry.value > 0)
         .map((entry) => MapEntry(entry.key, entry.value))
         .toList()
       ..sort((a, b) => b.value.compareTo(a.value));
@@ -100,8 +100,8 @@ class SplitSettlement {
       creditors[creditorIndex] =
           MapEntry(creditor.key, creditor.value - amount);
 
-      if (debtors[debtorIndex].value <= 0.01) debtorIndex++;
-      if (creditors[creditorIndex].value <= 0.01) creditorIndex++;
+      if (debtors[debtorIndex].value <= 0) debtorIndex++;
+      if (creditors[creditorIndex].value <= 0) creditorIndex++;
     }
 
     return settlements;

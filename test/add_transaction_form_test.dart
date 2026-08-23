@@ -89,8 +89,8 @@ void main() {
       await tester.pump();
 
       // --- Category picker ---
-      // Open the category bottom sheet by tapping the "Select" placeholder.
-      await tester.tap(find.text('Select').first);
+      // Open the category bottom sheet by tapping the "Select" placeholder (the second/last one in the row).
+      await tester.tap(find.text('Select').last);
       await tester.pumpAndSettle();
 
       // The picker is a scrollable ListView inside a bottom sheet.
@@ -109,6 +109,14 @@ void main() {
       await tester.tap(find.text('Food'));
       await tester.pumpAndSettle();
 
+      // --- Account picker ---
+      // Open the account bottom sheet by tapping 'Cash' (already selected by default).
+      await tester.tap(find.text('Cash').first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Cash').last);
+      await tester.pumpAndSettle();
+
       // --- Save transaction ---
       await tester.tap(find.text('Save Transaction'));
       await tester.pump();
@@ -116,7 +124,7 @@ void main() {
 
       final txs = TransactionRepository().getAllTransactions();
       expect(txs.length, 1);
-      expect(txs.first.amount, 10);
+      expect(txs.first.amount, 1000);
       expect(txs.first.categoryId, 'cat_food');
       expect(txs.first.accountId, isNotEmpty);
       // Any default account is valid — multiple accounts have isDefault: true.

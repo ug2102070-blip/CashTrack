@@ -4,6 +4,7 @@ class AppConstants {
   static const String appVersion = '1.0.0';
   static const String appPackage = 'com.cashtrack.app';
 
+
   // Currency
   static const String currencySymbol = '\u09F3';
   static const String currencyCode = 'BDT';

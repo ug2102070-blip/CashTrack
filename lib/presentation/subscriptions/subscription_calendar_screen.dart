@@ -36,7 +36,11 @@ class _SubscriptionCalendarScreenState
   Widget build(BuildContext context) {
     final allTransactions = ref.watch(transactionsProvider);
     final categories = ref.watch(categoriesProvider);
-    final categoryMap = {for (final c in categories) c.id: c.name};
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
+    final categoryMap = {
+      '': isBangla ? 'শ্রেণীহীন' : 'Uncategorized',
+      for (final c in categories) c.id: isBangla ? (c.nameBn.isNotEmpty ? c.nameBn : c.name) : c.name
+    };
     final recurringTransactions = allTransactions
         .where((t) => t.isRecurring && t.recurringType != null)
         .toList();
@@ -52,158 +56,163 @@ class _SubscriptionCalendarScreenState
         title: Text(context.t('subscription_calendar')),
         centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          children: [
-            TableCalendar<TransactionModel>(
-              firstDay: DateTime(2020, 1, 1),
-              lastDay: DateTime(2100, 12, 31),
-              focusedDay: _focusedDay,
-              selectedDayPredicate: (day) => isSameDay(day, selectedDay),
-              eventLoader: (day) => _getEventsForDay(day, events),
-              calendarStyle: CalendarStyle(
-                todayDecoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary,
-                  shape: BoxShape.circle,
-                ),
-                selectedDecoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.secondary,
-                  shape: BoxShape.circle,
-                ),
-                markerDecoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              headerStyle: const HeaderStyle(
-                formatButtonVisible: false,
-                titleCentered: true,
-              ),
-              onDaySelected: (selected, focused) {
-                setState(() {
-                  _selectedDay = selected;
-                  _focusedDay = focused;
-                });
-              },
-              onPageChanged: (focused) {
-                setState(() => _focusedDay = focused);
-              },
-            ),
-            const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                context.t('detected_subscriptions'),
-                style: AppTextStyles.h5.copyWith(fontSize: 16),
-              ),
-            ),
-            const SizedBox(height: 10),
-            if (detectedSubscriptions.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  context.t('no_detected_subscriptions'),
-                  style: AppTextStyles.caption.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.55),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Column(
+            children: [
+              TableCalendar<TransactionModel>(
+                firstDay: DateTime(2020, 1, 1),
+                lastDay: DateTime(2100, 12, 31),
+                focusedDay: _focusedDay,
+                selectedDayPredicate: (day) => isSameDay(day, selectedDay),
+                eventLoader: (day) => _getEventsForDay(day, events),
+                calendarStyle: CalendarStyle(
+                  todayDecoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  selectedDecoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.secondary,
+                    shape: BoxShape.circle,
+                  ),
+                  markerDecoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary,
+                    shape: BoxShape.circle,
                   ),
                 ),
-              )
-            else
-              SizedBox(
-                height: 160,
-                child: ListView.separated(
-                  padding: EdgeInsets.zero,
-                  scrollDirection: Axis.horizontal,
-                  itemCount: detectedSubscriptions.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
-                  itemBuilder: (context, index) {
-                    final item = detectedSubscriptions[index];
-                    return Container(
-                        width: 260,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surface,
-                          borderRadius: BorderRadius.circular(18),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.04),
-                              blurRadius: 14,
-                              offset: const Offset(0, 5),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(item.merchantName,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.body1.copyWith(
-                                    fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 8),
-                            Text(
-                              '${item.amount.toStringAsFixed(2)} \u2022 ${item.frequency}',
-                              style: AppTextStyles.caption,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              '${context.t('subscription_next_expected')}: ${DateFormat('dd MMM yyyy').format(item.nextExpectedDate)}',
-                              style: AppTextStyles.caption.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withValues(alpha: 0.55),
-                              ),
-                            ),
-                            const Spacer(),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton(
-                                    onPressed: () async {
-                                      await _markSubscriptionRecurring(
-                                          context, ref, item);
-                                    },
-                                    child:
-                                        Text(context.t('mark_as_recurring')),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                    );
-                  },
+                headerStyle: const HeaderStyle(
+                  formatButtonVisible: false,
+                  titleCentered: true,
+                ),
+                onDaySelected: (selected, focused) {
+                  setState(() {
+                    _selectedDay = selected;
+                    _focusedDay = focused;
+                  });
+                },
+                onPageChanged: (focused) {
+                  setState(() => _focusedDay = focused);
+                },
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  context.t('detected_subscriptions'),
+                  style: AppTextStyles.h5.copyWith(fontSize: 16),
                 ),
               ),
-            const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                context.t('upcoming_recurring_payments'),
-                style: AppTextStyles.h5.copyWith(fontSize: 16),
+              const SizedBox(height: 10),
+              if (detectedSubscriptions.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    context.t('no_detected_subscriptions'),
+                    style: AppTextStyles.caption.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.55),
+                    ),
+                  ),
+                )
+              else
+                SizedBox(
+                  height: 160,
+                  child: ListView.separated(
+                    padding: EdgeInsets.zero,
+                    scrollDirection: Axis.horizontal,
+                    itemCount: detectedSubscriptions.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final item = detectedSubscriptions[index];
+                      return Container(
+                          width: 260,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surface,
+                            borderRadius: BorderRadius.circular(18),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.04),
+                                blurRadius: 14,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(item.merchantName,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.body1.copyWith(
+                                      fontWeight: FontWeight.w700)),
+                              const SizedBox(height: 8),
+                              Text(
+                                '${item.amount.toStringAsFixed(2)} \u2022 ${item.frequency}',
+                                style: AppTextStyles.caption,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                '${context.t('subscription_next_expected')}: ${DateFormat('dd MMM yyyy').format(item.nextExpectedDate)}',
+                                style: AppTextStyles.caption.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withValues(alpha: 0.55),
+                                ),
+                              ),
+                              const Spacer(),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      onPressed: () async {
+                                        await _markSubscriptionRecurring(
+                                            context, ref, item);
+                                      },
+                                      child:
+                                          Text(context.t('mark_as_recurring')),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  context.t('upcoming_recurring_payments'),
+                  style: AppTextStyles.h5.copyWith(fontSize: 16),
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: selectedEvents.isEmpty
-                  ? Center(
-                      child: Text(
-                        context.t('recurring_payments_no_data'),
-                        style: AppTextStyles.body2.copyWith(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.45),
+              const SizedBox(height: 10),
+              selectedEvents.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                        child: Text(
+                          context.t('recurring_payments_no_data'),
+                          style: AppTextStyles.body2.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.45),
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
                       ),
                     )
                   : ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
                       itemCount: selectedEvents.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 10),
                       itemBuilder: (context, index) {
@@ -271,8 +280,8 @@ class _SubscriptionCalendarScreenState
                         );
                       },
                     ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

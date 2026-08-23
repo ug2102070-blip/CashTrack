@@ -218,14 +218,15 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> with SingleTickerProv
               child: Text(context.t('cancel'))),
           ElevatedButton(
             onPressed: isSaving ? null : () async {
-              final add = double.tryParse(controller.text.trim()) ?? 0;
+              final parsedDouble = double.tryParse(controller.text.trim());
+              final add = parsedDouble != null ? (parsedDouble * 100).toInt() : 0;
               if (add <= 0) {
                 ScaffoldMessenger.of(ctx).showSnackBar(
                     SnackBar(content: Text(context.t('enter_valid_amount'))));
                 return;
               }
               setState(() => isSaving = true);
-              final newPaid = (debt.paidAmount + add).clamp(0.0, debt.amount);
+              final newPaid = (debt.paidAmount + add).clamp(0, debt.amount);
               final isFullyPaid = newPaid >= debt.amount;
 
               // Update trust score: on-time = +5, late = -10
@@ -393,17 +394,19 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> with SingleTickerProv
                 builder: (context, setBtn) => ElevatedButton(
                   onPressed: isSaving ? null : () async {
                     final person = personC.text.trim();
-                    final amount = double.tryParse(amountC.text.trim());
+                    final parsedDouble = double.tryParse(amountC.text.trim());
+                    final amount = parsedDouble != null ? (parsedDouble * 100).toInt() : null;
                     if (person.isEmpty || amount == null || amount <= 0) {
                       ScaffoldMessenger.of(sheetCtx).showSnackBar(
                           SnackBar(content: Text(context.t('enter_valid_person_amount'))));
                       return;
                     }
                     setBtn(() => isSaving = true);
-                    final clampedPaid = existing == null ? 0.0
-                        : existing.paidAmount.clamp(0.0, amount);
+                    final clampedPaid = existing == null ? 0
+                        : existing.paidAmount.clamp(0, amount);
                     final isSettled = clampedPaid >= amount;
-                    final penalty = double.tryParse(penaltyC.text.trim()) ?? 0;
+                    final penaltyDouble = double.tryParse(penaltyC.text.trim());
+                    final penalty = penaltyDouble ?? 0.0;
 
                     final debt = (existing ?? DebtModel(
                       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -527,9 +530,10 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> with SingleTickerProv
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.t('cancel'))),
           ElevatedButton(
             onPressed: () async {
-              final add = double.tryParse(controller.text.trim()) ?? 0;
+              final parsedDouble = double.tryParse(controller.text.trim());
+              final add = parsedDouble != null ? (parsedDouble * 100).toInt() : 0;
               if (add <= 0) return;
-              final penaltyMsg = '${context.t('penalty_added')}: $currency${add.toStringAsFixed(0)}';
+              final penaltyMsg = '${context.t('penalty_added')}: $currency${(add / 100).toStringAsFixed(0)}';
               final updated = debt.copyWith(
                 penaltyAmount: debt.penaltyAmount + add,
                 updatedAt: DateTime.now(),

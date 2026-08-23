@@ -1,4 +1,4 @@
-﻿import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive/hive.dart';
 
 part 'user_model.freezed.dart';
@@ -13,7 +13,7 @@ class UserModel with _$UserModel {
     @HiveField(2) String? displayName,
     @HiveField(3) String? photoURL,
     @HiveField(4) UserSettings? settings,
-    @HiveField(5) UserStats? stats,
+
     @HiveField(6) DateTime? createdAt,
     @HiveField(7) DateTime? updatedAt,
   }) = _UserModel;
@@ -41,18 +41,4 @@ class UserSettings with _$UserSettings {
       _$UserSettingsFromJson(json);
 }
 
-@freezed
-@HiveType(typeId: 16)
-class UserStats with _$UserStats {
-  const factory UserStats({
-    @HiveField(0) @Default(0) double totalBalance,
-    @HiveField(1) @Default(0) double totalIncome,
-    @HiveField(2) @Default(0) double totalExpense,
-    @HiveField(3) @Default(0) int transactionCount,
-    @HiveField(4) DateTime? lastSyncTime,
-  }) = _UserStats;
-
-  factory UserStats.fromJson(Map<String, dynamic> json) =>
-      _$UserStatsFromJson(json);
-}
 

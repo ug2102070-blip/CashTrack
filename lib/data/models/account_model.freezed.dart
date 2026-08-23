@@ -29,7 +29,7 @@ mixin _$AccountModel {
   @HiveField(3)
   AccountType get type => throw _privateConstructorUsedError;
   @HiveField(4)
-  double get balance => throw _privateConstructorUsedError;
+  int get balance => throw _privateConstructorUsedError;
   @HiveField(5)
   String? get icon => throw _privateConstructorUsedError;
   @HiveField(6)
@@ -44,7 +44,8 @@ mixin _$AccountModel {
   String? get nickname =>
       throw _privateConstructorUsedError; // User-editable custom name (e.g. "Salary Account")
   @HiveField(11)
-  String? get userId => throw _privateConstructorUsedError;
+  String? get userId =>
+      throw _privateConstructorUsedError; // Track which user owns this account
   @HiveField(12)
   String? get accountNumber => throw _privateConstructorUsedError;
   @HiveField(13)
@@ -54,7 +55,7 @@ mixin _$AccountModel {
   @HiveField(15)
   String? get cardholderName => throw _privateConstructorUsedError;
   @HiveField(16)
-  double? get creditLimit => throw _privateConstructorUsedError;
+  int? get creditLimit => throw _privateConstructorUsedError;
   @HiveField(17)
   int? get billingDay => throw _privateConstructorUsedError;
   @HiveField(18)
@@ -77,7 +78,7 @@ abstract class $AccountModelCopyWith<$Res> {
       @HiveField(1) String name,
       @HiveField(2) String nameBn,
       @HiveField(3) AccountType type,
-      @HiveField(4) double balance,
+      @HiveField(4) int balance,
       @HiveField(5) String? icon,
       @HiveField(6) String? colorHex,
       @HiveField(7) bool isDefault,
@@ -89,7 +90,7 @@ abstract class $AccountModelCopyWith<$Res> {
       @HiveField(13) String? cardType,
       @HiveField(14) String? cardIssuer,
       @HiveField(15) String? cardholderName,
-      @HiveField(16) double? creditLimit,
+      @HiveField(16) int? creditLimit,
       @HiveField(17) int? billingDay,
       @HiveField(18) int? paymentDueDay});
 }
@@ -147,7 +148,7 @@ class _$AccountModelCopyWithImpl<$Res, $Val extends AccountModel>
       balance: null == balance
           ? _value.balance
           : balance // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       icon: freezed == icon
           ? _value.icon
           : icon // ignore: cast_nullable_to_non_nullable
@@ -195,7 +196,7 @@ class _$AccountModelCopyWithImpl<$Res, $Val extends AccountModel>
       creditLimit: freezed == creditLimit
           ? _value.creditLimit
           : creditLimit // ignore: cast_nullable_to_non_nullable
-              as double?,
+              as int?,
       billingDay: freezed == billingDay
           ? _value.billingDay
           : billingDay // ignore: cast_nullable_to_non_nullable
@@ -221,7 +222,7 @@ abstract class _$$AccountModelImplCopyWith<$Res>
       @HiveField(1) String name,
       @HiveField(2) String nameBn,
       @HiveField(3) AccountType type,
-      @HiveField(4) double balance,
+      @HiveField(4) int balance,
       @HiveField(5) String? icon,
       @HiveField(6) String? colorHex,
       @HiveField(7) bool isDefault,
@@ -233,7 +234,7 @@ abstract class _$$AccountModelImplCopyWith<$Res>
       @HiveField(13) String? cardType,
       @HiveField(14) String? cardIssuer,
       @HiveField(15) String? cardholderName,
-      @HiveField(16) double? creditLimit,
+      @HiveField(16) int? creditLimit,
       @HiveField(17) int? billingDay,
       @HiveField(18) int? paymentDueDay});
 }
@@ -289,7 +290,7 @@ class __$$AccountModelImplCopyWithImpl<$Res>
       balance: null == balance
           ? _value.balance
           : balance // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       icon: freezed == icon
           ? _value.icon
           : icon // ignore: cast_nullable_to_non_nullable
@@ -337,7 +338,7 @@ class __$$AccountModelImplCopyWithImpl<$Res>
       creditLimit: freezed == creditLimit
           ? _value.creditLimit
           : creditLimit // ignore: cast_nullable_to_non_nullable
-              as double?,
+              as int?,
       billingDay: freezed == billingDay
           ? _value.billingDay
           : billingDay // ignore: cast_nullable_to_non_nullable
@@ -391,7 +392,7 @@ class _$AccountModelImpl implements _AccountModel {
   final AccountType type;
   @override
   @HiveField(4)
-  final double balance;
+  final int balance;
   @override
   @HiveField(5)
   final String? icon;
@@ -415,6 +416,7 @@ class _$AccountModelImpl implements _AccountModel {
   @override
   @HiveField(11)
   final String? userId;
+// Track which user owns this account
   @override
   @HiveField(12)
   final String? accountNumber;
@@ -429,7 +431,7 @@ class _$AccountModelImpl implements _AccountModel {
   final String? cardholderName;
   @override
   @HiveField(16)
-  final double? creditLimit;
+  final int? creditLimit;
   @override
   @HiveField(17)
   final int? billingDay;
@@ -482,27 +484,28 @@ class _$AccountModelImpl implements _AccountModel {
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode => Object.hash(
-      runtimeType,
-      id,
-      name,
-      nameBn,
-      type,
-      balance,
-      icon,
-      colorHex,
-      isDefault,
-      createdAt,
-      updatedAt,
-      nickname,
-      userId,
-      accountNumber,
-      cardType,
-      cardIssuer,
-      cardholderName,
-      creditLimit,
-      billingDay,
-      paymentDueDay);
+  int get hashCode => Object.hashAll([
+        runtimeType,
+        id,
+        name,
+        nameBn,
+        type,
+        balance,
+        icon,
+        colorHex,
+        isDefault,
+        createdAt,
+        updatedAt,
+        nickname,
+        userId,
+        accountNumber,
+        cardType,
+        cardIssuer,
+        cardholderName,
+        creditLimit,
+        billingDay,
+        paymentDueDay
+      ]);
 
   @JsonKey(ignore: true)
   @override
@@ -524,7 +527,7 @@ abstract class _AccountModel implements AccountModel {
       @HiveField(1) required final String name,
       @HiveField(2) required final String nameBn,
       @HiveField(3) required final AccountType type,
-      @HiveField(4) required final double balance,
+      @HiveField(4) required final int balance,
       @HiveField(5) final String? icon,
       @HiveField(6) final String? colorHex,
       @HiveField(7) final bool isDefault,
@@ -536,7 +539,7 @@ abstract class _AccountModel implements AccountModel {
       @HiveField(13) final String? cardType,
       @HiveField(14) final String? cardIssuer,
       @HiveField(15) final String? cardholderName,
-      @HiveField(16) final double? creditLimit,
+      @HiveField(16) final int? creditLimit,
       @HiveField(17) final int? billingDay,
       @HiveField(18) final int? paymentDueDay}) = _$AccountModelImpl;
 
@@ -557,7 +560,7 @@ abstract class _AccountModel implements AccountModel {
   AccountType get type;
   @override
   @HiveField(4)
-  double get balance;
+  int get balance;
   @override
   @HiveField(5)
   String? get icon;
@@ -579,7 +582,7 @@ abstract class _AccountModel implements AccountModel {
   @override // User-editable custom name (e.g. "Salary Account")
   @HiveField(11)
   String? get userId;
-  @override
+  @override // Track which user owns this account
   @HiveField(12)
   String? get accountNumber;
   @override
@@ -593,7 +596,7 @@ abstract class _AccountModel implements AccountModel {
   String? get cardholderName;
   @override
   @HiveField(16)
-  double? get creditLimit;
+  int? get creditLimit;
   @override
   @HiveField(17)
   int? get billingDay;

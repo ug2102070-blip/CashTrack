@@ -1,6 +1,6 @@
 class DetectedSubscription {
   final String merchantName;
-  final double amount;
+  final int amount;
   final String frequency;
   final DateTime lastDate;
   final DateTime nextExpectedDate;

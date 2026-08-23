@@ -22,7 +22,6 @@ class UserModelAdapter extends TypeAdapter<UserModel> {
       displayName: fields[2] as String?,
       photoURL: fields[3] as String?,
       settings: fields[4] as UserSettings?,
-      stats: fields[5] as UserStats?,
       createdAt: fields[6] as DateTime?,
       updatedAt: fields[7] as DateTime?,
     );
@@ -31,7 +30,7 @@ class UserModelAdapter extends TypeAdapter<UserModel> {
   @override
   void write(BinaryWriter writer, UserModel obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -42,8 +41,6 @@ class UserModelAdapter extends TypeAdapter<UserModel> {
       ..write(obj.photoURL)
       ..writeByte(4)
       ..write(obj.settings)
-      ..writeByte(5)
-      ..write(obj.stats)
       ..writeByte(6)
       ..write(obj.createdAt)
       ..writeByte(7)
@@ -119,52 +116,6 @@ class UserSettingsAdapter extends TypeAdapter<UserSettings> {
           typeId == other.typeId;
 }
 
-class UserStatsAdapter extends TypeAdapter<UserStats> {
-  @override
-  final int typeId = 16;
-
-  @override
-  UserStats read(BinaryReader reader) {
-    final numOfFields = reader.readByte();
-    final fields = <int, dynamic>{
-      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
-    };
-    return UserStats(
-      totalBalance: fields[0] as double,
-      totalIncome: fields[1] as double,
-      totalExpense: fields[2] as double,
-      transactionCount: fields[3] as int,
-      lastSyncTime: fields[4] as DateTime?,
-    );
-  }
-
-  @override
-  void write(BinaryWriter writer, UserStats obj) {
-    writer
-      ..writeByte(5)
-      ..writeByte(0)
-      ..write(obj.totalBalance)
-      ..writeByte(1)
-      ..write(obj.totalIncome)
-      ..writeByte(2)
-      ..write(obj.totalExpense)
-      ..writeByte(3)
-      ..write(obj.transactionCount)
-      ..writeByte(4)
-      ..write(obj.lastSyncTime);
-  }
-
-  @override
-  int get hashCode => typeId.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UserStatsAdapter &&
-          runtimeType == other.runtimeType &&
-          typeId == other.typeId;
-}
-
 // **************************************************************************
 // JsonSerializableGenerator
 // **************************************************************************
@@ -178,9 +129,6 @@ _$UserModelImpl _$$UserModelImplFromJson(Map<String, dynamic> json) =>
       settings: json['settings'] == null
           ? null
           : UserSettings.fromJson(json['settings'] as Map<String, dynamic>),
-      stats: json['stats'] == null
-          ? null
-          : UserStats.fromJson(json['stats'] as Map<String, dynamic>),
       createdAt: json['createdAt'] == null
           ? null
           : DateTime.parse(json['createdAt'] as String),
@@ -196,7 +144,6 @@ Map<String, dynamic> _$$UserModelImplToJson(_$UserModelImpl instance) =>
       'displayName': instance.displayName,
       'photoURL': instance.photoURL,
       'settings': instance.settings,
-      'stats': instance.stats,
       'createdAt': instance.createdAt?.toIso8601String(),
       'updatedAt': instance.updatedAt?.toIso8601String(),
     };
@@ -225,24 +172,4 @@ Map<String, dynamic> _$$UserSettingsImplToJson(_$UserSettingsImpl instance) =>
       'smsAutoImport': instance.smsAutoImport,
       'biometricEnabled': instance.biometricEnabled,
       'notificationsEnabled': instance.notificationsEnabled,
-    };
-
-_$UserStatsImpl _$$UserStatsImplFromJson(Map<String, dynamic> json) =>
-    _$UserStatsImpl(
-      totalBalance: (json['totalBalance'] as num?)?.toDouble() ?? 0,
-      totalIncome: (json['totalIncome'] as num?)?.toDouble() ?? 0,
-      totalExpense: (json['totalExpense'] as num?)?.toDouble() ?? 0,
-      transactionCount: (json['transactionCount'] as num?)?.toInt() ?? 0,
-      lastSyncTime: json['lastSyncTime'] == null
-          ? null
-          : DateTime.parse(json['lastSyncTime'] as String),
-    );
-
-Map<String, dynamic> _$$UserStatsImplToJson(_$UserStatsImpl instance) =>
-    <String, dynamic>{
-      'totalBalance': instance.totalBalance,
-      'totalIncome': instance.totalIncome,
-      'totalExpense': instance.totalExpense,
-      'transactionCount': instance.transactionCount,
-      'lastSyncTime': instance.lastSyncTime?.toIso8601String(),
     };

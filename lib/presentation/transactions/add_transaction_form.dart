@@ -17,6 +17,7 @@ import '../../data/models/account_model.dart';
 import '../../data/models/category_model.dart';
 import '../../data/models/transaction_model.dart';
 import '../../services/duplicate_detection_service.dart';
+import '../../services/local_receipt_service.dart';
 import '../providers/app_providers.dart';
 import 'calculator_bottom_sheet.dart';
 
@@ -48,14 +49,13 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
   // Controllers
   final _noteController = TextEditingController();
   final _noteFocusNode = FocusNode();
-  final _imagePicker = ImagePicker();
   final _speech = stt.SpeechToText();
 
   // Form state
   TransactionType _type = TransactionType.expense;
   DateTime _date = DateTime.now();
   String? _categoryId;
-  String? _accountId;
+  String? _accountId = 'acc_cash';
   String _amountStr = '';
   String? _receiptPath;
   bool _isRecurring = false;
@@ -78,8 +78,8 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
 
   bool get _isEditMode => widget.transactionToEdit != null;
 
-  double get _amount =>
-      _amountStr.isEmpty ? 0 : (double.tryParse(_amountStr) ?? 0);
+  int get _amount =>
+      _amountStr.isEmpty ? 0 : ((double.tryParse(_amountStr) ?? 0) * 100).toInt();
 
   // Colors
   Color get _expColor => const Color(0xFFEF4444);
@@ -144,8 +144,9 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
       _accountId = t.accountId;
       _isRecurring = t.isRecurring;
       _recurringType = t.recurringType;
-      _amountStr = t.amount.toStringAsFixed(
-          t.amount == t.amount.truncate() ? 0 : 2);
+      final amountInDouble = t.amount / 100;
+      _amountStr = amountInDouble.toStringAsFixed(
+          amountInDouble == amountInDouble.truncate() ? 0 : 2);
       _noteController.text = t.note ?? '';
       _receiptPath = t.receiptUrl;
     }
@@ -223,6 +224,8 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
     bool voiceEnabled,
     bool receiptEnabled,
   ) {
+    final isWide = MediaQuery.of(context).size.width > 700;
+
     return Container(
       margin: const EdgeInsets.only(top: 8, bottom: 16),
       decoration: BoxDecoration(
@@ -248,21 +251,60 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+        padding: EdgeInsets.fromLTRB(20, 8, 20, isWide ? 24 : 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildTopBar(context, isDark, voiceEnabled, receiptEnabled),
             const SizedBox(height: 14),
-            _buildTypeSwitcher(isDark),
-            const SizedBox(height: 20),
-            _buildAmountDisplay(isDark),
-            const SizedBox(height: 16),
-            _buildFieldsSection(context, cats, accounts, isDark),
-            const SizedBox(height: 14),
-            _buildNumpad(isDark),
-            const SizedBox(height: 16),
-            _buildSaveButton(),
+            if (isWide)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Left column: type switcher, amount display, and details
+                  Expanded(
+                    flex: 11,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildTypeSwitcher(isDark),
+                        const SizedBox(height: 16),
+                        _buildAmountDisplay(isDark),
+                        const SizedBox(height: 16),
+                        _buildFieldsSection(context, cats, accounts, isDark),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  // Right column: dial pad and save button
+                  Expanded(
+                    flex: 9,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildNumpad(isDark),
+                        const SizedBox(height: 20),
+                        _buildSaveButton(),
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            else
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildTypeSwitcher(isDark),
+                  const SizedBox(height: 20),
+                  _buildAmountDisplay(isDark),
+                  const SizedBox(height: 16),
+                  _buildFieldsSection(context, cats, accounts, isDark),
+                  const SizedBox(height: 14),
+                  _buildNumpad(isDark),
+                  const SizedBox(height: 16),
+                  _buildSaveButton(),
+                ],
+              ),
             if (widget.embedded) const SizedBox(height: 4),
           ],
         ),
@@ -722,15 +764,15 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
             color: isFilled
                 ? _activeColor.withValues(alpha: isDark ? 0.10 : 0.05)
                 : (isDark
-                    ? Colors.white.withValues(alpha: 0.04)
-                    : const Color(0xFFF8F9FA)),
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : const Color(0xFFF1F3F5)),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: isFilled
                   ? _activeColor.withValues(alpha: 0.22)
                   : (isDark
-                      ? Colors.white.withValues(alpha: 0.06)
-                      : Colors.black.withValues(alpha: 0.05)),
+                      ? Colors.white.withValues(alpha: 0.16)
+                      : Colors.black.withValues(alpha: 0.15)),
             ),
             boxShadow: [
               BoxShadow(
@@ -751,8 +793,8 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                   color: isFilled
                       ? _activeColor.withValues(alpha: isDark ? 0.18 : 0.12)
                       : (isDark
-                          ? Colors.white.withValues(alpha: 0.06)
-                          : Colors.black.withValues(alpha: 0.04)),
+                          ? Colors.white.withValues(alpha: 0.10)
+                          : Colors.black.withValues(alpha: 0.07)),
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: Icon(
@@ -763,7 +805,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                       : Theme.of(context)
                           .colorScheme
                           .onSurface
-                          .withValues(alpha: 0.35),
+                          .withValues(alpha: 0.5),
                 ),
               ),
               const SizedBox(width: 8),
@@ -783,7 +825,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                             : Theme.of(context)
                                 .colorScheme
                                 .onSurface
-                                .withValues(alpha: 0.35),
+                                .withValues(alpha: 0.5),
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -799,7 +841,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                             : Theme.of(context)
                                 .colorScheme
                                 .onSurface
-                                .withValues(alpha: 0.28),
+                                .withValues(alpha: 0.45),
                       ),
                     ),
                   ],
@@ -841,8 +883,8 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                   : isFilled
                       ? _activeColor.withValues(alpha: isDark ? 0.06 : 0.03)
                       : (isDark
-                          ? Colors.white.withValues(alpha: 0.04)
-                          : const Color(0xFFF8F9FA)),
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : const Color(0xFFF1F3F5)),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: hasFocus
@@ -850,8 +892,8 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                     : isFilled
                         ? _activeColor.withValues(alpha: 0.22)
                         : (isDark
-                            ? Colors.white.withValues(alpha: 0.06)
-                            : Colors.black.withValues(alpha: 0.05)),
+                            ? Colors.white.withValues(alpha: 0.16)
+                            : Colors.black.withValues(alpha: 0.15)),
                 width: hasFocus ? 1.5 : 1.0,
               ),
               boxShadow: [
@@ -880,8 +922,8 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                     color: (hasFocus || isFilled)
                         ? _activeColor.withValues(alpha: isDark ? 0.18 : 0.12)
                         : (isDark
-                            ? Colors.white.withValues(alpha: 0.06)
-                            : Colors.black.withValues(alpha: 0.04)),
+                            ? Colors.white.withValues(alpha: 0.10)
+                            : Colors.black.withValues(alpha: 0.07)),
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: Icon(
@@ -892,7 +934,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                         : Theme.of(context)
                             .colorScheme
                             .onSurface
-                            .withValues(alpha: 0.35),
+                            .withValues(alpha: 0.5),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -912,7 +954,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                               : Theme.of(context)
                                   .colorScheme
                                   .onSurface
-                                  .withValues(alpha: 0.35),
+                                  .withValues(alpha: 0.5),
                         ),
                       ),
                       const SizedBox(height: 1),
@@ -929,6 +971,9 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                         ),
                         decoration: InputDecoration(
                           border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          disabledBorder: InputBorder.none,
                           isDense: true,
                           contentPadding: const EdgeInsets.symmetric(vertical: 2),
                           hintText: context.t('add_note'),
@@ -1065,6 +1110,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
 
   Widget _buildNumpad(bool isDark) {
     const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
+    final isWide = MediaQuery.of(context).size.width > 700;
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
@@ -1082,7 +1128,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         crossAxisCount: 3,
-        childAspectRatio: 1.8,
+        childAspectRatio: isWide ? 2.2 : 1.8,
         mainAxisSpacing: 6,
         crossAxisSpacing: 6,
         children: keys.map((k) => _numpadKey(k, isDark)).toList(),
@@ -1093,65 +1139,65 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
   Widget _numpadKey(String key, bool isDark) {
     final isBack = key == '⌫';
     final isDot = key == '.';
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _onNumpadTap(key),
-        onLongPress: isBack
-            ? () {
-                HapticFeedback.mediumImpact();
-                setState(() => _amountStr = '');
-              }
-            : null,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 80),
+      decoration: BoxDecoration(
+        color: isBack
+            ? _activeColor.withValues(alpha: isDark ? 0.18 : 0.10)
+            : isDot
+                ? (isDark
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : Colors.black.withValues(alpha: 0.04))
+                : (isDark
+                    ? Colors.white.withValues(alpha: 0.09)
+                    : Colors.white),
         borderRadius: BorderRadius.circular(14),
-        splashColor: _activeColor.withValues(alpha: 0.08),
-        highlightColor: _activeColor.withValues(alpha: 0.04),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 80),
-          decoration: BoxDecoration(
-            color: isBack
-                ? _activeColor.withValues(alpha: isDark ? 0.1 : 0.07)
-                : isDot
-                    ? (isDark
-                        ? Colors.white.withValues(alpha: 0.04)
-                        : Colors.black.withValues(alpha: 0.03))
-                    : (isDark
-                        ? Colors.white.withValues(alpha: 0.07)
-                        : Colors.white),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.05)
-                  : Colors.black.withValues(alpha: 0.04),
-            ),
-            boxShadow: (!isBack && !isDot)
-                ? [
-                    BoxShadow(
-                      color: Colors.black
-                          .withValues(alpha: isDark ? 0.1 : 0.03),
-                      blurRadius: 3,
-                      offset: const Offset(0, 1),
-                    ),
-                  ]
-                : null,
+        border: Border.all(
+          color: isBack
+              ? _activeColor.withValues(alpha: isDark ? 0.25 : 0.18)
+              : isDark
+                  ? Colors.white.withValues(alpha: 0.09)
+                  : Colors.black.withValues(alpha: 0.08),
+          width: 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 1.5),
           ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _onNumpadTap(key),
+          onLongPress: isBack
+              ? () {
+                  HapticFeedback.mediumImpact();
+                  setState(() => _amountStr = '');
+                }
+              : null,
+          borderRadius: BorderRadius.circular(14),
+          splashColor: _activeColor.withValues(alpha: 0.16),
+          highlightColor: _activeColor.withValues(alpha: 0.08),
           child: Center(
             child: isBack
                 ? Icon(
                     Icons.backspace_rounded,
                     size: 23,
-                    color: _activeColor.withValues(alpha: 0.75),
+                    color: _activeColor,
                   )
                 : Text(
                     key,
                     style: TextStyle(
                       fontSize: 25,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700, // Bold numbers for premium readability
                       color: isDot
                           ? Theme.of(context)
                               .colorScheme
                               .onSurface
-                              .withValues(alpha: 0.55)
+                              .withValues(alpha: 0.65)
                           : Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
@@ -1193,8 +1239,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
   // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildSaveButton() {
-    final ready =
-        _amount > 0 && _categoryId != null && _accountId != null;
+    final ready = _amount > 0;
 
     return Material(
       color: Colors.transparent,
@@ -1314,6 +1359,10 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
 
     _showPickerSheet(
       title: context.t('select_category'),
+      onActionTap: () {
+        Navigator.pop(context);
+        context.push('/categories');
+      },
       builder: (sheetSetState) {
         final sorted = [...cats]..sort((a, b) {
             final aP = localPinned.contains(a.id);
@@ -1321,51 +1370,62 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
             if (aP != bP) return aP ? -1 : 1;
             return a.name.compareTo(b.name);
           });
-        return sorted
-            .map(
-              (c) => _pickerListTile(
-                context: context,
-                leading: Text(c.icon,
-                    style: const TextStyle(fontSize: 24)),
-                title: c.name,
-                subtitle: c.nameBn.isNotEmpty ? c.nameBn : null,
-                selected: _categoryId == c.id,
-                onTap: () {
-                  setState(() => _categoryId = c.id);
-                  Navigator.pop(context);
-                },
-                trailing: IconButton(
-                  icon: Icon(
-                    localPinned.contains(c.id)
-                        ? Icons.push_pin_rounded
-                        : Icons.push_pin_outlined,
-                    size: 18,
-                    color: localPinned.contains(c.id)
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.4),
-                  ),
-                  splashRadius: 20,
-                  tooltip: localPinned.contains(c.id)
-                      ? context.t('unpin_category')
-                      : context.t('pin_category'),
-                  onPressed: () async {
-                    if (localPinned.contains(c.id)) {
-                      localPinned.remove(c.id);
-                    } else {
-                      localPinned.add(c.id);
-                    }
-                    await ref
-                        .read(settingsProvider.notifier)
-                        .updatePinnedCategories(localPinned.toList());
-                    sheetSetState(() {});
-                  },
+        final isBn = Localizations.localeOf(context).languageCode == 'bn';
+        return [
+          _pickerListTile(
+            context: context,
+            leading: const Text('🏷️', style: TextStyle(fontSize: 24)),
+            title: isBn ? 'শ্রেণীহীন' : 'Uncategorized',
+            selected: _categoryId == null || _categoryId!.isEmpty,
+            onTap: () {
+              setState(() => _categoryId = null);
+              Navigator.pop(context);
+            },
+          ),
+          ...sorted.map(
+            (c) => _pickerListTile(
+              context: context,
+              leading: Text(c.icon,
+                  style: const TextStyle(fontSize: 24)),
+              title: c.name,
+              subtitle: c.nameBn.isNotEmpty ? c.nameBn : null,
+              selected: _categoryId == c.id,
+              onTap: () {
+                setState(() => _categoryId = c.id);
+                Navigator.pop(context);
+              },
+              trailing: IconButton(
+                icon: Icon(
+                  localPinned.contains(c.id)
+                      ? Icons.push_pin_rounded
+                      : Icons.push_pin_outlined,
+                  size: 18,
+                  color: localPinned.contains(c.id)
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.4),
                 ),
+                splashRadius: 20,
+                tooltip: localPinned.contains(c.id)
+                    ? context.t('unpin_category')
+                    : context.t('pin_category'),
+                onPressed: () async {
+                  if (localPinned.contains(c.id)) {
+                    localPinned.remove(c.id);
+                  } else {
+                    localPinned.add(c.id);
+                  }
+                  await ref
+                      .read(settingsProvider.notifier)
+                      .updatePinnedCategories(localPinned.toList());
+                  sheetSetState(() {});
+                },
               ),
-            )
-            .toList();
+            ),
+          )
+        ];
       },
     );
   }
@@ -1400,8 +1460,13 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
 
     _showPickerSheet(
       title: context.t('select_account'),
-      builder: (sheetSetState) => sorted
-          .map(
+      onActionTap: () {
+        Navigator.pop(context);
+        context.push('/accounts');
+      },
+      builder: (sheetSetState) {
+        return [
+          ...sorted.map(
             (a) => _pickerListTile(
               context: context,
               leading: Text(a.icon ?? '💳',
@@ -1448,13 +1513,15 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
               ),
             ),
           )
-          .toList(),
+        ];
+      },
     );
   }
 
   void _showPickerSheet({
     required String title,
     required List<Widget> Function(StateSetter) builder,
+    VoidCallback? onActionTap,
   }) {
     showModalBottomSheet(
       context: context,
@@ -1486,10 +1553,22 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  title,
-                  style: AppTextStyles.h5
-                      .copyWith(fontWeight: FontWeight.w800),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTextStyles.h5
+                          .copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    if (onActionTap != null)
+                      IconButton(
+                        icon: const Icon(Icons.add_rounded, size: 28),
+                        color: Theme.of(context).colorScheme.primary,
+                        onPressed: onActionTap,
+                        tooltip: 'Manage Options',
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 Expanded(
@@ -1919,12 +1998,12 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
     );
 
     if (source == null || !mounted) return;
-    final image = await _imagePicker.pickImage(
+    final savedPath = await LocalReceiptService().pickAndSaveReceipt(
       source: source,
       imageQuality: 80,
     );
-    if (image != null && mounted) {
-      setState(() => _receiptPath = image.path);
+    if (savedPath != null && mounted) {
+      setState(() => _receiptPath = savedPath);
     }
   }
 
@@ -1935,16 +2014,6 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
   Future<void> _submit() async {
     if (_isSaving || _amount <= 0) return;
 
-    if (_categoryId == null) {
-      _showSnack(context.t('select_category_prompt'));
-      return;
-    }
-
-    if (_accountId == null) {
-      _showSnack(context.t('select_account_prompt'));
-      return;
-    }
-
     final note = _noteController.text.trim();
     final prev = _isPendingSms ? null : widget.transactionToEdit;
     final now = DateTime.now();
@@ -1953,8 +2022,8 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
         ? widget.transactionToEdit!.copyWith(
             amount: _amount,
             type: _type,
-            categoryId: _categoryId!,
-            accountId: _accountId!,
+            categoryId: _categoryId ?? '',
+            accountId: _accountId ?? '',
             date: _date,
             note: note.isEmpty ? null : note,
             receiptUrl: _receiptPath,
@@ -1966,8 +2035,8 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
             id: now.millisecondsSinceEpoch.toString(),
             amount: _amount,
             type: _type,
-            categoryId: _categoryId!,
-            accountId: _accountId!,
+            categoryId: _categoryId ?? '',
+            accountId: _accountId ?? '',
             date: _date,
             note: note.isEmpty ? null : note,
             receiptUrl: _receiptPath,
@@ -2002,7 +2071,6 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
       }
 
       await _syncBalance(prev, tx);
-      await _syncBudget(prev, tx);
 
       if (!mounted) return;
       HapticFeedback.mediumImpact();
@@ -2160,7 +2228,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
   // Balance & Budget Sync
   // ─────────────────────────────────────────────────────────────────────────
 
-  double _signedAmount(TransactionType type, double amount) =>
+  int _signedAmount(TransactionType type, int amount) =>
       type == TransactionType.income ? amount : -amount;
 
   Future<void> _syncBalance(
@@ -2196,22 +2264,6 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
     }
   }
 
-  Future<void> _syncBudget(
-      TransactionModel? prev, TransactionModel curr) async {
-    final notifier = ref.read(budgetsProvider.notifier);
-
-    Future<void> apply(TransactionModel tx, double delta) async {
-      if (tx.type != TransactionType.expense) return;
-      final budget =
-          notifier.getBudgetByCategory(tx.categoryId, tx.date);
-      if (budget == null) return;
-      await notifier.updateSpent(
-          budget.id, (budget.spent + delta).clamp(0.0, double.infinity));
-    }
-
-    if (prev != null) await apply(prev, -prev.amount);
-    await apply(curr, curr.amount);
-  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // Default Data Helpers
@@ -2254,7 +2306,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
     if (context.canPop()) {
       context.pop();
     } else {
-      context.go('/');
+      context.go('/dashboard');
     }
   }
 

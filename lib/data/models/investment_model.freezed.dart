@@ -27,11 +27,11 @@ mixin _$InvestmentModel {
   @HiveField(2)
   InvestmentType get type => throw _privateConstructorUsedError;
   @HiveField(3)
-  double get investedAmount => throw _privateConstructorUsedError;
+  int get investedAmount => throw _privateConstructorUsedError;
   @HiveField(4)
-  double get currentValue => throw _privateConstructorUsedError;
+  int get currentValue => throw _privateConstructorUsedError;
   @HiveField(5)
-  double get expectedReturn => throw _privateConstructorUsedError;
+  int get expectedReturn => throw _privateConstructorUsedError;
   @HiveField(6)
   DateTime get startDate => throw _privateConstructorUsedError;
   @HiveField(7)
@@ -59,9 +59,9 @@ abstract class $InvestmentModelCopyWith<$Res> {
       {@HiveField(0) String id,
       @HiveField(1) String name,
       @HiveField(2) InvestmentType type,
-      @HiveField(3) double investedAmount,
-      @HiveField(4) double currentValue,
-      @HiveField(5) double expectedReturn,
+      @HiveField(3) int investedAmount,
+      @HiveField(4) int currentValue,
+      @HiveField(5) int expectedReturn,
       @HiveField(6) DateTime startDate,
       @HiveField(7) DateTime? maturityDate,
       @HiveField(8) String? note,
@@ -110,15 +110,15 @@ class _$InvestmentModelCopyWithImpl<$Res, $Val extends InvestmentModel>
       investedAmount: null == investedAmount
           ? _value.investedAmount
           : investedAmount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       currentValue: null == currentValue
           ? _value.currentValue
           : currentValue // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       expectedReturn: null == expectedReturn
           ? _value.expectedReturn
           : expectedReturn // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       startDate: null == startDate
           ? _value.startDate
           : startDate // ignore: cast_nullable_to_non_nullable
@@ -155,9 +155,9 @@ abstract class _$$InvestmentModelImplCopyWith<$Res>
       {@HiveField(0) String id,
       @HiveField(1) String name,
       @HiveField(2) InvestmentType type,
-      @HiveField(3) double investedAmount,
-      @HiveField(4) double currentValue,
-      @HiveField(5) double expectedReturn,
+      @HiveField(3) int investedAmount,
+      @HiveField(4) int currentValue,
+      @HiveField(5) int expectedReturn,
       @HiveField(6) DateTime startDate,
       @HiveField(7) DateTime? maturityDate,
       @HiveField(8) String? note,
@@ -204,15 +204,15 @@ class __$$InvestmentModelImplCopyWithImpl<$Res>
       investedAmount: null == investedAmount
           ? _value.investedAmount
           : investedAmount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       currentValue: null == currentValue
           ? _value.currentValue
           : currentValue // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       expectedReturn: null == expectedReturn
           ? _value.expectedReturn
           : expectedReturn // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       startDate: null == startDate
           ? _value.startDate
           : startDate // ignore: cast_nullable_to_non_nullable
@@ -267,14 +267,14 @@ class _$InvestmentModelImpl implements _InvestmentModel {
   final InvestmentType type;
   @override
   @HiveField(3)
-  final double investedAmount;
+  final int investedAmount;
   @override
   @HiveField(4)
-  final double currentValue;
+  final int currentValue;
   @override
   @JsonKey()
   @HiveField(5)
-  final double expectedReturn;
+  final int expectedReturn;
   @override
   @HiveField(6)
   final DateTime startDate;
@@ -357,9 +357,9 @@ abstract class _InvestmentModel implements InvestmentModel {
       {@HiveField(0) required final String id,
       @HiveField(1) required final String name,
       @HiveField(2) required final InvestmentType type,
-      @HiveField(3) required final double investedAmount,
-      @HiveField(4) required final double currentValue,
-      @HiveField(5) final double expectedReturn,
+      @HiveField(3) required final int investedAmount,
+      @HiveField(4) required final int currentValue,
+      @HiveField(5) final int expectedReturn,
       @HiveField(6) required final DateTime startDate,
       @HiveField(7) final DateTime? maturityDate,
       @HiveField(8) final String? note,
@@ -380,13 +380,13 @@ abstract class _InvestmentModel implements InvestmentModel {
   InvestmentType get type;
   @override
   @HiveField(3)
-  double get investedAmount;
+  int get investedAmount;
   @override
   @HiveField(4)
-  double get currentValue;
+  int get currentValue;
   @override
   @HiveField(5)
-  double get expectedReturn;
+  int get expectedReturn;
   @override
   @HiveField(6)
   DateTime get startDate;

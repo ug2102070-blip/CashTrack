@@ -1,7 +1,7 @@
 // lib/core/utils/amount_mask.dart
 String formatAmount(
   String currency,
-  double amount, {
+  num amountInPaisa, {
   int decimals = 0,
   bool hide = false,
 }) {
@@ -9,19 +9,19 @@ String formatAmount(
     // Keep currency visible so users know denomination; mask digits only (production-style).
     return '$currency\u00A0••••••';
   }
-  return '$currency${amount.toStringAsFixed(decimals)}';
+  return '$currency${(amountInPaisa / 100).toStringAsFixed(decimals)}';
 }
 
 String formatSignedAmount(
   String currency,
-  double amount, {
+  num amountInPaisa, {
   int decimals = 0,
   bool hide = false,
 }) {
   if (hide) {
-    final sign = amount < 0 ? '-' : '+';
+    final sign = amountInPaisa < 0 ? '-' : '+';
     return '$sign $currency\u00A0••••••';
   }
-  final sign = amount < 0 ? '-' : '+';
-  return '$sign $currency${amount.abs().toStringAsFixed(decimals)}';
+  final sign = amountInPaisa < 0 ? '-' : '+';
+  return '$sign $currency${(amountInPaisa.abs() / 100).toStringAsFixed(decimals)}';
 }

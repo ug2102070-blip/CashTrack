@@ -2,6 +2,7 @@ import 'package:hive/hive.dart';
 
 import '../models/split_expense_model.dart';
 import 'hive_box_recovery.dart';
+import 'sync_tombstone_repository.dart';
 
 class SplitExpenseRepository {
   SplitExpenseRepository._internal();
@@ -70,9 +71,11 @@ class SplitExpenseRepository {
   Future<void> deleteGroup(String id) async {
     await init();
     await _groupBox!.delete(id);
+    await SyncTombstoneRepository().record(_groupBoxName, id);
     final expenses = getExpensesByGroup(id);
     for (final expense in expenses) {
       await _expenseBox!.delete(expense.id);
+      await SyncTombstoneRepository().record(_expenseBoxName, expense.id);
     }
   }
 
@@ -95,6 +98,7 @@ class SplitExpenseRepository {
   Future<void> deleteExpense(String id) async {
     await init();
     await _expenseBox!.delete(id);
+    await SyncTombstoneRepository().record(_expenseBoxName, id);
   }
 
   List<SplitGroup> _decodedGroupValues() {

@@ -5,10 +5,12 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/l10n/app_l10n.dart';
+import '../../core/utils/amount_mask.dart';
 import '../../data/models/budget_model.dart';
 import '../../data/models/category_model.dart';
 import '../../data/models/transaction_model.dart';
 import '../providers/app_providers.dart';
+import '../dashboard/widgets/daily_budget_tracker_card.dart';
 
 class BudgetScreen extends ConsumerStatefulWidget {
   const BudgetScreen({super.key});
@@ -43,10 +45,11 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
 
     _scheduleRolloverIfNeeded(enabled: rolloverEnabled);
 
+    final allTransactions = ref.watch(transactionsProvider);
     final monthBudgets = _getMonthBudgets(budgets);
     final totalBudget =
         monthBudgets.fold<double>(0, (sum, b) => sum + b.amount);
-    final totalSpent = monthBudgets.fold<double>(0, (sum, b) => sum + b.spent);
+    final totalSpent = monthBudgets.fold<double>(0, (sum, b) => sum + b.getSpent(allTransactions));
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -63,25 +66,29 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           ),
         ],
       ),
-      body: Column(
+      body: ListView(
         children: [
           _buildMonthSelector(),
           _buildOverviewCard(totalBudget, totalSpent, currency),
-          _buildRolloverToggle(context, rolloverEnabled),
-          Expanded(
-            child: monthBudgets.isEmpty
-                ? _buildEmptyState(
-                    currency: currency,
-                    categories: budgetCategories,
-                    rolloverEnabled: rolloverEnabled,
-                  )
-                : _buildBudgetList(
-                    budgets: monthBudgets,
-                    currency: currency,
-                    categories: budgetCategories,
-                    rolloverEnabled: rolloverEnabled,
-                  ),
+          DailyBudgetTrackerCard(
+            settings: settings,
+            currency: currency,
           ),
+          _buildDailyBudgetSettings(context, settings, currency),
+          _buildRolloverToggle(context, rolloverEnabled),
+          monthBudgets.isEmpty
+              ? _buildEmptyState(
+                  currency: currency,
+                  categories: budgetCategories,
+                  rolloverEnabled: rolloverEnabled,
+                )
+              : _buildBudgetList(
+                  budgets: monthBudgets,
+                  currency: currency,
+                  categories: budgetCategories,
+                  rolloverEnabled: rolloverEnabled,
+                  transactions: allTransactions,
+                ),
         ],
       ),
     );
@@ -254,8 +261,11 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     required String currency,
     required List<CategoryModel> categories,
     required bool rolloverEnabled,
+    required List<TransactionModel> transactions,
   }) {
     return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.only(bottom: 100),
       itemCount: budgets.length,
       itemBuilder: (context, index) {
@@ -265,6 +275,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           currency: currency,
           categories: categories,
           rolloverEnabled: rolloverEnabled,
+          transactions: transactions,
         );
       },
     );
@@ -275,9 +286,10 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     required String currency,
     required List<CategoryModel> categories,
     required bool rolloverEnabled,
+    required List<TransactionModel> transactions,
   }) {
-    final percentage = budget.amount > 0 ? (budget.spent / budget.amount) : 0.0;
-    final remaining = budget.amount - budget.spent;
+    final percentage = budget.amount > 0 ? (budget.getSpent(transactions) / budget.amount) : 0.0;
+    final remaining = budget.amount - budget.getSpent(transactions);
     final isOverBudget = remaining < 0;
 
     CategoryModel? category;
@@ -444,7 +456,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '$currency${budget.spent.toStringAsFixed(0)} ${context.t('spent')}',
+                '$currency${budget.getSpent(transactions).toStringAsFixed(0)} ${context.t('spent')}',
                 style: AppTextStyles.caption.copyWith(
                   color: Theme.of(context)
                       .colorScheme
@@ -500,60 +512,53 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     required List<CategoryModel> categories,
     required bool rolloverEnabled,
   }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(height: constraints.maxHeight * 0.12),
-                Icon(
-                  Icons.account_balance_wallet_outlined,
-                  size: 80,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.3),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  context.t('no_budgets_month'),
-                  style: AppTextStyles.h5.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.6),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  context.t('create_first_budget'),
-                  style: AppTextStyles.caption.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.6),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: () => _showBudgetDialog(
-                    currency: currency,
-                    categories: categories,
-                    rolloverEnabled: rolloverEnabled,
-                  ),
-                  icon: const Icon(Icons.add),
-                  label: Text(context.t('create_budget')),
-                ),
-                const SizedBox(height: 140),
-              ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 40),
+          Icon(
+            Icons.account_balance_wallet_outlined,
+            size: 80,
+            color: Theme.of(context)
+                .colorScheme
+                .onSurface
+                .withValues(alpha: 0.3),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            context.t('no_budgets_month'),
+            style: AppTextStyles.h5.copyWith(
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.6),
             ),
           ),
-        );
-      },
+          const SizedBox(height: 8),
+          Text(
+            context.t('create_first_budget'),
+            style: AppTextStyles.caption.copyWith(
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.6),
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => _showBudgetDialog(
+              currency: currency,
+              categories: categories,
+              rolloverEnabled: rolloverEnabled,
+            ),
+            icon: const Icon(Icons.add),
+            label: Text(context.t('create_budget')),
+          ),
+          const SizedBox(height: 100),
+        ],
+      ),
     );
   }
 
@@ -682,8 +687,8 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              final amount = double.tryParse(amountController.text.trim());
-              if (selectedCategoryId == null || amount == null || amount <= 0) {
+              final parsedAmount = double.tryParse(amountController.text.trim());
+              if (selectedCategoryId == null || parsedAmount == null || parsedAmount <= 0) {
                 ScaffoldMessenger.of(dialogContext).showSnackBar(
                   SnackBar(
                       content: Text(context.t('enter_valid_category_amount'))),
@@ -691,12 +696,14 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                 return;
               }
 
+              final amountInPaisa = (parsedAmount * 100).toInt();
+
               final budgetsNotifier = ref.read(budgetsProvider.notifier);
               if (existing == null) {
                 final budget = BudgetModel(
                   id: 'budget_${DateTime.now().millisecondsSinceEpoch}',
                   categoryId: selectedCategoryId!,
-                  amount: amount,
+                  amount: amountInPaisa,
                   month: DateTime(_selectedMonth.year, _selectedMonth.month, 1),
                   rollover: rolloverEnabled,
                   createdAt: DateTime.now(),
@@ -705,7 +712,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                 await budgetsNotifier.addBudget(budget);
               } else {
                 final updated = existing.copyWith(
-                  amount: amount,
+                  amount: amountInPaisa,
                   month: DateTime(_selectedMonth.year, _selectedMonth.month, 1),
                   rollover: rolloverEnabled,
                   updatedAt: DateTime.now(),
@@ -798,6 +805,176 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         : (enabled
             ? 'Unused monthly budget carries into the next month'
             : 'Each month starts fresh without carrying leftovers');
+  }
+
+  Widget _buildDailyBudgetSettings(BuildContext context, Map<String, dynamic> settings, String currency) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primary = Theme.of(context).colorScheme.primary;
+    final dailyLimit = (settings['dailyBudgetLimit'] as num?)?.toInt() ?? 0;
+    final dailyRollover = settings['dailyBudgetRollover'] as bool? ?? false;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : Colors.black.withValues(alpha: 0.04),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.today_rounded,
+                  color: Color(0xFFF59E0B),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Daily Global Budget',
+                      style: AppTextStyles.body1.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'Set a daily expense limit',
+                      style: AppTextStyles.caption.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: () => _showDailyBudgetDialog(context, settings, currency),
+                style: TextButton.styleFrom(
+                  backgroundColor: primary.withValues(alpha: 0.1),
+                  foregroundColor: primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(
+                  dailyLimit > 0 ? formatAmount(currency, dailyLimit, decimals: 0) : 'Set',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          if (dailyLimit > 0) ...[
+            const SizedBox(height: 12),
+            const Divider(height: 1, thickness: 1),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Auto Carry Forward Unused Budget',
+                        style: AppTextStyles.body2.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Unspent amount adds to subsequent days',
+                        style: AppTextStyles.caption.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: dailyRollover,
+                  activeThumbColor: primary,
+                  onChanged: (val) async {
+                    await ref.read(settingsProvider.notifier).update('dailyBudgetRollover', val);
+                    if (val) {
+                      await ref.read(settingsProvider.notifier).update('dailyBudgetStartDate', DateTime.now().millisecondsSinceEpoch);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showDailyBudgetDialog(BuildContext context, Map<String, dynamic> settings, String currency) async {
+    final dailyLimit = (settings['dailyBudgetLimit'] as num?)?.toInt() ?? 0;
+    final controller = TextEditingController(text: dailyLimit > 0 ? (dailyLimit / 100).toStringAsFixed(0) : '');
+    
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Set Daily Budget Limit'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Enter the maximum amount you want to spend per day across all categories.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: 'Daily Amount',
+                prefixText: '$currency ',
+                border: const OutlineInputBorder(),
+              ),
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(context.t('cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final parsed = double.tryParse(controller.text.trim()) ?? 0.0;
+              final amount = (parsed * 100).toInt();
+              await ref.read(settingsProvider.notifier).update('dailyBudgetLimit', amount);
+              if (amount > 0 && settings['dailyBudgetStartDate'] == null) {
+                await ref.read(settingsProvider.notifier).update('dailyBudgetStartDate', DateTime.now().millisecondsSinceEpoch);
+              }
+              if (!dialogContext.mounted) return;
+              Navigator.pop(dialogContext);
+            },
+            child: Text(context.t('save')),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildRolloverToggle(BuildContext context, bool rolloverEnabled) {

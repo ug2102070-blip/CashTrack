@@ -39,7 +39,6 @@ void main() {
     final allAccounts = repo.getAllAccounts();
 
     expect(allAccounts.any((a) => a.id == 'acc_cash'), isTrue);
-    expect(allAccounts.any((a) => a.id == 'acc_online'), isTrue);
     expect(allAccounts.any((a) => a.id == 'custom_acc'), isTrue);
   });
 

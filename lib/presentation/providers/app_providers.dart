@@ -25,19 +25,12 @@ import '../../data/models/investment_model.dart';
 import '../../data/models/split_expense_model.dart';
 import '../../core/utils/logger.dart';
 import '../../services/auth_service.dart';
+import 'auth_providers.dart';
 
 // ==========================================
 // 0. AUTH STATE PROVIDER
 // Login/logout হলে সব providers নতুন userId দিয়ে reload হবে
 // ==========================================
-
-/// Streams the current user UID (null = logged out).
-/// All data providers watch this so they reload on auth change.
-final authUserIdProvider = StreamProvider<String?>((ref) {
-  return AuthService().authStateChanges.map((_) {
-    return AuthService().currentUser?.uid;
-  });
-});
 
 // ==========================================
 // 1. REPOSITORY PROVIDERS
@@ -270,7 +263,7 @@ class AccountsNotifier extends StateNotifier<List<AccountModel>> {
     loadAccounts();
   }
 
-  Future<void> updateBalance(String accountId, double newBalance) async {
+  Future<void> updateBalance(String accountId, int newBalance) async {
     await _repository.init();
     await _repository.updateBalance(accountId, newBalance);
     loadAccounts();
@@ -282,7 +275,7 @@ class AccountsNotifier extends StateNotifier<List<AccountModel>> {
     loadAccounts();
   }
 
-  double getTotalBalance() {
+  int getTotalBalance() {
     return _repository.getTotalBalance();
   }
 }
@@ -339,16 +332,18 @@ class SplitGroupsNotifier extends StateNotifier<List<SplitGroup>> {
 final budgetsProvider =
     StateNotifierProvider<BudgetsNotifier, List<BudgetModel>>((ref) {
   final repository = ref.watch(budgetRepositoryProvider);
-  return BudgetsNotifier(repository);
+  final transactionRepo = ref.watch(transactionRepositoryProvider);
+  return BudgetsNotifier(repository, transactionRepo);
 });
 
 /// BudgetsNotifier
 class BudgetsNotifier extends StateNotifier<List<BudgetModel>> {
   final BudgetRepository _repository;
+  final TransactionRepository _transactionRepository;
   String? _lastRolloverMonthKey;
   String? _rolloverInFlightForMonth;
 
-  BudgetsNotifier(this._repository) : super([]) {
+  BudgetsNotifier(this._repository, this._transactionRepository) : super([]) {
     _bootstrap();
   }
 
@@ -388,10 +383,6 @@ class BudgetsNotifier extends StateNotifier<List<BudgetModel>> {
     loadBudgets();
   }
 
-  Future<void> updateSpent(String budgetId, double newSpent) async {
-    await _repository.updateSpent(budgetId, newSpent);
-    loadBudgets();
-  }
 
   Future<void> deleteBudget(String id) async {
     await _repository.deleteBudget(id);
@@ -436,9 +427,17 @@ class BudgetsNotifier extends StateNotifier<List<BudgetModel>> {
     var updatedCount = 0;
 
     final previousBudgets = getBudgetsForMonth(previousMonth);
+    final previousStart = DateTime(previousMonth.year, previousMonth.month, 1);
+    final previousEnd = DateTime(previousMonth.year, previousMonth.month + 1, 0, 23, 59, 59);
+    final previousTransactions = _transactionRepository.getTransactionsByDateRange(previousStart, previousEnd);
+
     for (final previous in previousBudgets) {
+      final spent = previousTransactions
+          .where((t) => t.type == TransactionType.expense && t.categoryId == previous.categoryId)
+          .fold<int>(0, (sum, t) => sum + t.amount);
+
       final carryAmount =
-          (previous.amount - previous.spent).clamp(0.0, previous.amount);
+          (previous.amount - spent).clamp(0, previous.amount);
       if (carryAmount <= 0) continue;
 
       final current = getBudgetByCategory(previous.categoryId, month);
@@ -449,7 +448,6 @@ class BudgetsNotifier extends StateNotifier<List<BudgetModel>> {
             categoryId: previous.categoryId,
             amount: carryAmount,
             month: month,
-            spent: 0,
             rollover: true,
             rolledAmount: carryAmount,
             createdAt: now,
@@ -463,7 +461,7 @@ class BudgetsNotifier extends StateNotifier<List<BudgetModel>> {
       final delta = carryAmount - current.rolledAmount;
       if (delta == 0) continue;
 
-      final nextAmount = (current.amount + delta).clamp(0.0, double.infinity);
+      final nextAmount = (current.amount + delta).toInt().clamp(0, 9223372036854775807);
       await updateBudget(
         current.copyWith(
           amount: nextAmount,
@@ -537,7 +535,7 @@ class GoalsNotifier extends StateNotifier<List<GoalModel>> {
     loadGoals();
   }
 
-  Future<void> updateProgress(String goalId, double newAmount) async {
+  Future<void> updateProgress(String goalId, int newAmount) async {
     await _repository.init();
     await _repository.updateProgress(goalId, newAmount);
     loadGoals();
@@ -604,7 +602,7 @@ class DebtsNotifier extends StateNotifier<List<DebtModel>> {
     loadDebts();
   }
 
-  Future<void> updatePayment(String debtId, double paidAmount) async {
+  Future<void> updatePayment(String debtId, int paidAmount) async {
     await _repository.init();
     await _repository.updatePayment(debtId, paidAmount);
     loadDebts();
@@ -663,7 +661,7 @@ class AssetsNotifier extends StateNotifier<List<AssetModel>> {
     loadAssets();
   }
 
-  Future<void> updateValue(String assetId, double newValue) async {
+  Future<void> updateValue(String assetId, int newValue) async {
     await _repository.init();
     await _repository.updateValue(assetId, newValue);
     loadAssets();
@@ -675,7 +673,7 @@ class AssetsNotifier extends StateNotifier<List<AssetModel>> {
     loadAssets();
   }
 
-  double getTotalAssetValue() {
+  int getTotalAssetValue() {
     return _repository.getTotalAssetValue();
   }
 }
@@ -726,7 +724,7 @@ class InvestmentsNotifier extends StateNotifier<List<InvestmentModel>> {
     loadInvestments();
   }
 
-  Future<void> updateValue(String investmentId, double newValue) async {
+  Future<void> updateValue(String investmentId, int newValue) async {
     await _repository.init();
     await _repository.updateCurrentValue(investmentId, newValue);
     loadInvestments();
@@ -738,15 +736,15 @@ class InvestmentsNotifier extends StateNotifier<List<InvestmentModel>> {
     loadInvestments();
   }
 
-  double getTotalInvested() {
+  int getTotalInvested() {
     return _repository.getTotalInvested();
   }
 
-  double getTotalCurrentValue() {
+  int getTotalCurrentValue() {
     return _repository.getTotalCurrentValue();
   }
 
-  double getTotalReturns() {
+  int getTotalReturns() {
     return _repository.getTotalReturns();
   }
 
@@ -769,12 +767,12 @@ final dashboardSummaryProvider = Provider<DashboardSummary>((ref) {
 
   final totalIncome = transactions
       .where((t) => t.type == TransactionType.income)
-      .fold<double>(0, (sum, t) => sum + t.amount);
+      .fold<int>(0, (sum, t) => sum + t.amount);
   final totalExpense = transactions
       .where((t) => t.type == TransactionType.expense)
-      .fold<double>(0, (sum, t) => sum + t.amount);
+      .fold<int>(0, (sum, t) => sum + t.amount);
   final totalBalance =
-      accounts.fold<double>(0, (sum, account) => sum + account.balance);
+      accounts.fold<int>(0, (sum, account) => sum + account.balance);
 
   return DashboardSummary(
     totalBalance: totalBalance,
@@ -786,9 +784,9 @@ final dashboardSummaryProvider = Provider<DashboardSummary>((ref) {
 
 /// Dashboard Summary Data Class
 class DashboardSummary {
-  final double totalBalance;
-  final double totalIncome;
-  final double totalExpense;
+  final int totalBalance;
+  final int totalIncome;
+  final int totalExpense;
   final List<TransactionModel> recentTransactions;
 
   DashboardSummary({
@@ -799,7 +797,7 @@ class DashboardSummary {
   });
 
   /// Net savings this month
-  double get netSavings => totalIncome - totalExpense;
+  int get netSavings => totalIncome - totalExpense;
 
   /// Expense percentage
   double get expensePercentage {
@@ -846,8 +844,8 @@ final monthlyAnalyticsProvider =
 class MonthlyAnalytics {
   final DateTime month;
   final List<TransactionModel> transactions;
-  final double totalIncome;
-  final double totalExpense;
+  final int totalIncome;
+  final int totalExpense;
 
   MonthlyAnalytics({
     required this.month,
@@ -856,11 +854,11 @@ class MonthlyAnalytics {
     required this.totalExpense,
   });
 
-  double get netSavings => totalIncome - totalExpense;
+  int get netSavings => totalIncome - totalExpense;
 
   /// Group transactions by category
-  Map<String, double> getCategoryBreakdown(TransactionType type) {
-    final Map<String, double> breakdown = {};
+  Map<String, int> getCategoryBreakdown(TransactionType type) {
+    final Map<String, int> breakdown = {};
 
     for (var transaction in transactions.where((t) => t.type == type)) {
       breakdown[transaction.categoryId] =
@@ -886,7 +884,8 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
           'darkMode': false,
           'currency': '\u09F3',
           'smsTrack': false,
-          'smsMode': 'ask',
+          'smsPermissionDialogShown': false,
+          'smsMode': 'daily_summary',
           'language': 'en',
           'accentColor': 0xFF2D7A7B,
           'compactMode': false,
@@ -905,6 +904,9 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
           'receiptImageAttachment': false,
           'defaultRecurring': false,
           'defaultRecurringType': 'monthly',
+          'dailyBudgetLimit': 0,
+          'dailyBudgetRollover': false,
+          'dailyBudgetStartDate': null,
           'pinnedAccounts': <String>[],
           'pinnedCategories': <String>[],
         }) {
@@ -927,9 +929,11 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
     state = {
       'darkMode': box.get('darkMode', defaultValue: false),
       'currency': _normalizeCurrency(
-          box.get('currency', defaultValue: '\u09F3') as String?),
+          box.get('currency', defaultValue: '৳') as String?),
       'smsTrack': box.get('smsTrack', defaultValue: false),
-      'smsMode': box.get('smsMode', defaultValue: 'ask'),
+      'smsPermissionDialogShown':
+          box.get('smsPermissionDialogShown', defaultValue: false),
+      'smsMode': box.get('smsMode', defaultValue: 'daily_summary'),
       'language': box.get('language', defaultValue: 'en'),
       'accentColor': box.get('accentColor', defaultValue: 0xFF2D7A7B),
       'compactMode': box.get('compactMode', defaultValue: false),
@@ -950,7 +954,15 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
       'receiptImageAttachment':
           box.get('receiptImageAttachment', defaultValue: false),
       'defaultRecurring': box.get('defaultRecurring', defaultValue: false),
-      'defaultRecurringType': box.get('defaultRecurringType', defaultValue: 'monthly'),
+      'defaultRecurringType':
+          box.get('defaultRecurringType', defaultValue: 'monthly'),
+      'dailyBudgetLimit': (box.get('dailyBudgetLimit', defaultValue: 0) as num).toInt(),
+      'dailyBudgetRollover':
+          box.get('dailyBudgetRollover', defaultValue: false),
+      'dailyBudgetStartDate': box.get('dailyBudgetStartDate'),
+      'pinnedAccounts':
+          (box.get('pinnedAccounts', defaultValue: <String>[]) as List<dynamic>)
+              .cast<String>(),
       'pinnedCategories': (box.get('pinnedCategories', defaultValue: <String>[])
               as List<dynamic>)
           .cast<String>(),
@@ -963,9 +975,11 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
     state = {
       'darkMode': box.get('darkMode', defaultValue: false),
       'currency': _normalizeCurrency(
-          box.get('currency', defaultValue: '\u09F3') as String?),
+          box.get('currency', defaultValue: '৳') as String?),
       'smsTrack': box.get('smsTrack', defaultValue: false),
-      'smsMode': box.get('smsMode', defaultValue: 'ask'),
+      'smsPermissionDialogShown':
+          box.get('smsPermissionDialogShown', defaultValue: false),
+      'smsMode': box.get('smsMode', defaultValue: 'daily_summary'),
       'language': box.get('language', defaultValue: 'en'),
       'accentColor': box.get('accentColor', defaultValue: 0xFF2D7A7B),
       'compactMode': box.get('compactMode', defaultValue: false),
@@ -987,7 +1001,12 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
       'receiptImageAttachment':
           box.get('receiptImageAttachment', defaultValue: false),
       'defaultRecurring': box.get('defaultRecurring', defaultValue: false),
-      'defaultRecurringType': box.get('defaultRecurringType', defaultValue: 'monthly'),
+      'defaultRecurringType':
+          box.get('defaultRecurringType', defaultValue: 'monthly'),
+      'dailyBudgetLimit': (box.get('dailyBudgetLimit', defaultValue: 0) as num).toInt(),
+      'dailyBudgetRollover':
+          box.get('dailyBudgetRollover', defaultValue: false),
+      'dailyBudgetStartDate': box.get('dailyBudgetStartDate'),
       'pinnedAccounts':
           (box.get('pinnedAccounts', defaultValue: <String>[]) as List<dynamic>)
               .cast<String>(),
@@ -1083,6 +1102,12 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
 
   Future<void> updateSmsTrack(bool value) async {
     await toggleSmsTrack(value);
+  }
+
+  Future<void> updateSmsPermissionDialogShown(bool value) async {
+    final box = await _getBox();
+    await box.put('smsPermissionDialogShown', value);
+    state = {...state, 'smsPermissionDialogShown': value};
   }
 
   Future<void> update(String key, dynamic value) async {

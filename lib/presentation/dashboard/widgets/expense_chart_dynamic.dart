@@ -55,7 +55,11 @@ class _ExpenseChartDynamicState extends ConsumerState<ExpenseChartDynamic>
   Widget build(BuildContext context) {
     final transactions = ref.watch(transactionsProvider);
     final categories = ref.watch(categoriesProvider);
-    final catMap = {for (final c in categories) c.id: c.name};
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
+    final catMap = {
+      '': isBangla ? 'শ্রেণীহীন' : 'Uncategorized',
+      for (final c in categories) c.id: isBangla ? (c.nameBn.isNotEmpty ? c.nameBn : c.name) : c.name
+    };
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primary = Theme.of(context).colorScheme.primary;
 

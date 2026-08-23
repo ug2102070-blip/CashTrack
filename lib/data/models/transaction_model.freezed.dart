@@ -25,7 +25,7 @@ mixin _$TransactionModel {
   @HiveField(1)
   TransactionType get type => throw _privateConstructorUsedError;
   @HiveField(2)
-  double get amount => throw _privateConstructorUsedError;
+  int get amount => throw _privateConstructorUsedError;
   @HiveField(3)
   String get categoryId => throw _privateConstructorUsedError;
   @HiveField(4)
@@ -77,7 +77,7 @@ abstract class $TransactionModelCopyWith<$Res> {
   $Res call(
       {@HiveField(0) String id,
       @HiveField(1) TransactionType type,
-      @HiveField(2) double amount,
+      @HiveField(2) int amount,
       @HiveField(3) String categoryId,
       @HiveField(4) String accountId,
       @HiveField(5) DateTime date,
@@ -141,7 +141,7 @@ class _$TransactionModelCopyWithImpl<$Res, $Val extends TransactionModel>
       amount: null == amount
           ? _value.amount
           : amount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       categoryId: null == categoryId
           ? _value.categoryId
           : categoryId // ignore: cast_nullable_to_non_nullable
@@ -221,7 +221,7 @@ abstract class _$$TransactionModelImplCopyWith<$Res>
   $Res call(
       {@HiveField(0) String id,
       @HiveField(1) TransactionType type,
-      @HiveField(2) double amount,
+      @HiveField(2) int amount,
       @HiveField(3) String categoryId,
       @HiveField(4) String accountId,
       @HiveField(5) DateTime date,
@@ -283,7 +283,7 @@ class __$$TransactionModelImplCopyWithImpl<$Res>
       amount: null == amount
           ? _value.amount
           : amount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       categoryId: null == categoryId
           ? _value.categoryId
           : categoryId // ignore: cast_nullable_to_non_nullable
@@ -388,7 +388,7 @@ class _$TransactionModelImpl implements _TransactionModel {
   final TransactionType type;
   @override
   @HiveField(2)
-  final double amount;
+  final int amount;
   @override
   @HiveField(3)
   final String categoryId;
@@ -539,7 +539,7 @@ abstract class _TransactionModel implements TransactionModel {
   const factory _TransactionModel(
       {@HiveField(0) required final String id,
       @HiveField(1) required final TransactionType type,
-      @HiveField(2) required final double amount,
+      @HiveField(2) required final int amount,
       @HiveField(3) required final String categoryId,
       @HiveField(4) required final String accountId,
       @HiveField(5) required final DateTime date,
@@ -568,7 +568,7 @@ abstract class _TransactionModel implements TransactionModel {
   TransactionType get type;
   @override
   @HiveField(2)
-  double get amount;
+  int get amount;
   @override
   @HiveField(3)
   String get categoryId;

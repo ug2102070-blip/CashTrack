@@ -400,6 +400,7 @@ class DefaultCategories {
     ),
   ];
 
+
   static CategoryModel _category({
     required String id,
     required String name,

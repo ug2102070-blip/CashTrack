@@ -13,8 +13,8 @@ class GoalModel with _$GoalModel {
   const factory GoalModel({
     @HiveField(0) required String id,
     @HiveField(1) required String name,
-    @HiveField(2) required double targetAmount,
-    @HiveField(3) @Default(0) double currentAmount,
+    @HiveField(2) required int targetAmount,
+    @HiveField(3) @Default(0) int currentAmount,
     @HiveField(4) DateTime? deadline,
     @HiveField(5) String? icon,
     @HiveField(6) String? colorHex,

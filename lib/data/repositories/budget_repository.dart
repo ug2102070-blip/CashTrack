@@ -2,6 +2,7 @@ import 'package:hive/hive.dart';
 
 import '../models/budget_model.dart';
 import 'hive_box_recovery.dart';
+import 'sync_tombstone_repository.dart';
 
 class BudgetRepository {
   BudgetRepository._internal();
@@ -66,20 +67,11 @@ class BudgetRepository {
     await _box!.put(budget.id, budget.toJson());
   }
 
-  Future<void> updateSpent(String budgetId, double newSpent) async {
-    await init();
-    final budget = _decode(_box!.get(budgetId));
-    if (budget != null) {
-      await _box!.put(
-        budgetId,
-        budget.copyWith(spent: newSpent, updatedAt: DateTime.now()).toJson(),
-      );
-    }
-  }
 
   Future<void> deleteBudget(String id) async {
     await init();
     await _box!.delete(id);
+    await SyncTombstoneRepository().record(_boxName, id);
   }
 
   List<BudgetModel> _decodedValues() {

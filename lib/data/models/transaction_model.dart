@@ -11,7 +11,7 @@ class TransactionModel with _$TransactionModel {
   const factory TransactionModel({
     @HiveField(0) required String id,
     @HiveField(1) required TransactionType type,
-    @HiveField(2) required double amount,
+    @HiveField(2) required int amount,
     @HiveField(3) required String categoryId,
     @HiveField(4) required String accountId,
     @HiveField(5) required DateTime date,

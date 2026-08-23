@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,11 +14,15 @@ import 'core/theme/app_theme.dart';
 import 'core/routes/app_router.dart';
 import 'presentation/providers/app_providers.dart';
 import 'presentation/security/app_lock_gate.dart';
+import 'presentation/widgets/global_error_boundary.dart';
 import 'core/utils/logger.dart';
 import 'services/ai_service.dart';
+import 'services/encrypted_hive_storage.dart';
 import 'services/screenshot_protection_service.dart';
 import 'services/notification_service.dart';
 import 'services/sms_service.dart';
+import 'services/sync_service.dart';
+import 'services/telemetry_service.dart';
 
 // Import all repositories
 import 'data/repositories/transaction_repository.dart';
@@ -66,20 +70,25 @@ void main() async {
   Hive.registerAdapter(SplitExpenseAdapter());
   Hive.registerAdapter(UserModelAdapter());
   Hive.registerAdapter(UserSettingsAdapter());
-  Hive.registerAdapter(UserStatsAdapter());
 
-  // Open the settings box only after adapters have been registered.
-  await Hive.openBox('settingsBox');
+  // Encrypt legacy Hive data before any box is opened.
+  await EncryptedHiveStorage.prepare();
+  await EncryptedHiveStorage.openBox('settingsBox');
 
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    await _activateAppCheck();
+    await TelemetryService.init();
   } catch (e) {
     AppLogger.w('Firebase init skipped/failure: $e');
   }
 
   await _initializeRepositories();
+
+  // Keep the per-entity sync queue responsive when connectivity returns.
+  await SyncService().init();
 
   // Pre-load API key from secure storage into memory cache.
   try {
@@ -102,22 +111,26 @@ void main() async {
     AppLogger.w('SmsService init skipped: $e');
   }
 
+  // ── Global Error Boundary: graceful fallback for UI rendering exceptions ──
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return GlobalErrorWidget(details: details);
+  };
+
   // ── Crashlytics: catch all Flutter framework errors ──
-  // NOTE: Crashlytics is NOT supported on web — guard with kIsWeb.
   FlutterError.onError = (errorDetails) {
-    if (!kIsWeb) {
-      FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
-    } else {
-      AppLogger.e('Flutter error: ${errorDetails.exceptionAsString()}');
-    }
+    unawaited(TelemetryService.recordFlutterError(
+      errorDetails,
+      fatal: true,
+    ));
   };
   // ── Crashlytics: catch async / platform errors ──
   PlatformDispatcher.instance.onError = (error, stack) {
-    if (!kIsWeb) {
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-    } else {
-      AppLogger.e('Platform error: $error');
-    }
+    unawaited(TelemetryService.recordFailure(
+      operation: 'platform_dispatcher',
+      error: error,
+      stackTrace: stack,
+      fatal: true,
+    ));
     return true;
   };
 
@@ -125,6 +138,29 @@ void main() async {
     const ProviderScope(
       child: CashTrackApp(),
     ),
+  );
+}
+
+Future<void> _activateAppCheck() async {
+  const webRecaptchaSiteKey = String.fromEnvironment(
+    'FIREBASE_APP_CHECK_WEB_RECAPTCHA_SITE_KEY',
+  );
+
+  if (kIsWeb && webRecaptchaSiteKey.isEmpty) {
+    AppLogger.w(
+      'App Check is not configured for web. Protected Firebase services will reject requests.',
+    );
+    return;
+  }
+
+  await FirebaseAppCheck.instance.activate(
+    providerAndroid: kDebugMode
+        ? const AndroidDebugProvider()
+        : const AndroidPlayIntegrityProvider(),
+    providerApple: kDebugMode
+        ? const AppleDebugProvider()
+        : const AppleDeviceCheckProvider(),
+    providerWeb: ReCaptchaV3Provider(webRecaptchaSiteKey),
   );
 }
 

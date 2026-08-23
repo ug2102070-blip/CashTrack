@@ -10,6 +10,12 @@ class AppL10n {
   }
 
   static const _values = <String, Map<String, String>>{
+    'error_required_field': {'en': 'This field is required', 'bn': 'এই ফিল্ডটি আবশ্যক'},
+    'error_required_field_named': {'en': '{field} is required', 'bn': '{field} আবশ্যক'},
+    'error_invalid_email': {'en': 'Invalid email address', 'bn': 'ইমেইল ঠিকানা সঠিক নয়'},
+    'error_invalid_phone': {'en': 'Invalid phone number', 'bn': 'ফোন নম্বর সঠিক নয়'},
+    'error_invalid_amount': {'en': 'Invalid amount', 'bn': 'পরিমাণ সঠিক নয়'},
+    'error_amount_exceeds_max': {'en': 'Amount exceeds the maximum allowed', 'bn': 'পরিমাণ অনুমোদিত সীমার চেয়ে বেশি'},
     'analytics': {'en': 'Analytics', 'bn': 'বিশ্লেষণ'},
     'dashboard': {'en': 'Dashboard', 'bn': 'ড্যাশবোর্ড'},
     'good_morning': {'en': 'Good morning', 'bn': 'সুপ্রভাত'},
@@ -258,6 +264,34 @@ class AppL10n {
       'en': 'SMS permission denied',
       'bn': 'এসএমএস অনুমতি পাওয়া যায়নি'
     },
+    'sms_permission_dialog_title': {
+      'en': 'Auto-Import Transactions',
+      'bn': 'স্বয়ংক্রিয় লেনদেন ইম্পোর্ট'
+    },
+    'sms_permission_dialog_body': {
+      'en': 'CashTrack can auto-import your MFS transactions (like bKash, Nagad, Rocket, Upay) by reading payment notifications. This helps you track expenses automatically without manual entry!\n\nTo ensure 100% reliable tracking in the background, we will request to exclude CashTrack from battery optimization.\n\nIf you choose not to enable it now, you can always enable it later from Settings -> General -> SMS Auto-Import.',
+      'bn': 'ক্যাশট্র্যাক আপনার পেমেন্ট নোটিফিকেশন পড়ে বিকাশ, নগদ, রকেট বা উপায়-এর মতো মোবাইল ব্যাংকিং লেনদেনগুলো স্বয়ংক্রিয়ভাবে অ্যাপে যোগ করতে পারে। এতে আপনার ম্যানুয়ালি কোনো লেনদেন লিখতে হবে না!\n\nব্যাকগ্রাউন্ডে ১০০% নিখুঁত ট্র্যাকিং নিশ্চিত করতে, আমরা অ্যাপটিকে ব্যাটারি অপ্টিমাইজেশন থেকে মুক্ত রাখার অনুমতি চাইব।\n\nআপনি যদি এখন এটি চালু করতে না চান, তবে পরবর্তীতে যেকোনো সময় সেটিংস -> সাধারণ -> এসএমএস অটো-ইমপোর্ট (Settings -> General -> SMS Auto-Import) থেকে এটি চালু করতে পারবেন।'
+    },
+    'sms_permission_dialog_allow': {
+      'en': 'Enable Now',
+      'bn': 'এখনই চালু করুন'
+    },
+    'sms_permission_dialog_deny': {
+      'en': 'Maybe Later',
+      'bn': 'পরে করব'
+    },
+    'background_running_tips': {
+      'en': 'If auto-import stops working in the background on devices like Xiaomi, Samsung, or Vivo, please set App Info -> Battery -> \'Unrestricted\' and enable \'Autostart\' in system settings.',
+      'bn': 'Xiaomi, Samsung বা Vivo-র মতো ফোনে ব্যাকগ্রাউন্ডে লেনদেন অটো-ইম্পোর্ট বন্ধ হয়ে গেলে, ফোন সেটিংস থেকে App Info -> Battery -> \'Unrestricted\' সিলেক্ট করুন এবং \'Autostart\' সচল রাখুন।'
+    },
+    'sms_web_not_supported_title': {
+      'en': 'Mobile Only Feature',
+      'bn': 'শুধুমাত্র মোবাইলে প্রযোজ্য'
+    },
+    'sms_web_not_supported_desc': {
+      'en': 'SMS Auto-Import is only supported on mobile devices (Android) and is not available on the web version.',
+      'bn': 'এসএমএস অটো-ইমপোর্ট ফিচারটি শুধুমাত্র মোবাইল ডিভাইসের (Android) জন্য প্রযোজ্য এবং এটি ওয়েব সংস্করণে কাজ করবে না।'
+    },
     'sms_import_mode': {'en': 'SMS Import Mode', 'bn': 'এসএমএস ইমপোর্ট মোড'},
     'language': {'en': 'Language', 'bn': 'ভাষা'},
     'english': {'en': 'English', 'bn': 'ইংরেজি'},
@@ -300,6 +334,11 @@ class AppL10n {
       'bn': 'স্ক্রিনশট প্রতিরোধ করুন'
     },
     'backup_cloud': {'en': 'Backup to Cloud', 'bn': 'ক্লাউডে ব্যাকআপ'},
+    'backup_local': {'en': 'Local Backup (JSON)', 'bn': 'লোকাল ব্যাকআপ (JSON)'},
+    'backup_local_sub': {
+      'en': 'Save full data backup file to device or Google Drive',
+      'bn': 'ডিভাইস বা গুগল ড্রাইভে সম্পূর্ণ ব্যাকআপ ফাইল সেভ করুন'
+    },
     'last_backup_never': {
       'en': 'Last backup: Never',
       'bn': 'শেষ ব্যাকআপ: কখনও নয়'
@@ -310,6 +349,11 @@ class AppL10n {
     },
     'backup_complete': {'en': 'Backup complete!', 'bn': 'ব্যাকআপ সম্পন্ন!'},
     'restore_cloud': {'en': 'Restore from Cloud', 'bn': 'ক্লাউড থেকে রিস্টোর'},
+    'restore_local': {'en': 'Restore from File (JSON)', 'bn': 'ফাইল থেকে রিস্টোর (JSON)'},
+    'restore_local_sub': {
+      'en': 'Restore all records from a CashTrack JSON backup file',
+      'bn': 'CashTrack JSON ব্যাকআপ ফাইল থেকে সব রেকর্ড রিস্টোর করুন'
+    },
     'restore_data': {
       'en': 'Restore your data',
       'bn': 'আপনার ডেটা রিস্টোর করুন'
@@ -618,6 +662,8 @@ class AppL10n {
       'bn': 'লেনদেন আপডেট করুন'
     },
     'save_transaction': {'en': 'Save Transaction', 'bn': 'লেনদেন সেভ করুন'},
+    'uncategorized': {'en': 'Uncategorized', 'bn': 'শ্রেণীহীন'},
+    'no_account': {'en': 'No Account', 'bn': 'কোন অ্যাকাউন্ট নেই'},
     'paste_sms': {'en': 'Paste SMS', 'bn': 'এসএমএস পেস্ট করুন'},
     'paste_sms_hint': {
       'en': 'Paste the transaction SMS here',
@@ -870,8 +916,8 @@ class AppL10n {
       'bn': 'আপনার খরচ নিয়ে কিছু জানতে চান? জিজ্ঞাসা করুন।'
     },
     'ai_service_not_configured': {
-      'en': 'AI service is not configured. Please set GEMINI_API_KEY.',
-      'bn': 'এআই সার্ভিস কনফিগার করা নেই। অনুগ্রহ করে GEMINI_API_KEY সেট করুন।'
+      'en': 'AI service is not configured. Please set your API key.',
+      'bn': 'এআই সার্ভিস কনফিগার করা নেই। অনুগ্রহ করে এপিআই কী সেট করুন।'
     },
     'ai_service_error_backend': {
       'en': 'AI service error. Please check your backend configuration.',
@@ -879,9 +925,9 @@ class AppL10n {
           'এআই সার্ভিসে সমস্যা হয়েছে। অনুগ্রহ করে ব্যাকএন্ড কনফিগারেশন চেক করুন।'
     },
     'ai_service_error_api_key': {
-      'en': 'AI service error. Please check your Gemini API key.',
+      'en': 'AI service error. Please check your API key.',
       'bn':
-          'এআই সার্ভিসে সমস্যা হয়েছে। অনুগ্রহ করে আপনার Gemini API কী চেক করুন।'
+          'এআই সার্ভিসে সমস্যা হয়েছে। অনুগ্রহ করে আপনার এপিআই কী চেক করুন।'
     },
     'ai_service_no_response': {
       'en': 'No response from AI service.',
@@ -1300,14 +1346,14 @@ class AppL10n {
     },
     'voice_transaction_input': {'en': 'Voice Input', 'bn': 'ভয়েস ইনপুট'},
     'receipt_photo_option': {'en': 'Receipt Photo', 'bn': 'রিসিপ্ট ছবি'},
-    'gemini_api_key': {'en': 'Gemini API Key', 'bn': 'জেমিনি এপিআই কী'},
+    'gemini_api_key': {'en': 'AI API Key', 'bn': 'এআই এপিআই কী'},
     'gemini_key_desc': {
       'en': 'Configure AI assistant',
       'bn': 'এআই সহকারী কনফিগার করুন'
     },
     'gemini_key_info': {
-      'en': 'Enter your Gemini API key to enable the AI assistant feature.',
-      'bn': 'এআই সহকারী ফিচার চালু করতে আপনার জেমিনি এপিআই কী দিন।'
+      'en': 'Enter your API key to enable the AI assistant feature.',
+      'bn': 'এআই সহকারী ফিচার চালু করতে আপনার এপিআই কী দিন।'
     },
     'api_key_saved': {'en': 'API key saved', 'bn': 'এপিআই কী সেভ হয়েছে'},
     'login_tagline': {

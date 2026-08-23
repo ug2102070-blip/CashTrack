@@ -985,9 +985,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   // ── Date picker ───────────────────────────────────────────────────────────
   Future<void> _showDatePicker(
       BuildContext context, _FieldConfig field) async {
+    DateTime initial = DateTime(1995, 1, 1);
+    if (field.initialValue.isNotEmpty && field.initialValue != context.t('not_set')) {
+      try {
+        initial = DateFormat('dd MMM yyyy').parse(field.initialValue);
+      } catch (_) {}
+    }
     final picked = await showDatePicker(
       context: context,
-      initialDate: DateTime(1995, 1, 1),
+      initialDate: initial,
       firstDate: DateTime(1920),
       lastDate: DateTime.now(),
     );

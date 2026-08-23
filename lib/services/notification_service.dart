@@ -1,10 +1,11 @@
+import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
-import 'dart:convert';
 import '../core/l10n/app_l10n.dart';
 import '../core/routes/app_router.dart';
 import '../data/models/transaction_model.dart';
@@ -207,7 +208,7 @@ class NotificationService {
     required String debtId,
     required String personName,
     required DateTime dueDate,
-    required double amount,
+    required int amount,
     required bool isBorrowed,
   }) async {
     final settings = await _openSettingsBox();
@@ -227,7 +228,7 @@ class NotificationService {
       'debt_reminder_body',
       params: {
         'action': action,
-        'amount': '$currency${amount.toStringAsFixed(0)}',
+        'amount': '$currency${(amount / 100).toStringAsFixed(0)}',
         'name': personName,
       },
     );
@@ -421,6 +422,22 @@ void callbackDispatcher() {
   });
 }
 
+/// Opens a Hive box with the same AES-256 cipher used by EncryptedHiveStorage.
+/// Must be called after Hive.init() and adapter registration.
+/// Falls back to plain open if the encryption key has not been created yet
+/// (i.e. the user has never launched the main app) so the task exits cleanly.
+Future<Box<dynamic>> _backgroundOpenBox(String name) async {
+  const storage = FlutterSecureStorage();
+  const keyName = 'cashtrack_hive_encryption_key_v1';
+  final encodedKey = await storage.read(key: keyName);
+  if (encodedKey == null) {
+    // Key doesn't exist yet — app was never fully launched. Open plain (empty).
+    return Hive.openBox<dynamic>(name);
+  }
+  final cipher = HiveAesCipher(base64Url.decode(encodedKey));
+  return Hive.openBox<dynamic>(name, encryptionCipher: cipher);
+}
+
 Future<void> _checkBudgetStatus() async {
   // Background-safe Hive + notifications setup
   WidgetsFlutterBinding.ensureInitialized();
@@ -436,9 +453,9 @@ Future<void> _checkBudgetStatus() async {
     Hive.registerAdapter(BudgetModelAdapter());
   }
 
-  final budgetsBox = await Hive.openBox('budgets');
-  final txBox = await Hive.openBox('transactions');
-  final categoriesBox = await Hive.openBox('categories');
+  final budgetsBox = await _backgroundOpenBox('budgets');
+  final txBox = await _backgroundOpenBox('transactions');
+  final categoriesBox = await _backgroundOpenBox('categories');
   final Map<String, String> categoryNames = {};
   for (final raw in categoriesBox.values) {
     final c = raw is CategoryModel
@@ -542,12 +559,12 @@ Future<void> _sendWeeklySummary() async {
     Hive.registerAdapter(RecurringTypeAdapter());
   }
 
-  final settingsBox = await Hive.openBox('settingsBox');
+  final settingsBox = await _backgroundOpenBox('settingsBox');
   final notificationsEnabled =
       (settingsBox.get('notifications') as bool?) ?? true;
   if (!notificationsEnabled) return;
 
-  final txBox = await Hive.openBox('transactions');
+  final txBox = await _backgroundOpenBox('transactions');
   final l10n = AppL10n((settingsBox.get('language') as String?) == 'bn'
       ? const Locale('bn', 'BD')
       : const Locale('en'));

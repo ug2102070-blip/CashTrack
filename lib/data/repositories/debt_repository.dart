@@ -2,6 +2,7 @@ import 'package:hive/hive.dart';
 
 import '../models/debt_model.dart';
 import 'hive_box_recovery.dart';
+import 'sync_tombstone_repository.dart';
 
 class DebtRepository {
   DebtRepository._internal();
@@ -62,7 +63,7 @@ class DebtRepository {
     await _box!.put(debt.id, debt.toJson());
   }
 
-  Future<void> updatePayment(String debtId, double paidAmount) async {
+  Future<void> updatePayment(String debtId, int paidAmount) async {
     await init();
     final debt = _decode(_box!.get(debtId));
     if (debt != null) {
@@ -83,6 +84,7 @@ class DebtRepository {
   Future<void> deleteDebt(String id) async {
     await init();
     await _box!.delete(id);
+    await SyncTombstoneRepository().record(_boxName, id);
   }
 
   List<DebtModel> _decodedValues() {

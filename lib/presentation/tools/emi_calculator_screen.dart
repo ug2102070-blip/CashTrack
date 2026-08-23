@@ -543,6 +543,40 @@ class _EmiCalculatorScreenState extends State<EmiCalculatorScreen>
             keyboardType: TextInputType.number,
             onChanged: (_) => _recalculate(),
           ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton(
+              onPressed: () {
+                FocusScope.of(context).unfocus();
+                _recalculate();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: 4,
+                shadowColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.calculate_rounded, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    context.t('calculate'),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

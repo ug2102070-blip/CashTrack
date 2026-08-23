@@ -11,10 +11,11 @@ class ScreenshotProtectionService {
       MethodChannel('cashtrack/security');
 
   Future<bool> apply({required bool enabled}) async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
-      return false;
-    }
+    if (kIsWeb) return false;
 
+    // Both Android and iOS now use the same MethodChannel name 'cashtrack/security'
+    // Android: uses FLAG_SECURE (managed in MainActivity)
+    // iOS: uses background blur overlay (managed in AppDelegate)
     try {
       final result = await _channel.invokeMethod<bool>(
         'setScreenshotProtection',

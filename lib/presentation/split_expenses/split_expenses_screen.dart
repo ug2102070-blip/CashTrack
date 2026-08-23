@@ -207,7 +207,9 @@ class _SplitExpensesScreenState extends ConsumerState<SplitExpensesScreen> {
             ElevatedButton(
               onPressed: () async {
                 final description = descriptionController.text.trim();
-                final amount = double.tryParse(amountController.text.trim());
+                final amountStr = amountController.text.trim();
+                final amountDouble = double.tryParse(amountStr);
+                final amount = amountDouble != null ? (amountDouble * 100).toInt() : null;
                 if (description.isEmpty ||
                     amount == null ||
                     selectedMembers.isEmpty) {

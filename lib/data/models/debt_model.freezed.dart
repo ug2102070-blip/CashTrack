@@ -27,9 +27,9 @@ mixin _$DebtModel {
   @HiveField(2)
   String get personName => throw _privateConstructorUsedError;
   @HiveField(3)
-  double get amount => throw _privateConstructorUsedError;
+  int get amount => throw _privateConstructorUsedError;
   @HiveField(4)
-  double get paidAmount => throw _privateConstructorUsedError;
+  int get paidAmount => throw _privateConstructorUsedError;
   @HiveField(5)
   DateTime? get dueDate => throw _privateConstructorUsedError;
   @HiveField(6)
@@ -48,7 +48,7 @@ mixin _$DebtModel {
   @HiveField(12)
   double get penaltyRate => throw _privateConstructorUsedError;
   @HiveField(13)
-  double get penaltyAmount => throw _privateConstructorUsedError;
+  int get penaltyAmount => throw _privateConstructorUsedError;
   @HiveField(14)
   String? get agreementTerms => throw _privateConstructorUsedError;
   @HiveField(15)
@@ -77,8 +77,8 @@ abstract class $DebtModelCopyWith<$Res> {
       {@HiveField(0) String id,
       @HiveField(1) DebtType type,
       @HiveField(2) String personName,
-      @HiveField(3) double amount,
-      @HiveField(4) double paidAmount,
+      @HiveField(3) int amount,
+      @HiveField(4) int paidAmount,
       @HiveField(5) DateTime? dueDate,
       @HiveField(6) String? note,
       @HiveField(7) bool isSettled,
@@ -87,7 +87,7 @@ abstract class $DebtModelCopyWith<$Res> {
       @HiveField(10) String? phoneNumber,
       @HiveField(11) AgreementStatus agreementStatus,
       @HiveField(12) double penaltyRate,
-      @HiveField(13) double penaltyAmount,
+      @HiveField(13) int penaltyAmount,
       @HiveField(14) String? agreementTerms,
       @HiveField(15) int trustScore,
       @HiveField(16) int remindersSent,
@@ -146,11 +146,11 @@ class _$DebtModelCopyWithImpl<$Res, $Val extends DebtModel>
       amount: null == amount
           ? _value.amount
           : amount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       paidAmount: null == paidAmount
           ? _value.paidAmount
           : paidAmount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       dueDate: freezed == dueDate
           ? _value.dueDate
           : dueDate // ignore: cast_nullable_to_non_nullable
@@ -186,7 +186,7 @@ class _$DebtModelCopyWithImpl<$Res, $Val extends DebtModel>
       penaltyAmount: null == penaltyAmount
           ? _value.penaltyAmount
           : penaltyAmount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       agreementTerms: freezed == agreementTerms
           ? _value.agreementTerms
           : agreementTerms // ignore: cast_nullable_to_non_nullable
@@ -227,8 +227,8 @@ abstract class _$$DebtModelImplCopyWith<$Res>
       {@HiveField(0) String id,
       @HiveField(1) DebtType type,
       @HiveField(2) String personName,
-      @HiveField(3) double amount,
-      @HiveField(4) double paidAmount,
+      @HiveField(3) int amount,
+      @HiveField(4) int paidAmount,
       @HiveField(5) DateTime? dueDate,
       @HiveField(6) String? note,
       @HiveField(7) bool isSettled,
@@ -237,7 +237,7 @@ abstract class _$$DebtModelImplCopyWith<$Res>
       @HiveField(10) String? phoneNumber,
       @HiveField(11) AgreementStatus agreementStatus,
       @HiveField(12) double penaltyRate,
-      @HiveField(13) double penaltyAmount,
+      @HiveField(13) int penaltyAmount,
       @HiveField(14) String? agreementTerms,
       @HiveField(15) int trustScore,
       @HiveField(16) int remindersSent,
@@ -294,11 +294,11 @@ class __$$DebtModelImplCopyWithImpl<$Res>
       amount: null == amount
           ? _value.amount
           : amount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       paidAmount: null == paidAmount
           ? _value.paidAmount
           : paidAmount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       dueDate: freezed == dueDate
           ? _value.dueDate
           : dueDate // ignore: cast_nullable_to_non_nullable
@@ -334,7 +334,7 @@ class __$$DebtModelImplCopyWithImpl<$Res>
       penaltyAmount: null == penaltyAmount
           ? _value.penaltyAmount
           : penaltyAmount // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       agreementTerms: freezed == agreementTerms
           ? _value.agreementTerms
           : agreementTerms // ignore: cast_nullable_to_non_nullable
@@ -402,11 +402,11 @@ class _$DebtModelImpl implements _DebtModel {
   final String personName;
   @override
   @HiveField(3)
-  final double amount;
+  final int amount;
   @override
   @JsonKey()
   @HiveField(4)
-  final double paidAmount;
+  final int paidAmount;
   @override
   @HiveField(5)
   final DateTime? dueDate;
@@ -438,7 +438,7 @@ class _$DebtModelImpl implements _DebtModel {
   @override
   @JsonKey()
   @HiveField(13)
-  final double penaltyAmount;
+  final int penaltyAmount;
   @override
   @HiveField(14)
   final String? agreementTerms;
@@ -553,8 +553,8 @@ abstract class _DebtModel implements DebtModel {
       {@HiveField(0) required final String id,
       @HiveField(1) required final DebtType type,
       @HiveField(2) required final String personName,
-      @HiveField(3) required final double amount,
-      @HiveField(4) final double paidAmount,
+      @HiveField(3) required final int amount,
+      @HiveField(4) final int paidAmount,
       @HiveField(5) final DateTime? dueDate,
       @HiveField(6) final String? note,
       @HiveField(7) final bool isSettled,
@@ -563,7 +563,7 @@ abstract class _DebtModel implements DebtModel {
       @HiveField(10) final String? phoneNumber,
       @HiveField(11) final AgreementStatus agreementStatus,
       @HiveField(12) final double penaltyRate,
-      @HiveField(13) final double penaltyAmount,
+      @HiveField(13) final int penaltyAmount,
       @HiveField(14) final String? agreementTerms,
       @HiveField(15) final int trustScore,
       @HiveField(16) final int remindersSent,
@@ -585,10 +585,10 @@ abstract class _DebtModel implements DebtModel {
   String get personName;
   @override
   @HiveField(3)
-  double get amount;
+  int get amount;
   @override
   @HiveField(4)
-  double get paidAmount;
+  int get paidAmount;
   @override
   @HiveField(5)
   DateTime? get dueDate;
@@ -615,7 +615,7 @@ abstract class _DebtModel implements DebtModel {
   double get penaltyRate;
   @override
   @HiveField(13)
-  double get penaltyAmount;
+  int get penaltyAmount;
   @override
   @HiveField(14)
   String? get agreementTerms;

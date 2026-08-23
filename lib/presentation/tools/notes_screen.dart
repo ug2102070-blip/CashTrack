@@ -222,14 +222,14 @@ class _NotesScreenState extends State<NotesScreen> {
   Map<String, List<_NoteEntry>> _groupByDate(List<_NoteEntry> items) {
     final map = <String, List<_NoteEntry>>{};
     for (final n in items) {
-      final key = DateFormat('yyyy-MM-dd').format(n.updatedAt);
+      final key = DateFormat('yyyy-MM-dd', 'en').format(n.updatedAt);
       map.putIfAbsent(key, () => []).add(n);
     }
     return map;
   }
 
   String _dateHeader(String key) {
-    final d = DateFormat('yyyy-MM-dd').parse(key);
+    final d = DateFormat('yyyy-MM-dd', 'en').parse(key);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final date = DateTime(d.year, d.month, d.day);

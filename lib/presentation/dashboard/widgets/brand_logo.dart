@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 
 class BrandLogo extends StatelessWidget {
@@ -174,20 +173,6 @@ class BrandLogo extends StatelessWidget {
       ),
       child: CustomPaint(
         painter: _SureCashPainter(),
-      ),
-    );
-  }
-
-  Widget _buildOkWallet() {
-    return Container(
-      width: size * 1.5,
-      height: size * 1.5,
-      decoration: BoxDecoration(
-        color: const Color(0xFFE2136E),
-        borderRadius: BorderRadius.circular(size * 0.35),
-      ),
-      child: CustomPaint(
-        painter: _OkWalletPainter(),
       ),
     );
   }
@@ -449,38 +434,6 @@ class _SureCashPainter extends CustomPainter {
       ..color = const Color(0xFFEA580C)
       ..style = PaintingStyle.fill;
     canvas.drawCircle(Offset(w * 0.7, h * 0.35), 3.0, paintDot);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _OkWalletPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-
-    final paintSmile = Paint()
-      ..color = const Color(0xFFFFD400)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(Offset(w * 0.5, h * 0.5), w * 0.35, paintSmile);
-
-    final paintFace = Paint()
-      ..color = Colors.black
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-
-    canvas.drawCircle(Offset(w * 0.4, h * 0.42), 1.5, paintFace..style = PaintingStyle.fill);
-    canvas.drawCircle(Offset(w * 0.6, h * 0.42), 1.5, paintFace..style = PaintingStyle.fill);
-
-    canvas.drawArc(
-      Rect.fromLTWH(w * 0.35, h * 0.45, w * 0.3, h * 0.25),
-      0.1,
-      2.9,
-      false,
-      paintFace..style = PaintingStyle.stroke..strokeWidth = 1.5,
-    );
   }
 
   @override

@@ -1,4 +1,4 @@
-storePassword=jahid.2025
-keyPassword=jahid.2025
-keyAlias=cashtrack
-storeFile=C:\\Users\\Zahid\\cashtrack\\cashtrack-release.jks
+storePassword=CHANGE_ME
+keyPassword=CHANGE_ME
+keyAlias=your-release-key-alias
+storeFile=/absolute/path/to/your-release.jks

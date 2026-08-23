@@ -25,9 +25,9 @@ mixin _$AssetModel {
   @HiveField(1)
   String get name => throw _privateConstructorUsedError;
   @HiveField(2)
-  double get purchasePrice => throw _privateConstructorUsedError;
+  int get purchasePrice => throw _privateConstructorUsedError;
   @HiveField(3)
-  double get currentValue => throw _privateConstructorUsedError;
+  int get currentValue => throw _privateConstructorUsedError;
   @HiveField(4)
   DateTime get purchaseDate => throw _privateConstructorUsedError;
   @HiveField(5)
@@ -58,8 +58,8 @@ abstract class $AssetModelCopyWith<$Res> {
   $Res call(
       {@HiveField(0) String id,
       @HiveField(1) String name,
-      @HiveField(2) double purchasePrice,
-      @HiveField(3) double currentValue,
+      @HiveField(2) int purchasePrice,
+      @HiveField(3) int currentValue,
       @HiveField(4) DateTime purchaseDate,
       @HiveField(5) DateTime? warrantyExpiry,
       @HiveField(6) DateTime? insuranceExpiry,
@@ -106,11 +106,11 @@ class _$AssetModelCopyWithImpl<$Res, $Val extends AssetModel>
       purchasePrice: null == purchasePrice
           ? _value.purchasePrice
           : purchasePrice // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       currentValue: null == currentValue
           ? _value.currentValue
           : currentValue // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       purchaseDate: null == purchaseDate
           ? _value.purchaseDate
           : purchaseDate // ignore: cast_nullable_to_non_nullable
@@ -154,8 +154,8 @@ abstract class _$$AssetModelImplCopyWith<$Res>
   $Res call(
       {@HiveField(0) String id,
       @HiveField(1) String name,
-      @HiveField(2) double purchasePrice,
-      @HiveField(3) double currentValue,
+      @HiveField(2) int purchasePrice,
+      @HiveField(3) int currentValue,
       @HiveField(4) DateTime purchaseDate,
       @HiveField(5) DateTime? warrantyExpiry,
       @HiveField(6) DateTime? insuranceExpiry,
@@ -200,11 +200,11 @@ class __$$AssetModelImplCopyWithImpl<$Res>
       purchasePrice: null == purchasePrice
           ? _value.purchasePrice
           : purchasePrice // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       currentValue: null == currentValue
           ? _value.currentValue
           : currentValue // ignore: cast_nullable_to_non_nullable
-              as double,
+              as int,
       purchaseDate: null == purchaseDate
           ? _value.purchaseDate
           : purchaseDate // ignore: cast_nullable_to_non_nullable
@@ -264,10 +264,10 @@ class _$AssetModelImpl implements _AssetModel {
   final String name;
   @override
   @HiveField(2)
-  final double purchasePrice;
+  final int purchasePrice;
   @override
   @HiveField(3)
-  final double currentValue;
+  final int currentValue;
   @override
   @HiveField(4)
   final DateTime purchaseDate;
@@ -355,8 +355,8 @@ abstract class _AssetModel implements AssetModel {
   const factory _AssetModel(
       {@HiveField(0) required final String id,
       @HiveField(1) required final String name,
-      @HiveField(2) required final double purchasePrice,
-      @HiveField(3) required final double currentValue,
+      @HiveField(2) required final int purchasePrice,
+      @HiveField(3) required final int currentValue,
       @HiveField(4) required final DateTime purchaseDate,
       @HiveField(5) final DateTime? warrantyExpiry,
       @HiveField(6) final DateTime? insuranceExpiry,
@@ -376,10 +376,10 @@ abstract class _AssetModel implements AssetModel {
   String get name;
   @override
   @HiveField(2)
-  double get purchasePrice;
+  int get purchasePrice;
   @override
   @HiveField(3)
-  double get currentValue;
+  int get currentValue;
   @override
   @HiveField(4)
   DateTime get purchaseDate;

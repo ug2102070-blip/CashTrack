@@ -30,8 +30,6 @@ mixin _$UserModel {
   String? get photoURL => throw _privateConstructorUsedError;
   @HiveField(4)
   UserSettings? get settings => throw _privateConstructorUsedError;
-  @HiveField(5)
-  UserStats? get stats => throw _privateConstructorUsedError;
   @HiveField(6)
   DateTime? get createdAt => throw _privateConstructorUsedError;
   @HiveField(7)
@@ -54,12 +52,10 @@ abstract class $UserModelCopyWith<$Res> {
       @HiveField(2) String? displayName,
       @HiveField(3) String? photoURL,
       @HiveField(4) UserSettings? settings,
-      @HiveField(5) UserStats? stats,
       @HiveField(6) DateTime? createdAt,
       @HiveField(7) DateTime? updatedAt});
 
   $UserSettingsCopyWith<$Res>? get settings;
-  $UserStatsCopyWith<$Res>? get stats;
 }
 
 /// @nodoc
@@ -80,7 +76,6 @@ class _$UserModelCopyWithImpl<$Res, $Val extends UserModel>
     Object? displayName = freezed,
     Object? photoURL = freezed,
     Object? settings = freezed,
-    Object? stats = freezed,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
   }) {
@@ -105,10 +100,6 @@ class _$UserModelCopyWithImpl<$Res, $Val extends UserModel>
           ? _value.settings
           : settings // ignore: cast_nullable_to_non_nullable
               as UserSettings?,
-      stats: freezed == stats
-          ? _value.stats
-          : stats // ignore: cast_nullable_to_non_nullable
-              as UserStats?,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -131,18 +122,6 @@ class _$UserModelCopyWithImpl<$Res, $Val extends UserModel>
       return _then(_value.copyWith(settings: value) as $Val);
     });
   }
-
-  @override
-  @pragma('vm:prefer-inline')
-  $UserStatsCopyWith<$Res>? get stats {
-    if (_value.stats == null) {
-      return null;
-    }
-
-    return $UserStatsCopyWith<$Res>(_value.stats!, (value) {
-      return _then(_value.copyWith(stats: value) as $Val);
-    });
-  }
 }
 
 /// @nodoc
@@ -159,14 +138,11 @@ abstract class _$$UserModelImplCopyWith<$Res>
       @HiveField(2) String? displayName,
       @HiveField(3) String? photoURL,
       @HiveField(4) UserSettings? settings,
-      @HiveField(5) UserStats? stats,
       @HiveField(6) DateTime? createdAt,
       @HiveField(7) DateTime? updatedAt});
 
   @override
   $UserSettingsCopyWith<$Res>? get settings;
-  @override
-  $UserStatsCopyWith<$Res>? get stats;
 }
 
 /// @nodoc
@@ -185,7 +161,6 @@ class __$$UserModelImplCopyWithImpl<$Res>
     Object? displayName = freezed,
     Object? photoURL = freezed,
     Object? settings = freezed,
-    Object? stats = freezed,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
   }) {
@@ -210,10 +185,6 @@ class __$$UserModelImplCopyWithImpl<$Res>
           ? _value.settings
           : settings // ignore: cast_nullable_to_non_nullable
               as UserSettings?,
-      stats: freezed == stats
-          ? _value.stats
-          : stats // ignore: cast_nullable_to_non_nullable
-              as UserStats?,
       createdAt: freezed == createdAt
           ? _value.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -235,7 +206,6 @@ class _$UserModelImpl implements _UserModel {
       @HiveField(2) this.displayName,
       @HiveField(3) this.photoURL,
       @HiveField(4) this.settings,
-      @HiveField(5) this.stats,
       @HiveField(6) this.createdAt,
       @HiveField(7) this.updatedAt});
 
@@ -258,9 +228,6 @@ class _$UserModelImpl implements _UserModel {
   @HiveField(4)
   final UserSettings? settings;
   @override
-  @HiveField(5)
-  final UserStats? stats;
-  @override
   @HiveField(6)
   final DateTime? createdAt;
   @override
@@ -269,7 +236,7 @@ class _$UserModelImpl implements _UserModel {
 
   @override
   String toString() {
-    return 'UserModel(id: $id, email: $email, displayName: $displayName, photoURL: $photoURL, settings: $settings, stats: $stats, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'UserModel(id: $id, email: $email, displayName: $displayName, photoURL: $photoURL, settings: $settings, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -285,7 +252,6 @@ class _$UserModelImpl implements _UserModel {
                 other.photoURL == photoURL) &&
             (identical(other.settings, settings) ||
                 other.settings == settings) &&
-            (identical(other.stats, stats) || other.stats == stats) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -295,7 +261,7 @@ class _$UserModelImpl implements _UserModel {
   @JsonKey(ignore: true)
   @override
   int get hashCode => Object.hash(runtimeType, id, email, displayName, photoURL,
-      settings, stats, createdAt, updatedAt);
+      settings, createdAt, updatedAt);
 
   @JsonKey(ignore: true)
   @override
@@ -318,7 +284,6 @@ abstract class _UserModel implements UserModel {
       @HiveField(2) final String? displayName,
       @HiveField(3) final String? photoURL,
       @HiveField(4) final UserSettings? settings,
-      @HiveField(5) final UserStats? stats,
       @HiveField(6) final DateTime? createdAt,
       @HiveField(7) final DateTime? updatedAt}) = _$UserModelImpl;
 
@@ -340,9 +305,6 @@ abstract class _UserModel implements UserModel {
   @override
   @HiveField(4)
   UserSettings? get settings;
-  @override
-  @HiveField(5)
-  UserStats? get stats;
   @override
   @HiveField(6)
   DateTime? get createdAt;
@@ -707,249 +669,5 @@ abstract class _UserSettings implements UserSettings {
   @override
   @JsonKey(ignore: true)
   _$$UserSettingsImplCopyWith<_$UserSettingsImpl> get copyWith =>
-      throw _privateConstructorUsedError;
-}
-
-UserStats _$UserStatsFromJson(Map<String, dynamic> json) {
-  return _UserStats.fromJson(json);
-}
-
-/// @nodoc
-mixin _$UserStats {
-  @HiveField(0)
-  double get totalBalance => throw _privateConstructorUsedError;
-  @HiveField(1)
-  double get totalIncome => throw _privateConstructorUsedError;
-  @HiveField(2)
-  double get totalExpense => throw _privateConstructorUsedError;
-  @HiveField(3)
-  int get transactionCount => throw _privateConstructorUsedError;
-  @HiveField(4)
-  DateTime? get lastSyncTime => throw _privateConstructorUsedError;
-
-  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
-  @JsonKey(ignore: true)
-  $UserStatsCopyWith<UserStats> get copyWith =>
-      throw _privateConstructorUsedError;
-}
-
-/// @nodoc
-abstract class $UserStatsCopyWith<$Res> {
-  factory $UserStatsCopyWith(UserStats value, $Res Function(UserStats) then) =
-      _$UserStatsCopyWithImpl<$Res, UserStats>;
-  @useResult
-  $Res call(
-      {@HiveField(0) double totalBalance,
-      @HiveField(1) double totalIncome,
-      @HiveField(2) double totalExpense,
-      @HiveField(3) int transactionCount,
-      @HiveField(4) DateTime? lastSyncTime});
-}
-
-/// @nodoc
-class _$UserStatsCopyWithImpl<$Res, $Val extends UserStats>
-    implements $UserStatsCopyWith<$Res> {
-  _$UserStatsCopyWithImpl(this._value, this._then);
-
-  // ignore: unused_field
-  final $Val _value;
-  // ignore: unused_field
-  final $Res Function($Val) _then;
-
-  @pragma('vm:prefer-inline')
-  @override
-  $Res call({
-    Object? totalBalance = null,
-    Object? totalIncome = null,
-    Object? totalExpense = null,
-    Object? transactionCount = null,
-    Object? lastSyncTime = freezed,
-  }) {
-    return _then(_value.copyWith(
-      totalBalance: null == totalBalance
-          ? _value.totalBalance
-          : totalBalance // ignore: cast_nullable_to_non_nullable
-              as double,
-      totalIncome: null == totalIncome
-          ? _value.totalIncome
-          : totalIncome // ignore: cast_nullable_to_non_nullable
-              as double,
-      totalExpense: null == totalExpense
-          ? _value.totalExpense
-          : totalExpense // ignore: cast_nullable_to_non_nullable
-              as double,
-      transactionCount: null == transactionCount
-          ? _value.transactionCount
-          : transactionCount // ignore: cast_nullable_to_non_nullable
-              as int,
-      lastSyncTime: freezed == lastSyncTime
-          ? _value.lastSyncTime
-          : lastSyncTime // ignore: cast_nullable_to_non_nullable
-              as DateTime?,
-    ) as $Val);
-  }
-}
-
-/// @nodoc
-abstract class _$$UserStatsImplCopyWith<$Res>
-    implements $UserStatsCopyWith<$Res> {
-  factory _$$UserStatsImplCopyWith(
-          _$UserStatsImpl value, $Res Function(_$UserStatsImpl) then) =
-      __$$UserStatsImplCopyWithImpl<$Res>;
-  @override
-  @useResult
-  $Res call(
-      {@HiveField(0) double totalBalance,
-      @HiveField(1) double totalIncome,
-      @HiveField(2) double totalExpense,
-      @HiveField(3) int transactionCount,
-      @HiveField(4) DateTime? lastSyncTime});
-}
-
-/// @nodoc
-class __$$UserStatsImplCopyWithImpl<$Res>
-    extends _$UserStatsCopyWithImpl<$Res, _$UserStatsImpl>
-    implements _$$UserStatsImplCopyWith<$Res> {
-  __$$UserStatsImplCopyWithImpl(
-      _$UserStatsImpl _value, $Res Function(_$UserStatsImpl) _then)
-      : super(_value, _then);
-
-  @pragma('vm:prefer-inline')
-  @override
-  $Res call({
-    Object? totalBalance = null,
-    Object? totalIncome = null,
-    Object? totalExpense = null,
-    Object? transactionCount = null,
-    Object? lastSyncTime = freezed,
-  }) {
-    return _then(_$UserStatsImpl(
-      totalBalance: null == totalBalance
-          ? _value.totalBalance
-          : totalBalance // ignore: cast_nullable_to_non_nullable
-              as double,
-      totalIncome: null == totalIncome
-          ? _value.totalIncome
-          : totalIncome // ignore: cast_nullable_to_non_nullable
-              as double,
-      totalExpense: null == totalExpense
-          ? _value.totalExpense
-          : totalExpense // ignore: cast_nullable_to_non_nullable
-              as double,
-      transactionCount: null == transactionCount
-          ? _value.transactionCount
-          : transactionCount // ignore: cast_nullable_to_non_nullable
-              as int,
-      lastSyncTime: freezed == lastSyncTime
-          ? _value.lastSyncTime
-          : lastSyncTime // ignore: cast_nullable_to_non_nullable
-              as DateTime?,
-    ));
-  }
-}
-
-/// @nodoc
-@JsonSerializable()
-class _$UserStatsImpl implements _UserStats {
-  const _$UserStatsImpl(
-      {@HiveField(0) this.totalBalance = 0,
-      @HiveField(1) this.totalIncome = 0,
-      @HiveField(2) this.totalExpense = 0,
-      @HiveField(3) this.transactionCount = 0,
-      @HiveField(4) this.lastSyncTime});
-
-  factory _$UserStatsImpl.fromJson(Map<String, dynamic> json) =>
-      _$$UserStatsImplFromJson(json);
-
-  @override
-  @JsonKey()
-  @HiveField(0)
-  final double totalBalance;
-  @override
-  @JsonKey()
-  @HiveField(1)
-  final double totalIncome;
-  @override
-  @JsonKey()
-  @HiveField(2)
-  final double totalExpense;
-  @override
-  @JsonKey()
-  @HiveField(3)
-  final int transactionCount;
-  @override
-  @HiveField(4)
-  final DateTime? lastSyncTime;
-
-  @override
-  String toString() {
-    return 'UserStats(totalBalance: $totalBalance, totalIncome: $totalIncome, totalExpense: $totalExpense, transactionCount: $transactionCount, lastSyncTime: $lastSyncTime)';
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is _$UserStatsImpl &&
-            (identical(other.totalBalance, totalBalance) ||
-                other.totalBalance == totalBalance) &&
-            (identical(other.totalIncome, totalIncome) ||
-                other.totalIncome == totalIncome) &&
-            (identical(other.totalExpense, totalExpense) ||
-                other.totalExpense == totalExpense) &&
-            (identical(other.transactionCount, transactionCount) ||
-                other.transactionCount == transactionCount) &&
-            (identical(other.lastSyncTime, lastSyncTime) ||
-                other.lastSyncTime == lastSyncTime));
-  }
-
-  @JsonKey(ignore: true)
-  @override
-  int get hashCode => Object.hash(runtimeType, totalBalance, totalIncome,
-      totalExpense, transactionCount, lastSyncTime);
-
-  @JsonKey(ignore: true)
-  @override
-  @pragma('vm:prefer-inline')
-  _$$UserStatsImplCopyWith<_$UserStatsImpl> get copyWith =>
-      __$$UserStatsImplCopyWithImpl<_$UserStatsImpl>(this, _$identity);
-
-  @override
-  Map<String, dynamic> toJson() {
-    return _$$UserStatsImplToJson(
-      this,
-    );
-  }
-}
-
-abstract class _UserStats implements UserStats {
-  const factory _UserStats(
-      {@HiveField(0) final double totalBalance,
-      @HiveField(1) final double totalIncome,
-      @HiveField(2) final double totalExpense,
-      @HiveField(3) final int transactionCount,
-      @HiveField(4) final DateTime? lastSyncTime}) = _$UserStatsImpl;
-
-  factory _UserStats.fromJson(Map<String, dynamic> json) =
-      _$UserStatsImpl.fromJson;
-
-  @override
-  @HiveField(0)
-  double get totalBalance;
-  @override
-  @HiveField(1)
-  double get totalIncome;
-  @override
-  @HiveField(2)
-  double get totalExpense;
-  @override
-  @HiveField(3)
-  int get transactionCount;
-  @override
-  @HiveField(4)
-  DateTime? get lastSyncTime;
-  @override
-  @JsonKey(ignore: true)
-  _$$UserStatsImplCopyWith<_$UserStatsImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

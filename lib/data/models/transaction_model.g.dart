@@ -19,7 +19,7 @@ class TransactionModelAdapter extends TypeAdapter<TransactionModel> {
     return TransactionModel(
       id: fields[0] as String,
       type: fields[1] as TransactionType,
-      amount: fields[2] as double,
+      amount: fields[2] as int,
       categoryId: fields[3] as String,
       accountId: fields[4] as String,
       date: fields[5] as DateTime,
@@ -206,7 +206,7 @@ _$TransactionModelImpl _$$TransactionModelImplFromJson(
     _$TransactionModelImpl(
       id: json['id'] as String,
       type: $enumDecode(_$TransactionTypeEnumMap, json['type']),
-      amount: (json['amount'] as num).toDouble(),
+      amount: (json['amount'] as num).toInt(),
       categoryId: json['categoryId'] as String,
       accountId: json['accountId'] as String,
       date: DateTime.parse(json['date'] as String),

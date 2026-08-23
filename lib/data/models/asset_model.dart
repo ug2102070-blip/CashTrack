@@ -10,8 +10,8 @@ class AssetModel with _$AssetModel {
   const factory AssetModel({
     @HiveField(0) required String id,
     @HiveField(1) required String name,
-    @HiveField(2) required double purchasePrice,
-    @HiveField(3) required double currentValue,
+    @HiveField(2) required int purchasePrice,
+    @HiveField(3) required int currentValue,
     @HiveField(4) required DateTime purchaseDate,
     @HiveField(5) DateTime? warrantyExpiry,
     @HiveField(6) DateTime? insuranceExpiry,

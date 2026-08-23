@@ -186,20 +186,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isDark
-              ? Colors.white.withValues(alpha: 0.06)
-              : Colors.black.withValues(alpha: 0.04),
+              ? AppColors.darkBorder.withValues(alpha: 0.5)
+              : AppColors.lightBorder.withValues(alpha: 0.7),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: isDark ? AppColors.shadowDarkSm : AppColors.shadowSm,
       ),
       child: ListTile(
         onTap: onTap,
@@ -233,20 +227,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isDark
-              ? Colors.white.withValues(alpha: 0.06)
-              : Colors.black.withValues(alpha: 0.04),
+              ? AppColors.darkBorder.withValues(alpha: 0.5)
+              : AppColors.lightBorder.withValues(alpha: 0.7),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: isDark ? AppColors.shadowDarkSm : AppColors.shadowSm,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -351,20 +339,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isDark
-              ? Colors.white.withValues(alpha: 0.06)
-              : Colors.black.withValues(alpha: 0.04),
+              ? AppColors.darkBorder.withValues(alpha: 0.5)
+              : AppColors.lightBorder.withValues(alpha: 0.7),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: isDark ? AppColors.shadowDarkSm : AppColors.shadowSm,
       ),
       child: Row(
         children: [
@@ -463,12 +445,24 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
     final totalIncome = _sumAmount(incomeTransactions);
     final totalExpense = _sumAmount(expenseTransactions);
-    final totalBudget = rangedBudgets.fold<double>(0, (sum, b) => sum + b.amount);
-    final totalBudgetSpent =
-        rangedBudgets.fold<double>(0, (sum, b) => sum + b.spent);
-    final overBudgetCount = rangedBudgets
-        .where((b) => b.amount > 0 && b.spent > b.amount)
-        .length;
+    final totalBudget = rangedBudgets.fold<int>(0, (sum, b) => sum + b.amount);
+    int totalBudgetSpent = 0;
+    int overBudgetCount = 0;
+    int onTrackCount = 0;
+    
+    for (final b in rangedBudgets) {
+      final spent = expenseTransactions
+          .where((t) => t.categoryId == b.categoryId && t.date.year == b.month.year && t.date.month == b.month.month)
+          .fold<int>(0, (sum, t) => sum + t.amount);
+      totalBudgetSpent += spent;
+      if (b.amount > 0) {
+        if (spent > b.amount) {
+          overBudgetCount++;
+        } else {
+          onTrackCount++;
+        }
+      }
+    }
 
     late final String reportTitle;
     late final List<List<String>> stats;
@@ -515,9 +509,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       case 'budget':
         final utilization =
             totalBudget > 0 ? (totalBudgetSpent / totalBudget) * 100 : 0.0;
-        final onTrackCount = rangedBudgets
-            .where((b) => b.amount > 0 && b.spent <= b.amount)
-            .length;
         reportTitle = context.t('budget_vs_actual');
         stats = [
           [
@@ -636,10 +627,25 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           : rawCurrency;
       final currency = (_selectedFormat == 'PDF') ? pdfCurrency : rawCurrency;
       final l10n = AppL10n.of(context);
+      final isBangla = Localizations.localeOf(context).languageCode == 'bn';
       final Map<String, String> categoryNames = {
-        for (final c in categories) c.id: c.name,
+        '': isBangla ? 'শ্রেণীহীন' : 'Uncategorized',
+        for (final c in categories) c.id: isBangla ? (c.nameBn.isNotEmpty ? c.nameBn : c.name) : c.name,
       };
-      final dir = await getTemporaryDirectory();
+      
+      Directory? dir;
+      if (Platform.isAndroid) {
+        dir = Directory('/storage/emulated/0/Download');
+        if (!await dir.exists()) {
+          dir = await getExternalStorageDirectory();
+        }
+      } else if (Platform.isIOS) {
+        dir = await getApplicationDocumentsDirectory();
+      } else {
+        dir = await getDownloadsDirectory();
+      }
+      dir ??= await getTemporaryDirectory();
+      
       final rangedBudgets = _getRangedBudgets(budgets, _selectedDateRange!);
       final budgetRows = reportType == 'budget'
           ? _buildBudgetComparisonRows(
@@ -689,6 +695,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       if (!returnFileOnly && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+            duration: const Duration(seconds: 2),
             content: Text(
               context.t('file_saved', params: {
                 'file': file.path.split('/').last,
@@ -697,9 +704,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             action: SnackBarAction(
               label: context.t('share'),
               onPressed: () {
+                final mimeType = _selectedFormat == 'PDF' 
+                    ? 'application/pdf' 
+                    : (_selectedFormat == 'CSV' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
                 SharePlus.instance.share(
                   ShareParams(
-                    files: [XFile(file.path)],
+                    files: [XFile(file.path, mimeType: mimeType)],
                     text: context.t('cashtrack_report'),
                   ),
                 );
@@ -749,9 +759,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               t.categoryId == budget.categoryId &&
               t.date.year == budget.month.year &&
               t.date.month == budget.month.month)
-          .fold<double>(0, (sum, t) => sum + t.amount);
+          .fold<int>(0, (sum, t) => sum + t.amount);
 
-      final spent = spentFromTransactions > 0 ? spentFromTransactions : budget.spent;
+      final spent = spentFromTransactions;
       final variance = budget.amount - spent;
       final utilization = budget.amount > 0 ? (spent / budget.amount) * 100 : 0.0;
 
@@ -782,8 +792,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     AppL10n l10n,
   ) {
     final pdf = pw.Document();
-    final totalBudget = rows.fold<double>(0, (sum, r) => sum + r.budgetAmount);
-    final totalSpent = rows.fold<double>(0, (sum, r) => sum + r.spentAmount);
+    final totalBudget = rows.fold<int>(0, (sum, r) => sum + r.budgetAmount);
+    final totalSpent = rows.fold<int>(0, (sum, r) => sum + r.spentAmount);
 
     pdf.addPage(
       pw.MultiPage(
@@ -996,7 +1006,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
                 pw.Text(
-                  'Generated by CashTrack — Developed by Jahid Hasan',
+                  'Generated by CashTrack - Developed by Jahid Hasan',
                   style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
                 ),
                 pw.Text(
@@ -1042,7 +1052,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               data: transactions.map((t) {
                 final type =
                     t.type == TransactionType.income ? l10n.t('income') : l10n.t('expense');
-                final date = DateFormat('yyyy-MM-dd').format(t.date);
+                final date = DateFormat('yyyy-MM-dd', 'en').format(t.date);
                 final amount =
                     (t.type == TransactionType.expense ? '-' : '') +
                         t.amount.toStringAsFixed(2);
@@ -1051,7 +1061,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   type,
                   categoryNames[t.categoryId] ?? t.categoryId,
                   '$currency $amount',
-                  t.note ?? '—',
+                  t.note ?? '-',
                 ];
               }).toList(),
               headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
@@ -1122,7 +1132,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       ...transactions.map((t) {
         final type =
             t.type == TransactionType.income ? context.t('income') : context.t('expense');
-        final date = DateFormat('yyyy-MM-dd').format(t.date);
+        final date = DateFormat('yyyy-MM-dd', 'en').format(t.date);
         final amount =
             (t.type == TransactionType.expense ? '-' : '') +
                 t.amount.toStringAsFixed(2);
@@ -1157,7 +1167,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     for (final t in transactions) {
       final type =
           t.type == TransactionType.income ? context.t('income') : context.t('expense');
-      final date = DateFormat('yyyy-MM-dd').format(t.date);
+      final date = DateFormat('yyyy-MM-dd', 'en').format(t.date);
       final amount =
           (t.type == TransactionType.expense ? '-' : '') +
               t.amount.toStringAsFixed(2);
@@ -1176,7 +1186,19 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
   Future<void> _downloadTemplate(String templateId) async {
     try {
-      final dir = await getTemporaryDirectory();
+      Directory? dir;
+      if (Platform.isAndroid) {
+        dir = Directory('/storage/emulated/0/Download');
+        if (!await dir.exists()) {
+          dir = await getExternalStorageDirectory();
+        }
+      } else if (Platform.isIOS) {
+        dir = await getApplicationDocumentsDirectory();
+      } else {
+        dir = await getDownloadsDirectory();
+      }
+      dir ??= await getTemporaryDirectory();
+
       final stamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
       final fileBase = _templateFileBase(templateId);
       final templateTitle = _templateTitle(templateId);
@@ -1205,6 +1227,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          duration: const Duration(seconds: 2),
           content: Text(
             context.t('template_saved', params: {
               'file': file.path.split('/').last,
@@ -1213,9 +1236,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           action: SnackBarAction(
             label: context.t('share'),
             onPressed: () {
+              final mimeType = _selectedFormat == 'PDF' 
+                  ? 'application/pdf' 
+                  : (_selectedFormat == 'CSV' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
               SharePlus.instance.share(
                 ShareParams(
-                  files: [XFile(file.path)],
+                  files: [XFile(file.path, mimeType: mimeType)],
                   text: context.t('template_share_text', params: {
                     'name': templateTitle,
                   }),
@@ -1395,9 +1421,9 @@ class _BudgetComparisonRow {
 
   final String month;
   final String category;
-  final double budgetAmount;
-  final double spentAmount;
-  final double variance;
+  final int budgetAmount;
+  final int spentAmount;
+  final int variance;
   final double utilization;
 }
 

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../core/l10n/app_l10n.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../data/models/transaction_model.dart';
 import '../providers/app_providers.dart';
 
 class NotificationsScreen extends ConsumerWidget {
@@ -15,12 +16,17 @@ class NotificationsScreen extends ConsumerWidget {
     final summary = ref.watch(dashboardSummaryProvider);
     final budgets =
         ref.watch(budgetsProvider.notifier).getBudgetsForCurrentMonth();
+    final transactions = ref.watch(transactionsProvider);
     final debts = ref.watch(debtsProvider);
     final accounts = ref.watch(accountsProvider);
     final categories = ref.watch(categoriesProvider);
     final settings = ref.watch(settingsProvider);
     final currency = (settings['currency'] as String?) ?? '৳';
-    final categoryMap = {for (final c in categories) c.id: c.name};
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
+    final categoryMap = {
+      '': isBangla ? 'শ্রেণীহীন' : 'Uncategorized',
+      for (final c in categories) c.id: isBangla ? (c.nameBn.isNotEmpty ? c.nameBn : c.name) : c.name
+    };
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final items = <_NotifItem>[];
@@ -42,7 +48,14 @@ class NotificationsScreen extends ConsumerWidget {
     for (final b in budgets) {
       if (b.amount <= 0) continue;
       final catName = categoryMap[b.categoryId] ?? b.categoryId;
-      final ratio = b.spent / b.amount;
+      final spent = transactions
+          .where((t) =>
+              t.type == TransactionType.expense &&
+              t.categoryId == b.categoryId &&
+              t.date.year == b.month.year &&
+              t.date.month == b.month.month)
+          .fold<int>(0, (sum, t) => sum + t.amount);
+      final ratio = spent / b.amount;
       if (ratio >= 1) {
         items.add(_NotifItem(
           title: context.t('budget_exceeded'),

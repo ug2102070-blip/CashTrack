@@ -2,6 +2,7 @@ import 'package:hive/hive.dart';
 
 import '../models/asset_model.dart';
 import 'hive_box_recovery.dart';
+import 'sync_tombstone_repository.dart';
 
 class AssetRepository {
   AssetRepository._internal();
@@ -50,7 +51,7 @@ class AssetRepository {
     await _box!.put(asset.id, asset.toJson());
   }
 
-  Future<void> updateValue(String assetId, double newValue) async {
+  Future<void> updateValue(String assetId, int newValue) async {
     await init();
     final asset = _decode(_box!.get(assetId));
     if (asset != null) {
@@ -66,11 +67,12 @@ class AssetRepository {
   Future<void> deleteAsset(String id) async {
     await init();
     await _box!.delete(id);
+    await SyncTombstoneRepository().record(_boxName, id);
   }
 
-  double getTotalAssetValue() {
+  int getTotalAssetValue() {
     return _decodedValues()
-        .fold<double>(0, (sum, asset) => sum + asset.currentValue);
+        .fold<int>(0, (sum, asset) => sum + asset.currentValue);
   }
 
   List<AssetModel> _decodedValues() {
