@@ -24,7 +24,7 @@ dependencies:
   shared_preferences: ^2.2.2
 
   # Firebase
-  firebase_core: ^4.4.0
+  firebase_core: ^4.13.0
   firebase_app_check: ^0.4.1+4
   firebase_auth: ^6.1.4
   cloud_firestore: ^6.1.2
