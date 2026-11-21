@@ -9,6 +9,7 @@ import '../data/repositories/hive_box_recovery.dart';
 import '../data/repositories/sync_tombstone_repository.dart';
 import 'auth_service.dart';
 import 'local_user_data_service.dart';
+import 'profile_sync_service.dart';
 import 'sync_conflict_resolver.dart';
 
 /// Version 2 sync stores each record as its own document. This avoids the
@@ -69,6 +70,7 @@ class SyncService {
       // Pull first so a fresh device never mistakes remote data for local deletes.
       await _pullRemote(userId);
       await _pushLocal(userId);
+      await _syncProfile(userId);
       LocalUserDataService.instance.notifyChanged();
       return syncCompleteMessage;
     } catch (error, stackTrace) {
@@ -87,10 +89,21 @@ class SyncService {
       await LocalUserDataService.instance.prepareForSync(userId);
       await _migrateLegacySnapshot(userId);
       await _pullRemote(userId);
+      await _syncProfile(userId);
       LocalUserDataService.instance.notifyChanged();
       return restoreCompleteMessage;
     } catch (error) {
       return 'Restore failed: $error';
+    }
+  }
+
+  /// Profile sync is best-effort: a profile failure (e.g. a photo rejected by
+  /// rules) must never fail or roll back financial data sync.
+  Future<void> _syncProfile(String userId) async {
+    try {
+      await ProfileSyncService(firestore: _firestore).sync(userId);
+    } catch (error) {
+      AppLogger.w('Profile sync failed: $error');
     }
   }
 

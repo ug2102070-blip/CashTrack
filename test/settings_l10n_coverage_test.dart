@@ -12,6 +12,7 @@ void main() {
   const files = [
     'lib/presentation/settings/settings_screen.dart',
     'lib/presentation/security/app_lock_gate.dart',
+    'lib/presentation/profile/profile_screen.dart',
   ];
   final keyPattern = RegExp(r"""\.t\(\s*'([a-z0-9_]+)'""");
   // Conditional keys: `t(flag ? 'x_on' : 'x_off')`.

@@ -4,12 +4,16 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/l10n/app_l10n.dart';
+import '../../core/utils/logger.dart';
+import '../../core/utils/validators.dart';
+import '../../data/models/transaction_model.dart';
+import '../../services/auth_service.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/app_providers.dart';
+import 'profile_logic.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -26,7 +30,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   late final List<Animation<Offset>> _slideAnimations;
   late final Animation<double> _avatarScale;
 
-  static const List<int> _animationDelays = [0, 80, 120, 160, 200, 240, 280];
+  static const List<int> _animationDelays = [0, 80, 120, 160, 200];
 
   final Map<String, TextEditingController> _controllers = {};
 
@@ -76,8 +80,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final e = ((ms + 300) / 700).clamp(0.0, 1.0);
     return Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
         .animate(CurvedAnimation(
-            parent: _animCtrl,
-            curve: Interval(s, e, curve: Curves.easeOut)));
+            parent: _animCtrl, curve: Interval(s, e, curve: Curves.easeOut)));
   }
 
   Widget _anim({required int index, required Widget child}) {
@@ -96,14 +99,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   Widget build(BuildContext context) {
     final profile = ref.watch(userProfileProvider);
     final transactions = ref.watch(transactionsProvider);
+    final hasBudget = ref.watch(budgetsProvider).isNotEmpty;
 
     final fullName = (profile['fullName'] ?? '').trim();
     final email = (profile['email'] ?? '').trim();
+    final emailManaged =
+        UserProfileNotifier.accountEmailOf(AuthService().currentUser) != null;
     final phone = (profile['phone'] ?? '').trim();
-    final address = (profile['address'] ?? '').trim();
-    final occupation = (profile['occupation'] ?? '').trim();
-    final bio = (profile['bio'] ?? '').trim();
     final dob = (profile['dob'] ?? '').trim();
+    final dobDisplay =
+        displayDob(dob, Localizations.localeOf(context).toString());
     final photoBase64 = (profile['photoBase64'] ?? '').trim();
     final profilePhotoBytes = _decodePhotoBytes(photoBase64);
     final displayName = fullName.isEmpty ? context.t('your_name') : fullName;
@@ -122,32 +127,34 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             backgroundColor: primary,
             leading: Padding(
               padding: const EdgeInsets.all(8),
-              child: GestureDetector(
-                onTap: () => context.pop(),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.arrow_back_rounded,
-                      color: Colors.white, size: 20),
+              child: IconButton(
+                tooltip: context.t('back'),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.15),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
+                // The route can be opened directly (web sidebar / deep link)
+                // with nothing beneath it, where pop() would throw.
+                onPressed: () =>
+                    context.canPop() ? context.pop() : context.go('/settings'),
+                icon: const Icon(Icons.arrow_back_rounded,
+                    color: Colors.white, size: 20),
               ),
             ),
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: 12),
-                child: GestureDetector(
-                  onTap: () => _showPhotoOptions(context, photoBase64),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.camera_alt_rounded,
-                        color: Colors.white, size: 20),
+                child: IconButton(
+                  tooltip: context.t('profile_photo'),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.white.withValues(alpha: 0.15),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
+                  onPressed: () => _showPhotoOptions(context, photoBase64),
+                  icon: const Icon(Icons.camera_alt_rounded,
+                      color: Colors.white, size: 20),
                 ),
               ),
             ],
@@ -166,9 +173,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 child: Stack(
                   children: [
                     Positioned(
-                      top: -30, right: -20,
+                      top: -30,
+                      right: -20,
                       child: Container(
-                        width: 120, height: 120,
+                        width: 120,
+                        height: 120,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.white.withValues(alpha: 0.06),
@@ -176,9 +185,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       ),
                     ),
                     Positioned(
-                      bottom: 0, left: -15,
+                      bottom: 0,
+                      left: -15,
                       child: Container(
-                        width: 90, height: 90,
+                        width: 90,
+                        height: 90,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.white.withValues(alpha: 0.05),
@@ -200,7 +211,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                   child: Stack(
                                     children: [
                                       Container(
-                                        width: 72, height: 72,
+                                        width: 72,
+                                        height: 72,
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
                                           border: Border.all(
@@ -237,9 +249,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                         ),
                                       ),
                                       Positioned(
-                                        bottom: 2, right: 2,
+                                        bottom: 2,
+                                        right: 2,
                                         child: Container(
-                                          width: 20, height: 20,
+                                          width: 20,
+                                          height: 20,
                                           decoration: BoxDecoration(
                                             color: Colors.white,
                                             shape: BoxShape.circle,
@@ -261,6 +275,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                   children: [
                                     Text(
                                       displayName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 20,
@@ -268,15 +284,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                         letterSpacing: -0.4,
                                       ),
                                     ),
-                                    if (occupation.isNotEmpty) ...[
-                                      const SizedBox(height: 2),
-                                      Text(occupation,
-                                          style: TextStyle(
-                                              color: Colors.white
-                                                  .withValues(alpha: 0.75),
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500)),
-                                    ],
                                     if (email.isNotEmpty) ...[
                                       const SizedBox(height: 3),
                                       Row(children: [
@@ -294,23 +301,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                               overflow: TextOverflow.ellipsis),
                                         ),
                                       ]),
-                                    ],
-                                    if (phone.isNotEmpty ||
-                                        address.isNotEmpty) ...[
-                                      const SizedBox(height: 6),
-                                      Wrap(
-                                        spacing: 6,
-                                        runSpacing: 4,
-                                        children: [
-                                          if (phone.isNotEmpty)
-                                            _headerBadge(
-                                                Icons.phone_rounded, phone),
-                                          if (address.isNotEmpty)
-                                            _headerBadge(
-                                                Icons.location_on_rounded,
-                                                address),
-                                        ],
-                                      ),
                                     ],
                                   ],
                                 ),
@@ -349,7 +339,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     value: email.isEmpty ? context.t('not_set') : email,
                     fieldKey: 'email',
                     initialValue: email,
-                    keyboardType: TextInputType.emailAddress),
+                    keyboardType: TextInputType.emailAddress,
+                    readOnly: emailManaged),
                 _FieldConfig(
                     icon: Icons.phone_rounded,
                     label: context.t('phone'),
@@ -358,52 +349,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     initialValue: phone,
                     keyboardType: TextInputType.phone),
                 _FieldConfig(
-                    icon: Icons.work_rounded,
-                    label: context.t('occupation'),
-                    value: occupation.isEmpty
-                        ? context.t('not_set')
-                        : occupation,
-                    fieldKey: 'occupation',
-                    initialValue: occupation,
-                    keyboardType: TextInputType.text),
-              ]),
-            ),
-          ),
-
-          // ── Additional Info ───────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: _anim(
-                index: 3,
-                child:
-                    _sectionLabel(context, context.t('additional_info'))),
-          ),
-          SliverToBoxAdapter(
-            child: _anim(
-              index: 4,
-              child: _buildInfoGroup(context, isDark, primary, [
-                _FieldConfig(
-                    icon: Icons.location_on_rounded,
-                    label: context.t('address'),
-                    value: address.isEmpty ? context.t('not_set') : address,
-                    fieldKey: 'address',
-                    initialValue: address,
-                    keyboardType: TextInputType.streetAddress),
-                _FieldConfig(
                     icon: Icons.cake_rounded,
                     label: context.t('date_of_birth'),
-                    value: dob.isEmpty ? context.t('not_set') : dob,
+                    value: dob.isEmpty ? context.t('not_set') : dobDisplay,
                     fieldKey: 'dob',
                     initialValue: dob,
                     keyboardType: TextInputType.datetime,
                     isDate: true),
-                _FieldConfig(
-                    icon: Icons.info_rounded,
-                    label: context.t('bio'),
-                    value: bio.isEmpty ? context.t('not_set') : bio,
-                    fieldKey: 'bio',
-                    initialValue: bio,
-                    keyboardType: TextInputType.multiline,
-                    isMultiline: true),
               ]),
             ),
           ),
@@ -411,41 +363,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           // ── Achievements ──────────────────────────────────────────────
           SliverToBoxAdapter(
             child: _anim(
-                index: 5,
+                index: 3,
                 child: _sectionLabel(context, context.t('achievements'))),
           ),
           SliverToBoxAdapter(
             child: _anim(
-              index: 6,
-              child: _buildAchievements(
-                  context, transactions.length, isDark, primary),
+              index: 4,
+              child: _buildAchievements(context,
+                  transactions: transactions,
+                  hasBudget: hasBudget,
+                  isDark: isDark),
             ),
           ),
 
           const SliverToBoxAdapter(child: SizedBox(height: 110)),
-        ],
-      ),
-    );
-  }
-
-  // ── Header badge helper ───────────────────────────────────────────────────
-  Widget _headerBadge(IconData icon, String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 10, color: Colors.white.withValues(alpha: 0.7)),
-          const SizedBox(width: 3),
-          Text(text,
-              style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.8),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -482,7 +413,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             children: [
               InkWell(
                 onTap: () {
-                  if (f.isDate) {
+                  if (f.readOnly) {
+                    _showSnack(context, context.t('profile_email_managed'));
+                  } else if (f.isDate) {
                     _showDatePicker(context, f);
                   } else {
                     _showEditBottomSheet(context, f);
@@ -490,8 +423,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 },
                 borderRadius: BorderRadius.circular(16),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 13),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
                   child: Row(
                     children: [
                       Container(
@@ -527,22 +460,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                         .colorScheme
                                         .onSurface
                                         .withValues(alpha: 0.3)
-                                    : Theme.of(context)
-                                        .colorScheme
-                                        .onSurface,
+                                    : Theme.of(context).colorScheme.onSurface,
                               ),
-                              maxLines: f.isMultiline ? 3 : 1,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
                       ),
-                      Icon(Icons.edit_rounded,
-                          size: 15,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.25)),
+                      if (f.isDate && f.initialValue.isNotEmpty)
+                        IconButton(
+                          tooltip: context.t('profile_dob_clear'),
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => _saveField(context, f, ''),
+                          icon: Icon(Icons.close_rounded,
+                              size: 18,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.45)),
+                        )
+                      else
+                        Icon(
+                            f.readOnly
+                                ? Icons.lock_outline_rounded
+                                : Icons.edit_rounded,
+                            size: 15,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.25)),
                     ],
                   ),
                 ),
@@ -564,11 +511,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   }
 
   // ── Edit Bottom Sheet ──────────────────────────────────────────────────────
-  Future<void> _showEditBottomSheet(BuildContext context, _FieldConfig f) async {
+  Future<void> _showEditBottomSheet(
+      BuildContext context, _FieldConfig f) async {
     final ctrl = _controllerFor(f);
     ctrl.text = f.initialValue;
-    ctrl.selection = TextSelection.fromPosition(
-        TextPosition(offset: ctrl.text.length));
+    ctrl.selection =
+        TextSelection.fromPosition(TextPosition(offset: ctrl.text.length));
+    String? errorText;
+    var saving = false;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -583,7 +533,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             return Container(
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(24)),
               ),
               padding: EdgeInsets.only(
                 left: 20,
@@ -608,17 +559,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   const SizedBox(height: 16),
                   Text(
                     '${context.t('edit')} ${f.label}',
-                    style: AppTextStyles.h5.copyWith(fontWeight: FontWeight.w800),
+                    style:
+                        AppTextStyles.h5.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: ctrl,
                     autofocus: true,
                     keyboardType: f.keyboardType,
-                    maxLines: f.isMultiline ? 4 : 1,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    textCapitalization: f.fieldKey == 'email'
+                        ? TextCapitalization.none
+                        : TextCapitalization.sentences,
+                    maxLines: 1,
+                    maxLength: kProfileFieldMaxLength[f.fieldKey],
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600),
                     decoration: InputDecoration(
                       hintText: f.label,
+                      errorText: errorText,
+                      errorMaxLines: 2,
                       prefixIcon: Icon(f.icon, color: primary, size: 20),
                       suffixIcon: ctrl.text.isNotEmpty
                           ? IconButton(
@@ -649,7 +608,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       ),
                     ),
                     onChanged: (text) {
-                      setModalState(() {});
+                      setModalState(() => errorText = null);
                     },
                   ),
                   const SizedBox(height: 20),
@@ -682,10 +641,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       const SizedBox(width: 12),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: () {
-                            _saveInlineField(context, f, ctrl);
-                            Navigator.pop(context);
-                          },
+                          onPressed: saving
+                              ? null
+                              : () async {
+                                  final error =
+                                      _validateField(context, f, ctrl.text);
+                                  if (error != null) {
+                                    setModalState(() => errorText = error);
+                                    return;
+                                  }
+                                  setModalState(() => saving = true);
+                                  final ok = await _saveField(
+                                      this.context, f, ctrl.text);
+                                  if (!context.mounted) return;
+                                  if (ok) {
+                                    Navigator.pop(context);
+                                  } else {
+                                    setModalState(() => saving = false);
+                                  }
+                                },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primary,
                             foregroundColor: Colors.white,
@@ -695,10 +669,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             ),
                             elevation: 0,
                           ),
-                          child: Text(
-                            context.t('save'),
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
+                          child: saving
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white),
+                                )
+                              : Text(
+                                  context.t('save'),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700),
+                                ),
                         ),
                       ),
                     ],
@@ -712,45 +694,68 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
-  void _saveInlineField(BuildContext context, _FieldConfig f,
-      TextEditingController ctrl) {
-    final result = ctrl.text.trim();
-    if (!mounted) return;
-    final current = ref.read(userProfileProvider);
-    final updated = <String, String>{
-      'fullName': current['fullName'] ?? '',
-      'email': current['email'] ?? '',
-      'phone': current['phone'] ?? '',
-      'address': current['address'] ?? '',
-      'occupation': current['occupation'] ?? '',
-      'bio': current['bio'] ?? '',
-      'dob': current['dob'] ?? '',
-      'photoBase64': current['photoBase64'] ?? '',
-    };
-    updated[f.fieldKey] = result;
-    ref.read(userProfileProvider.notifier).updateProfile(
-          fullName: updated['fullName']!,
-          email: updated['email']!,
-          phone: updated['phone']!,
-          address: updated['address']!,
-          occupation: updated['occupation']!,
-          bio: updated['bio']!,
-          dob: updated['dob']!,
-          photoBase64: updated['photoBase64'],
-        );
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content:
-          Text(context.t('field_updated', params: {'label': f.label})),
-      duration: const Duration(seconds: 1),
-      behavior: SnackBarBehavior.floating,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
+  /// Returns a localized error, or null when [raw] is acceptable.
+  /// All fields are optional; empty clears the value.
+  String? _validateField(BuildContext context, _FieldConfig f, String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) return null;
+    final max = kProfileFieldMaxLength[f.fieldKey];
+    if (max != null && value.length > max) {
+      return context.t('error_max_length', params: {'max': '$max'});
+    }
+    switch (f.fieldKey) {
+      case 'email':
+        return Validators.email(context, value);
+      case 'phone':
+        return Validators.phone(context, normalizePhone(value));
+    }
+    return null;
+  }
+
+  /// Persists one field. Shows success only after the write completes.
+  Future<bool> _saveField(
+      BuildContext context, _FieldConfig f, String raw) async {
+    var value = raw.trim();
+    if (f.fieldKey == 'phone') value = normalizePhone(value);
+    try {
+      await ref
+          .read(userProfileProvider.notifier)
+          .updateField(f.fieldKey, value);
+      if (context.mounted) {
+        _showSnack(
+            context, context.t('field_updated', params: {'label': f.label}));
+      }
+      return true;
+    } catch (e) {
+      AppLogger.e('Profile field save failed (${f.fieldKey}): $e');
+      if (context.mounted) {
+        _showSnack(context, context.t('profile_save_failed'), isError: true);
+      }
+      return false;
+    }
+  }
+
+  void _showSnack(BuildContext context, String message,
+      {bool isError = false}) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppColors.error : null,
+        duration: Duration(seconds: isError ? 3 : 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
   }
 
   // ── Achievements ──────────────────────────────────────────────────────────
   Widget _buildAchievements(
-      BuildContext context, int txCount, bool isDark, Color primary) {
+    BuildContext context, {
+    required List<TransactionModel> transactions,
+    required bool hasBudget,
+    required bool isDark,
+  }) {
+    final txCount = transactions.where((t) => !t.isDeleted).length;
     final achievements = [
       _Achievement(context.t('ach_first_tx'), context.t('ach_first_tx_desc'),
           Icons.star_rounded, AppColors.warning, txCount >= 1),
@@ -759,7 +764,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           context.t('ach_budget_tracker_desc'),
           Icons.pie_chart_rounded,
           AppColors.info,
-          false),
+          hasBudget),
       _Achievement(
           context.t('ach_power_user'),
           context.t('ach_power_user_desc'),
@@ -771,7 +776,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           context.t('ach_savings_master_desc'),
           Icons.savings_rounded,
           AppColors.success,
-          false),
+          hasSavingsMonth(transactions)),
     ];
 
     return Padding(
@@ -782,69 +787,77 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           final a = entry.value;
           return Expanded(
             child: Padding(
-              padding: EdgeInsets.only(right: i < achievements.length - 1 ? 8 : 0),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: a.unlocked
-                      ? a.color.withValues(alpha: 0.08)
-                      : Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
+              padding:
+                  EdgeInsets.only(right: i < achievements.length - 1 ? 8 : 0),
+              // The description says how to unlock it; previously never shown.
+              child: Tooltip(
+                message: a.description,
+                triggerMode: TooltipTriggerMode.tap,
+                showDuration: const Duration(seconds: 3),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
                     color: a.unlocked
-                        ? a.color.withValues(alpha: 0.25)
-                        : isDark
-                            ? Colors.white.withValues(alpha: 0.06)
-                            : Colors.black.withValues(alpha: 0.04),
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: a.unlocked
-                            ? a.color.withValues(alpha: 0.15)
-                            : Colors.grey.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(a.icon,
-                          color: a.unlocked
-                              ? a.color
-                              : Colors.grey.withValues(alpha: 0.4),
-                          size: 18),
+                        ? a.color.withValues(alpha: 0.08)
+                        : Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: a.unlocked
+                          ? a.color.withValues(alpha: 0.25)
+                          : isDark
+                              ? Colors.white.withValues(alpha: 0.06)
+                              : Colors.black.withValues(alpha: 0.04),
                     ),
-                    const SizedBox(height: 6),
-                    Text(a.title,
-                        style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: a.unlocked
-                                ? Theme.of(context).colorScheme.onSurface
-                                : Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withValues(alpha: 0.35)),
-                        textAlign: TextAlign.center,
-                        maxLines: 2),
-                    if (a.unlocked) ...[
-                      const SizedBox(height: 4),
+                  ),
+                  child: Column(
+                    children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                        width: 36,
+                        height: 36,
                         decoration: BoxDecoration(
-                          color: a.color.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(4),
+                          color: a.unlocked
+                              ? a.color.withValues(alpha: 0.15)
+                              : Colors.grey.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Text(context.t('unlocked'),
-                            style: TextStyle(
-                                fontSize: 8,
-                                fontWeight: FontWeight.w700,
-                                color: a.color)),
+                        child: Icon(a.icon,
+                            color: a.unlocked
+                                ? a.color
+                                : Colors.grey.withValues(alpha: 0.4),
+                            size: 18),
                       ),
+                      const SizedBox(height: 6),
+                      Text(a.title,
+                          style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: a.unlocked
+                                  ? Theme.of(context).colorScheme.onSurface
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withValues(alpha: 0.35)),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                      if (a.unlocked) ...[
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: a.color.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(context.t('unlocked'),
+                              style: TextStyle(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w700,
+                                  color: a.color)),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -864,8 +877,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.2,
-          color:
-              Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
         ),
       ),
     );
@@ -880,8 +892,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       builder: (ctx) => Container(
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         child: Column(
@@ -899,7 +910,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             const SizedBox(height: 8),
             ListTile(
               leading: Container(
-                width: 40, height: 40,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                     color: Theme.of(context)
                         .colorScheme
@@ -910,25 +922,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     color: Theme.of(context).colorScheme.primary, size: 20),
               ),
               title: Text(ctx.t('choose_from_gallery')),
-              onTap: () async {
+              onTap: () {
                 Navigator.pop(ctx);
-                final picker = ImagePicker();
-                final file =
-                    await picker.pickImage(source: ImageSource.gallery);
-                if (file == null) return;
-                final bytes = await file.readAsBytes();
-                final b64 = base64Encode(bytes);
-                await ref
-                    .read(userProfileProvider.notifier)
-                    .updateProfilePhoto(b64);
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(context.t('photo_updated'))));
+                _pickPhoto(context, ImageSource.gallery);
               },
             ),
             ListTile(
               leading: Container(
-                width: 40, height: 40,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                     color: Theme.of(context)
                         .colorScheme
@@ -939,26 +941,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     color: Theme.of(context).colorScheme.primary, size: 20),
               ),
               title: Text(ctx.t('take_photo')),
-              onTap: () async {
+              onTap: () {
                 Navigator.pop(ctx);
-                final picker = ImagePicker();
-                final file =
-                    await picker.pickImage(source: ImageSource.camera);
-                if (file == null) return;
-                final bytes = await file.readAsBytes();
-                final b64 = base64Encode(bytes);
-                await ref
-                    .read(userProfileProvider.notifier)
-                    .updateProfilePhoto(b64);
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(context.t('photo_updated'))));
+                _pickPhoto(context, ImageSource.camera);
               },
             ),
             if (currentPhoto.isNotEmpty)
               ListTile(
                 leading: Container(
-                  width: 40, height: 40,
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
                       color: AppColors.error.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10)),
@@ -968,12 +960,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 title: Text(ctx.t('remove_photo')),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  await ref
-                      .read(userProfileProvider.notifier)
-                      .clearProfilePhoto();
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(context.t('photo_removed'))));
+                  try {
+                    await ref
+                        .read(userProfileProvider.notifier)
+                        .clearProfilePhoto();
+                    if (!context.mounted) return;
+                    _showSnack(context, context.t('photo_removed'));
+                  } catch (e) {
+                    AppLogger.e('Profile photo removal failed: $e');
+                    if (!context.mounted) return;
+                    _showSnack(context, context.t('profile_save_failed'),
+                        isError: true);
+                  }
                 },
               ),
           ],
@@ -982,58 +980,78 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
+  Future<void> _pickPhoto(BuildContext context, ImageSource source) async {
+    try {
+      // Resize/compress at pick time: the photo is stored base64 in Hive and
+      // loaded at every startup, so multi-MB camera originals are not OK.
+      final file = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: kProfilePhotoMaxDimension,
+        maxHeight: kProfilePhotoMaxDimension,
+        imageQuality: kProfilePhotoQuality,
+      );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      if (bytes.length > kProfilePhotoMaxBytes) {
+        if (context.mounted) {
+          _showSnack(context, context.t('profile_photo_too_large'),
+              isError: true);
+        }
+        return;
+      }
+      await ref
+          .read(userProfileProvider.notifier)
+          .updateProfilePhoto(base64Encode(bytes));
+      if (!context.mounted) return;
+      _showSnack(context, context.t('photo_updated'));
+    } catch (e) {
+      // Permission denied, camera unavailable, read/write failure.
+      AppLogger.e('Profile photo update failed: $e');
+      if (!context.mounted) return;
+      _showSnack(context, context.t('profile_photo_failed'), isError: true);
+    }
+  }
+
   // ── Date picker ───────────────────────────────────────────────────────────
-  Future<void> _showDatePicker(
-      BuildContext context, _FieldConfig field) async {
-    DateTime initial = DateTime(1995, 1, 1);
-    if (field.initialValue.isNotEmpty && field.initialValue != context.t('not_set')) {
-      try {
-        initial = DateFormat('dd MMM yyyy').parse(field.initialValue);
-      } catch (_) {}
+  Future<void> _showDatePicker(BuildContext context, _FieldConfig field) async {
+    final now = DateTime.now();
+    final firstDate = DateTime(1920);
+    var initial = parseStoredDob(field.initialValue) ?? DateTime(1995, 1, 1);
+    if (initial.isAfter(now) || initial.isBefore(firstDate)) {
+      initial = DateTime(1995, 1, 1);
     }
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
-      firstDate: DateTime(1920),
-      lastDate: DateTime.now(),
+      firstDate: firstDate,
+      lastDate: now,
     );
-    if (picked == null || !mounted) return;
-    final formatted = DateFormat('dd MMM yyyy').format(picked);
-    final current = ref.read(userProfileProvider);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      ref.read(userProfileProvider.notifier).updateProfile(
-            fullName: current['fullName'] ?? '',
-            email: current['email'] ?? '',
-            phone: current['phone'] ?? '',
-            address: current['address'] ?? '',
-            occupation: current['occupation'] ?? '',
-            bio: current['bio'] ?? '',
-            dob: formatted,
-            photoBase64: current['photoBase64'],
-          );
-    });
+    if (picked == null || !context.mounted) return;
+    // Stored in a fixed English format so it parses in any app language.
+    await _saveField(context, field, formatDobForStorage(picked));
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
-  String _initials(BuildContext context, String name) {
-    final parts = name
-        .split(' ')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-    if (parts.isEmpty) return context.t('unknown_initial');
-    if (parts.length == 1) return parts.first[0].toUpperCase();
-    return (parts.first[0] + parts.last[0]).toUpperCase();
-  }
+  String _initials(BuildContext context, String name) =>
+      profileInitials(name, context.t('unknown_initial'));
+
+  // Decoding a base64 photo on every rebuild also hands Image.memory a new
+  // byte list each time, forcing a re-decode; memoize by source string.
+  String? _photoCacheKey;
+  Uint8List? _photoCacheBytes;
 
   Uint8List? _decodePhotoBytes(String photoBase64) {
     if (photoBase64.isEmpty) return null;
+    if (photoBase64 == _photoCacheKey) return _photoCacheBytes;
+    Uint8List? bytes;
     try {
-      return base64Decode(photoBase64);
+      bytes = base64Decode(photoBase64);
     } catch (_) {
-      return null;
+      bytes = null;
     }
+    _photoCacheKey = photoBase64;
+    _photoCacheBytes = bytes;
+    return bytes;
   }
 }
 
@@ -1047,8 +1065,8 @@ class _FieldConfig {
     required this.fieldKey,
     required this.initialValue,
     required this.keyboardType,
-    this.isMultiline = false,
     this.isDate = false,
+    this.readOnly = false,
   });
 
   final IconData icon;
@@ -1057,8 +1075,8 @@ class _FieldConfig {
   final String fieldKey;
   final String initialValue;
   final TextInputType keyboardType;
-  final bool isMultiline;
   final bool isDate;
+  final bool readOnly;
 }
 
 class _Achievement {

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:hive/hive.dart'; // Hive এর জন্য ইমপোর্ট প্রয়োজন
+import 'package:firebase_auth/firebase_auth.dart' show User;
 // আপনার প্রজেক্টের পাথ অনুযায়ী নিচের ইমপোর্টগুলো চেক করে নিবেন
 // import '../../core/constants/storage_keys.dart';
 
@@ -26,6 +27,7 @@ import '../../data/models/split_expense_model.dart';
 import '../../core/utils/logger.dart';
 import '../../services/auth_service.dart';
 import '../../services/local_user_data_service.dart';
+import '../../services/profile_store.dart';
 import 'auth_providers.dart';
 
 // ==========================================
@@ -1225,112 +1227,65 @@ final userProfileProvider =
 });
 
 class UserProfileNotifier extends StateNotifier<Map<String, String>> {
-  UserProfileNotifier()
-      : super({
+  UserProfileNotifier({ProfileStore? store})
+      : _store = store ?? ProfileStore(),
+        super(const {
           'fullName': '',
           'email': '',
           'phone': '',
-          'address': '',
-          'occupation': '',
-          'bio': '',
           'dob': '',
           'photoBase64': '',
         }) {
     _loadProfile();
   }
 
-  static const _boxName = 'settingsBox';
+  final ProfileStore _store;
 
-  /// Returns a UID-prefixed key for per-user storage.
-  /// Guest/anonymous users fall back to Firebase displayName/email only.
-  String _key(String field) {
-    final uid = AuthService().currentUser?.uid;
-    if (uid == null || uid.isEmpty) return 'profile_$field';
-    return 'profile_${uid}_$field';
-  }
-
-  Future<Box> _getBox() async {
-    if (Hive.isBoxOpen(_boxName)) {
-      return Hive.box(_boxName);
-    }
-    return Hive.openBox(_boxName);
-  }
+  String? get _uid => AuthService().currentUser?.uid;
 
   Future<void> _loadProfile() async {
-    final box = await _getBox();
     final user = AuthService().currentUser;
-
-    final fullName = (box.get(_key('full_name')) as String?)?.trim();
-    final email = (box.get(_key('email')) as String?)?.trim();
-    final phone = (box.get(_key('phone')) as String?)?.trim();
-    final address = (box.get(_key('address')) as String?)?.trim();
-    final occupation = (box.get(_key('occupation')) as String?)?.trim();
-    final bio = (box.get(_key('bio')) as String?)?.trim();
-    final dob = (box.get(_key('dob')) as String?)?.trim();
-    final photoBase64 = (box.get(_key('photo_base64')) as String?)?.trim();
+    final uid = _uid;
+    await _store.purgeRetiredFields(uid);
+    final stored = await _store.read(uid);
+    final displayName = user?.displayName?.trim() ?? '';
 
     state = {
-      'fullName': (fullName == null || fullName.isEmpty)
-          ? ((user?.displayName?.trim().isNotEmpty ?? false)
-              ? user!.displayName!.trim()
-              : '')
-          : fullName,
-      'email': (email == null || email.isEmpty)
-          ? (user?.email?.trim() ?? '')
-          : email,
-      'phone': phone ?? '',
-      'address': address ?? '',
-      'occupation': occupation ?? '',
-      'bio': bio ?? '',
-      'dob': dob ?? '',
-      'photoBase64': photoBase64 ?? '',
+      ...stored,
+      'fullName': stored['fullName']!.isNotEmpty
+          ? stored['fullName']!
+          : displayName,
+      // The sign-in email is authoritative for registered users; a locally
+      // edited copy must not diverge from the address used for password reset.
+      'email': accountEmailOf(user) ?? stored['email']!,
     };
   }
 
-  Future<void> updateProfile({
-    required String fullName,
-    required String email,
-    required String phone,
-    required String address,
-    required String occupation,
-    required String bio,
-    required String dob,
-    String? photoBase64,
-  }) async {
-    final box = await _getBox();
-    await box.put(_key('full_name'), fullName);
-    await box.put(_key('email'), email);
-    await box.put(_key('phone'), phone);
-    await box.put(_key('address'), address);
-    await box.put(_key('occupation'), occupation);
-    await box.put(_key('bio'), bio);
-    await box.put(_key('dob'), dob);
-    if (photoBase64 != null) {
-      await box.put(_key('photo_base64'), photoBase64);
+  /// Non-empty sign-in email of a registered (non-anonymous) user, else null.
+  static String? accountEmailOf(User? user) {
+    if (user == null || user.isAnonymous) return null;
+    final email = user.email?.trim();
+    return (email == null || email.isEmpty) ? null : email;
+  }
+
+  /// Persists a single profile field. Throws [ArgumentError] for unknown keys
+  /// and [StateError] when trying to change a sign-in managed email.
+  Future<void> updateField(String field, String value) async {
+    if (!ProfileStore.storageKeys.containsKey(field)) {
+      throw ArgumentError.value(field, 'field', 'Unknown profile field');
     }
-    state = {
-      'fullName': fullName,
-      'email': email,
-      'phone': phone,
-      'address': address,
-      'occupation': occupation,
-      'bio': bio,
-      'dob': dob,
-      'photoBase64': photoBase64 ?? (state['photoBase64'] ?? ''),
-    };
+    if (field == 'email' &&
+        accountEmailOf(AuthService().currentUser) != null) {
+      throw StateError('Email is managed by the sign-in account');
+    }
+    await _store.write(_uid, field, value);
+    state = {...state, field: value};
   }
 
-  Future<void> updateProfilePhoto(String photoBase64) async {
-    final box = await _getBox();
-    await box.put(_key('photo_base64'), photoBase64);
-    state = {...state, 'photoBase64': photoBase64};
-  }
+  Future<void> updateProfilePhoto(String photoBase64) =>
+      updateField('photoBase64', photoBase64);
 
-  Future<void> clearProfilePhoto() async {
-    final box = await _getBox();
-    await box.put(_key('photo_base64'), '');
-    state = {...state, 'photoBase64': ''};
-  }
+  Future<void> clearProfilePhoto() => updateField('photoBase64', '');
 
   /// Reloads profile data from Hive (call after sign-in to load user-specific data).
   Future<void> reloadProfile() async {

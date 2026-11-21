@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../core/utils/logger.dart';
+import 'profile_sync_service.dart';
 import 'sync_service.dart';
 
 /// Deletes the signed-in user's cloud data and Auth account directly from the
@@ -57,6 +58,12 @@ class ClientAccountDeletionService {
     final batch = _firestore.batch()
       ..delete(userDoc.collection('sync').doc('meta'))
       ..delete(userDoc.collection('app_data').doc('snapshot'))
+      ..delete(userDoc
+          .collection(ProfileSyncService.collection)
+          .doc(ProfileSyncService.infoDoc))
+      ..delete(userDoc
+          .collection(ProfileSyncService.collection)
+          .doc(ProfileSyncService.photoDoc))
       ..delete(userDoc);
     await batch.commit().timeout(_stepTimeout);
 

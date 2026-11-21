@@ -730,6 +730,7 @@ class AppL10n {
     'account_info': {'en': 'Account Info', 'bn': 'অ্যাকাউন্ট তথ্য'},
     'personal_info': {'en': 'Personal Info', 'bn': 'ব্যক্তিগত তথ্য'},
     'additional_info': {'en': 'Additional Info', 'bn': 'অতিরিক্ত তথ্য'},
+    'achievements': {'en': 'Achievements', 'bn': 'অর্জনসমূহ'},
     'recent_activity': {'en': 'Recent Activity', 'bn': 'সাম্প্রতিক কার্যকলাপ'},
     'full_name': {'en': 'Full Name', 'bn': 'পূর্ণ নাম'},
     'not_set': {'en': 'Not set', 'bn': 'সেট করা নেই'},
@@ -840,6 +841,31 @@ class AppL10n {
     'edit_field': {'en': 'Edit {label}', 'bn': '{label} সম্পাদনা'},
     'save_changes': {'en': 'Save Changes', 'bn': 'পরিবর্তন সংরক্ষণ করুন'},
     'field_updated': {'en': '{label} updated', 'bn': '{label} আপডেট হয়েছে'},
+    'profile_email_managed': {
+      'en': 'This email is linked to your sign-in account and can\'t be changed here.',
+      'bn': 'এই ইমেইলটি আপনার সাইন-ইন অ্যাকাউন্টের সাথে যুক্ত, এখান থেকে পরিবর্তন করা যাবে না।'
+    },
+    'profile_save_failed': {
+      'en': 'Couldn\'t save. Please try again.',
+      'bn': 'সেভ করা যায়নি। আবার চেষ্টা করুন।'
+    },
+    'profile_photo_failed': {
+      'en': 'Couldn\'t update the photo. Check permissions and try again.',
+      'bn': 'ছবি আপডেট করা যায়নি। অনুমতি দেখে আবার চেষ্টা করুন।'
+    },
+    'profile_photo_too_large': {
+      'en': 'This image is too large. Please choose a smaller one.',
+      'bn': 'ছবিটি অনেক বড়। ছোট একটি ছবি বাছাই করুন।'
+    },
+    'error_max_length': {
+      'en': 'Maximum {max} characters',
+      'bn': 'সর্বোচ্চ {max} অক্ষর'
+    },
+    'back': {'en': 'Back', 'bn': 'ফিরে যান'},
+    'profile_dob_clear': {
+      'en': 'Remove date of birth',
+      'bn': 'জন্মতারিখ মুছুন'
+    },
     'ach_first_tx': {'en': 'First Transaction', 'bn': 'প্রথম লেনদেন'},
     'ach_first_tx_desc': {
       'en': 'Logged your first transaction',
