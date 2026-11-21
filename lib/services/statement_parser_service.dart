@@ -80,12 +80,17 @@ class StatementParserService {
         return StatementParseResult.failure('The statement file is empty.');
       }
 
-      // 1. Convert CSV to 2D list of strings
+      // 1. Convert CSV to 2D list of strings. The csv package defaults to
+      // CRLF row endings, so LF-only files (Mac/Linux/web exports) would
+      // otherwise parse as a single row. Normalise all endings to LF.
+      final normalized =
+          rawContent.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
       const converter = CsvToListConverter(
         shouldParseNumbers: false,
         allowInvalid: true,
+        eol: '\n',
       );
-      final List<List<dynamic>> rows = converter.convert(rawContent);
+      final List<List<dynamic>> rows = converter.convert(normalized);
 
       if (rows.isEmpty) {
         return StatementParseResult.failure('No rows found in CSV file.');
@@ -308,17 +313,21 @@ class StatementParserService {
     final iso = DateTime.tryParse(trimmed);
     if (iso != null) return iso;
 
+    // Statement exports use ASCII digits and English month names. Pin the
+    // locale: with the app in Bangla, Intl.defaultLocale is bn_BD and an
+    // unpinned DateFormat expects Bangla digits, rejecting every row.
+    const locale = 'en_US';
     final formats = [
-      DateFormat('dd/MM/yyyy HH:mm:ss'),
-      DateFormat('dd/MM/yyyy HH:mm'),
-      DateFormat('dd/MM/yyyy'),
-      DateFormat('dd-MM-yyyy HH:mm:ss'),
-      DateFormat('dd-MM-yyyy'),
-      DateFormat('yyyy-MM-dd HH:mm:ss'),
-      DateFormat('yyyy-MM-dd'),
-      DateFormat('MM/dd/yyyy'),
-      DateFormat('dd MMM yyyy'),
-      DateFormat('dd-MMM-yyyy'),
+      DateFormat('dd/MM/yyyy HH:mm:ss', locale),
+      DateFormat('dd/MM/yyyy HH:mm', locale),
+      DateFormat('dd/MM/yyyy', locale),
+      DateFormat('dd-MM-yyyy HH:mm:ss', locale),
+      DateFormat('dd-MM-yyyy', locale),
+      DateFormat('yyyy-MM-dd HH:mm:ss', locale),
+      DateFormat('yyyy-MM-dd', locale),
+      DateFormat('MM/dd/yyyy', locale),
+      DateFormat('dd MMM yyyy', locale),
+      DateFormat('dd-MMM-yyyy', locale),
     ];
 
     for (final f in formats) {

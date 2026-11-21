@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
 import 'package:cashtrack/services/statement_parser_service.dart';
 import 'package:cashtrack/data/models/transaction_model.dart';
 import 'hive_test_setup.dart';
@@ -37,7 +39,8 @@ Date,TrxID,Transaction Type,Amount,Balance
       expect(cashIn.amount, 200000);
     });
 
-    test('parses Bangladeshi Bank Statement with Debit/Credit columns', () async {
+    test('parses Bangladeshi Bank Statement with Debit/Credit columns',
+        () async {
       const csvData = '''
 Account Statement: DBBL Savings Account 108.110.12345
 Date,Particulars,Cheque No,Debit,Credit,Balance
@@ -64,6 +67,33 @@ Date,Particulars,Cheque No,Debit,Credit,Balance
       final atm = result.items[2];
       expect(atm.type, TransactionType.expense);
       expect(atm.amount, 1000000);
+    });
+
+    test('parses CRLF (Windows/Excel) files the same as LF files', () async {
+      const lf = 'Date,TrxID,Transaction Type,Amount,Balance\n'
+          '15/10/2026 14:30,BL1,Send Money,500.00,1.00\n'
+          '16/10/2026 10:15,BL2,Cash In,200.00,2.00\n';
+      final result = await StatementParserService()
+          .parseCsvContent(lf.replaceAll('\n', '\r\n'));
+      expect(result.isSuccess, isTrue);
+      expect(result.items.length, 2);
+      expect(result.items[1].trxId, 'BL2');
+    });
+
+    test('parses dates while the app runs in Bangla (bn_BD locale)', () async {
+      await initializeDateFormatting('bn_BD');
+      final previous = Intl.defaultLocale;
+      Intl.defaultLocale = 'bn_BD';
+      addTearDown(() => Intl.defaultLocale = previous);
+
+      const csvData = 'Date,Particulars,Debit,Credit,Balance\n'
+          '15/10/2026 14:30,Shwapno,450.00,0.00,1.00\n'
+          '05 Oct 2026,Salary,0.00,1000.00,2.00\n';
+      final result = await StatementParserService().parseCsvContent(csvData);
+      expect(result.isSuccess, isTrue);
+      expect(result.items.length, 2);
+      expect(result.items[0].date, DateTime(2026, 10, 15, 14, 30));
+      expect(result.items[1].date, DateTime(2026, 10, 5));
     });
 
     test('handles empty or malformed statement gracefully', () async {

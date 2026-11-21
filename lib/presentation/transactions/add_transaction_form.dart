@@ -630,18 +630,27 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                         .withValues(alpha: 0.35),
               ),
               const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                  letterSpacing: -0.1,
-                  color: selected
-                      ? Colors.white
-                      : Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.4),
+              // Segments are a third of the width each; on small screens, with
+              // Bangla labels or large text scale, the label must shrink
+              // rather than overflow. scaleDown keeps the whole word readable.
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      letterSpacing: -0.1,
+                      color: selected
+                          ? Colors.white
+                          : Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.4),
+                    ),
+                  ),
                 ),
               ),
             ],
