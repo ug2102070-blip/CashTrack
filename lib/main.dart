@@ -20,6 +20,7 @@ import 'services/ai_service.dart';
 import 'services/encrypted_hive_storage.dart';
 import 'services/screenshot_protection_service.dart';
 import 'services/notification_service.dart';
+import 'services/recurring_transaction_service.dart';
 import 'services/sms_service.dart';
 import 'services/sync_service.dart';
 import 'services/telemetry_service.dart';
@@ -86,6 +87,13 @@ void main() async {
   }
 
   await _initializeRepositories();
+
+  // Automatically process any due recurring transactions into the ledger
+  try {
+    await RecurringTransactionService().processDueTransactions();
+  } catch (e) {
+    AppLogger.w('Recurring transactions processing skipped: $e');
+  }
 
   // Keep the per-entity sync queue responsive when connectivity returns.
   await SyncService().init();
@@ -216,6 +224,9 @@ class _CashTrackAppState extends ConsumerState<CashTrackApp> {
   Widget build(BuildContext context) {
     // settingsProvider থেকে গ্লোবাল সেটিংস স্টেট ওয়াচ করা হচ্ছে
     final settings = ref.watch(settingsProvider);
+    // Reload in-memory data when local data is erased/replaced (account
+    // switch, cloud pull, restore).
+    ref.watch(localDataReloadProvider);
     final bool rolloverEnabled = settings['rolloverBudget'] == true;
     if (rolloverEnabled) {
       unawaited(

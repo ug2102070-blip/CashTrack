@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuthException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:csv/csv.dart';
@@ -13,16 +15,18 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/l10n/app_l10n.dart';
+import '../../services/account_session_service.dart';
+import '../../services/app_lock_pin_store.dart';
 import '../../services/auth_service.dart';
 import '../../services/sms_service.dart';
 import '../../services/sync_service.dart';
 import '../../services/backup_restore_service.dart';
+import '../../services/statement_parser_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../services/notification_service.dart';
 import '../../services/screenshot_protection_service.dart';
@@ -41,9 +45,20 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _animCtrl;
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   final LocalAuthentication _localAuth = LocalAuthentication();
-  static const String _pinKey = 'app_lock_pin';
+
+  /// Max content width so the list stays readable on tablets/desktop.
+  static const double _maxContentWidth = 720;
+
+  /// Settings box key for the last successful cloud backup (ISO-8601).
+  static const String _lastCloudBackupKey = 'lastCloudBackupAt';
+
+  /// Keys that must never be written to user-facing exports.
+  static const Set<String> _nonExportableSettingKeys = {'appLockPin'};
+
+  /// Identifies the long-running operation in progress (backup, restore,
+  /// sign-out, …). Guards against double taps / concurrent runs.
+  String? _busyOperation;
 
   final List<(Color, String)> accentColorEntries = const [
     (Color(0xFF2D7A7B), 'Teal'),
@@ -122,7 +137,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _syncSmsTrackPermission();
+    // Inherited widgets (ScaffoldMessenger, Localizations) are not available
+    // during initState, so defer the permission check to after first frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _syncSmsTrackPermission();
+    });
     _animCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
@@ -179,136 +198,149 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       body: SafeArea(
         child: FadeTransition(
           opacity: _rootFade,
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              SliverToBoxAdapter(
-                child: _anim(
-                    index: 0, child: _buildPageHeader(context, screenIsDark)),
-              ),
-
-              // â”€â”€ Profile Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              SliverToBoxAdapter(
-                child: _anim(
-                    index: 1,
-                    child: _buildProfileCard(context, profile, isDark)),
-              ),
-
-              // â”€â”€ Appearance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              SliverToBoxAdapter(
-                child: _anim(
-                    index: 2,
-                    child: _sectionLabel(context, context.t('appearance'))),
-              ),
-              SliverToBoxAdapter(
-                child: _anim(
-                  index: 3,
-                  child: _buildAppearanceSection(context, settings, isDark,
-                      currency, hideAmounts, screenIsDark),
-                ),
-              ),
-
-              // â”€â”€ Notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              SliverToBoxAdapter(
-                child: _anim(
-                    index: 4,
-                    child: _sectionLabel(context, context.t('general'))),
-              ),
-              SliverToBoxAdapter(
-                child: _anim(
-                  index: 5,
-                  child: _buildGeneralSection(
-                      context, smsTrack, smsMode, language, screenIsDark),
-                ),
-              ),
-
-              // â”€â”€ General â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              SliverToBoxAdapter(
-                child: _anim(
-                    index: 6,
-                    child: _sectionLabel(context, context.t('notifications'))),
-              ),
-              SliverToBoxAdapter(
-                child: _anim(
-                  index: 7,
-                  child: _buildNotificationsSection(context, notifEnabled,
-                      weeklyReport, dailyReminderTime, screenIsDark),
-                ),
-              ),
-
-              SliverToBoxAdapter(
-                child: _anim(
-                  index: 8,
-                  child: _sectionLabel(context, context.t('transaction_entry')),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: _anim(
-                  index: 9,
-                  child: _buildTransactionEntrySection(
-                    context,
-                    voiceTransactionInput,
-                    receiptImageAttachment,
-                    settings['defaultRecurring'] ?? false,
-                    settings['defaultRecurringType'] ?? 'monthly',
-                    screenIsDark,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+              child: CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                  SliverToBoxAdapter(
+                    child: _anim(
+                        index: 0,
+                        child: _buildPageHeader(context, screenIsDark)),
                   ),
-                ),
-              ),
 
-              // â”€â”€ Security â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              SliverToBoxAdapter(
-                child: _anim(
-                    index: 10,
-                    child:
-                        _sectionLabel(context, context.t('security_privacy'))),
-              ),
-              SliverToBoxAdapter(
-                child: _anim(
-                  index: 11,
-                  child: _buildSecuritySection(
-                      context,
-                      biometricLock,
-                      hideAmounts,
-                      screenshotProtection,
-                      autoLockMinutes,
-                      pinSet,
-                      screenIsDark),
-                ),
-              ),
+                  // â”€â”€ Profile Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                  SliverToBoxAdapter(
+                    child: _anim(
+                        index: 1,
+                        child: _buildProfileCard(context, profile, isDark)),
+                  ),
 
-              // â”€â”€ Data & Sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              SliverToBoxAdapter(
-                child: _anim(
-                    index: 12,
-                    child: _sectionLabel(context, context.t('data_sync'))),
-              ),
-              SliverToBoxAdapter(
-                child: _anim(
-                    index: 13, child: _buildDataSection(context, screenIsDark)),
-              ),
+                  // â”€â”€ Appearance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                  SliverToBoxAdapter(
+                    child: _anim(
+                        index: 2,
+                        child: _sectionLabel(context, context.t('appearance'))),
+                  ),
+                  SliverToBoxAdapter(
+                    child: _anim(
+                      index: 3,
+                      child: _buildAppearanceSection(context, settings, isDark,
+                          currency, hideAmounts, screenIsDark),
+                    ),
+                  ),
 
-              // â”€â”€ About â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              SliverToBoxAdapter(
-                child: _anim(
-                    index: 14,
-                    child: _sectionLabel(context, context.t('about'))),
-              ),
-              SliverToBoxAdapter(
-                child: _anim(
-                    index: 15,
-                    child: _buildAboutSection(context, screenIsDark)),
-              ),
+                  // â”€â”€ Notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                  SliverToBoxAdapter(
+                    child: _anim(
+                        index: 4,
+                        child: _sectionLabel(context, context.t('general'))),
+                  ),
+                  SliverToBoxAdapter(
+                    child: _anim(
+                      index: 5,
+                      child: _buildGeneralSection(
+                          context, smsTrack, smsMode, language, screenIsDark),
+                    ),
+                  ),
 
-              // â”€â”€ Danger Zone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              SliverToBoxAdapter(
-                child: _anim(
-                    index: 16, child: _buildDangerZone(context, screenIsDark)),
-              ),
+                  // â”€â”€ General â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                  SliverToBoxAdapter(
+                    child: _anim(
+                        index: 6,
+                        child:
+                            _sectionLabel(context, context.t('notifications'))),
+                  ),
+                  SliverToBoxAdapter(
+                    child: _anim(
+                      index: 7,
+                      child: _buildNotificationsSection(context, notifEnabled,
+                          weeklyReport, dailyReminderTime, screenIsDark),
+                    ),
+                  ),
 
-              const SliverToBoxAdapter(child: SizedBox(height: 110)),
-            ],
+                  SliverToBoxAdapter(
+                    child: _anim(
+                      index: 8,
+                      child: _sectionLabel(
+                          context, context.t('transaction_entry')),
+                    ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: _anim(
+                      index: 9,
+                      child: _buildTransactionEntrySection(
+                        context,
+                        voiceTransactionInput,
+                        receiptImageAttachment,
+                        settings['defaultRecurring'] ?? false,
+                        settings['defaultRecurringType'] ?? 'monthly',
+                        screenIsDark,
+                      ),
+                    ),
+                  ),
+
+                  // â”€â”€ Security â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                  SliverToBoxAdapter(
+                    child: _anim(
+                        index: 10,
+                        child: _sectionLabel(
+                            context, context.t('security_privacy'))),
+                  ),
+                  SliverToBoxAdapter(
+                    child: _anim(
+                      index: 11,
+                      child: _buildSecuritySection(
+                          context,
+                          biometricLock,
+                          screenshotProtection,
+                          autoLockMinutes,
+                          pinSet,
+                          screenIsDark),
+                    ),
+                  ),
+
+                  // â”€â”€ Data & Sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                  SliverToBoxAdapter(
+                    child: _anim(
+                        index: 12,
+                        child: _sectionLabel(context, context.t('data_sync'))),
+                  ),
+                  SliverToBoxAdapter(
+                    child: _anim(
+                        index: 13,
+                        child: _buildDataSection(
+                          context,
+                          screenIsDark,
+                          settings[_lastCloudBackupKey] as String?,
+                        )),
+                  ),
+
+                  // â”€â”€ About â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                  SliverToBoxAdapter(
+                    child: _anim(
+                        index: 14,
+                        child: _sectionLabel(context, context.t('about'))),
+                  ),
+                  SliverToBoxAdapter(
+                    child: _anim(
+                        index: 15,
+                        child: _buildAboutSection(context, screenIsDark)),
+                  ),
+
+                  // â”€â”€ Danger Zone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                  SliverToBoxAdapter(
+                    child: _anim(
+                        index: 16,
+                        child: _buildDangerZone(context, screenIsDark)),
+                  ),
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 110)),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -336,7 +368,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 Text(
                   context.t('customize_experience'),
                   style: AppTextStyles.bodySm.copyWith(
-                    color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
+                    color: isDark
+                        ? AppColors.darkTextTertiary
+                        : AppColors.lightTextTertiary,
                   ),
                 ),
               ],
@@ -362,79 +396,89 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     final profilePhotoBytes = _decodePhotoBytes(photoBase64);
     final primary = Theme.of(context).colorScheme.primary;
 
-    return InkWell(
-      onTap: () => context.push('/profile'),
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              primary,
-              Color.lerp(primary, Colors.indigo.shade700, 0.45)!,
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => context.push('/profile'),
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: primary.withValues(alpha: 0.3),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: profilePhotoBytes != null
-                    ? Image.memory(profilePhotoBytes, fit: BoxFit.cover)
-                    : Center(
-                        child: Text(
-                          initials,
-                          style: AppTextStyles.h4.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(displayName,
-                      style: AppTextStyles.h5.copyWith(
-                          color: Colors.white, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 3),
-                  Text(displayEmail,
-                      style: AppTextStyles.caption.copyWith(
-                          color: Colors.white.withValues(alpha: 0.75))),
+          child: Ink(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  primary,
+                  Color.lerp(primary, Colors.indigo.shade700, 0.45)!,
                 ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: primary.withValues(alpha: 0.3),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.arrow_forward_rounded,
-                  color: Colors.white, size: 18),
+            child: Row(
+              children: [
+                Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: profilePhotoBytes != null
+                        ? Image.memory(profilePhotoBytes, fit: BoxFit.cover)
+                        : Center(
+                            child: Text(
+                              initials,
+                              style: AppTextStyles.h4.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.h5.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 3),
+                      Text(displayEmail,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.caption.copyWith(
+                              color: Colors.white.withValues(alpha: 0.75))),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.arrow_forward_rounded,
+                      color: Colors.white, size: 18),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -565,9 +609,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        _isBangla(context)
-                            ? 'পুশ নোটিফিকেশন পারমিশন প্রয়োজন'
-                            : 'Push notifications permission is required',
+                        context.t('settings_push_permission_required'),
                       ),
                     ),
                   );
@@ -606,28 +648,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           value: weeklyReport,
           onChanged: notifEnabled
               ? (v) async {
+                  // Don't persist a setting the platform cannot honour.
+                  if (kIsWeb) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                          content:
+                              Text(context.t('feature_not_supported_web'))),
+                    );
+                    return;
+                  }
                   await ref
                       .read(settingsProvider.notifier)
                       .update('weeklyReport', v);
-                  if (kIsWeb) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content:
-                                Text(context.t('feature_not_supported_web'))),
-                      );
-                    }
-                    return;
-                  }
                   await NotificationService().updateWeeklyReport(v);
                   if (v && context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(
-                          _isBangla(context)
-                              ? 'প্রতি রবিবার সকালে সাপ্তাহিক আয়-ব্যয়ের সামারি নোটিফিকেশন আসবে'
-                              : 'Weekly summary notification will arrive every Sunday morning',
-                        ),
+                        content:
+                            Text(context.t('settings_weekly_report_enabled')),
                       ),
                     );
                   }
@@ -647,9 +685,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           title: context.t('notification_schedule'),
           subtitle: notifEnabled
               ? _notificationScheduleSubtitle(context, reminderLabel)
-              : (_isBangla(context)
-                  ? 'Push Notifications চালু করুন'
-                  : 'Turn on Push Notifications first'),
+              : context.t('settings_turn_on_push_first'),
           onTap: notifEnabled
               ? () => _showTimePickerDialog(context, dailyReminderTime)
               : null,
@@ -659,8 +695,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   // â”€â”€ Planning & Tools Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-
 
   // â”€â”€ General Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -682,42 +716,45 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               if (v) {
                 // Persist true first to handle process kills on permission grant
                 await ref.read(settingsProvider.notifier).updateSmsTrack(true);
-                
+
                 final granted = await SmsService.requestPermission();
                 if (!granted) {
                   // Revert to false if not granted/cancelled
-                  await ref.read(settingsProvider.notifier).updateSmsTrack(false);
+                  await ref
+                      .read(settingsProvider.notifier)
+                      .updateSmsTrack(false);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(context.t('sms_permission_denied'))),
+                      SnackBar(
+                          content: Text(context.t('sms_permission_denied'))),
                     );
                   }
                   return;
                 }
 
                 // Check and request standard notification permission on Android 13+
-                final notifGranted = await Permission.notification.request().isGranted;
+                final notifGranted =
+                    await Permission.notification.request().isGranted;
                 if (!notifGranted && context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        _isBangla(context)
-                            ? 'লেনদেন নিশ্চিতকরণের জন্য নোটিফিকেশন পারমিশন প্রয়োজন'
-                            : 'Notification permission is required to ask for transaction confirmation',
+                        context.t('settings_sms_notif_permission_required'),
                       ),
                     ),
                   );
                 }
 
                 // Request ignore battery optimizations exemption
-                final batteryIgnored = await Permission.ignoreBatteryOptimizations.request().isGranted;
+                final batteryIgnored = await Permission
+                    .ignoreBatteryOptimizations
+                    .request()
+                    .isGranted;
                 if (!batteryIgnored && context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        _isBangla(context)
-                            ? 'ব্যাটারি অপ্টিমাইজেশন সচল থাকায় ব্যাকগ্রাউন্ডে লেনদেন ট্র্যাকিং বিঘ্নিত হতে পারে।'
-                            : 'Battery optimization is active. Auto-import might not be 100% reliable in the background.',
+                        context.t('settings_battery_optimization_warning'),
                       ),
                     ),
                   );
@@ -832,13 +869,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   Widget _buildSecuritySection(
     BuildContext context,
     bool biometricLock,
-    bool hideAmounts,
     bool screenshotProtection,
     int autoLockMinutes,
     bool pinSet,
     bool isDark,
   ) {
+    final passwordEmail = _passwordAccountEmail();
     return _settingsGroup(context, isDark, [
+      // Only email/password accounts have a password to change; Google and
+      // guest/local sessions are intentionally excluded.
+      if (passwordEmail != null) ...[
+        _settingsTile(
+          context,
+          icon: Icons.password_rounded,
+          iconColor: AppColors.secondary,
+          title: context.t('settings_change_password'),
+          subtitle: context.t('settings_change_password_sub'),
+          trailing:
+              _busyOperation == 'reset_password' ? _busyIndicator() : null,
+          onTap: () => _confirmPasswordReset(context, passwordEmail),
+        ),
+        _divider(context),
+      ],
       _settingsTile(
         context,
         icon: Icons.fingerprint_rounded,
@@ -889,31 +941,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   // â”€â”€ Data Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  Widget _buildDataSection(BuildContext context, bool isDark) {
+  Widget _buildDataSection(
+    BuildContext context,
+    bool isDark,
+    String? lastCloudBackupIso,
+  ) {
+    final lastBackup = lastCloudBackupIso == null
+        ? null
+        : DateTime.tryParse(lastCloudBackupIso);
+    final lastBackupLabel = lastBackup == null
+        ? context.t('last_backup_never')
+        : context.t('settings_last_cloud_backup', params: {
+            'time': DateFormat.yMMMd(Localizations.localeOf(context).toString())
+                .add_jm()
+                .format(lastBackup.toLocal()),
+          });
     return _settingsGroup(context, isDark, [
       _settingsTile(
         context,
         icon: Icons.cloud_upload_rounded,
         iconColor: AppColors.info,
         title: context.t('backup_cloud'),
-        subtitle: context.t('last_backup_never'),
-        onTap: () async {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(context.t('backup_started'))),
-          );
-          final result = await SyncService().backupToCloud();
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  result.contains('Backed up')
-                      ? context.t('backup_complete')
-                      : result,
-                ),
-              ),
-            );
-          }
-        },
+        subtitle: _busyOperation == 'cloud_backup'
+            ? context.t('settings_backing_up')
+            : lastBackupLabel,
+        trailing: _busyOperation == 'cloud_backup' ? _busyIndicator() : null,
+        onTap: () => _backupToCloud(context),
       ),
       _divider(context),
       _settingsTile(
@@ -922,6 +975,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         iconColor: AppColors.accent,
         title: context.t('backup_local'),
         subtitle: context.t('backup_local_sub'),
+        trailing: _busyOperation == 'local_backup' ? _busyIndicator() : null,
         onTap: () => _handleLocalBackup(context),
       ),
       _divider(context),
@@ -930,7 +984,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         icon: Icons.cloud_download_rounded,
         iconColor: AppColors.success,
         title: context.t('restore_cloud'),
-        subtitle: context.t('restore_data'),
+        subtitle: _busyOperation == 'cloud_restore'
+            ? context.t('settings_restoring')
+            : context.t('restore_data'),
+        trailing: _busyOperation == 'cloud_restore' ? _busyIndicator() : null,
         onTap: () => _confirmRestore(context),
       ),
       _divider(context),
@@ -939,7 +996,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         icon: Icons.restore_page_rounded,
         iconColor: const Color(0xFF10B981),
         title: context.t('restore_local'),
-        subtitle: context.t('restore_local_sub'),
+        subtitle: _busyOperation == 'local_restore'
+            ? context.t('settings_restoring')
+            : context.t('restore_local_sub'),
+        trailing: _busyOperation == 'local_restore' ? _busyIndicator() : null,
         onTap: () => _confirmLocalRestore(context),
       ),
       _divider(context),
@@ -1005,9 +1065,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    _isBangla(context)
-                        ? 'ব্যক্তিগত অর্থ ব্যবস্থাপনা অ্যাপ'
-                        : 'Personal Finance Manager',
+                    context.t('settings_app_tagline'),
                     style: TextStyle(
                       fontSize: 12,
                       color: Theme.of(context)
@@ -1059,9 +1117,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         onTap: () => _showInfoDialog(
           context,
           title: context.t('privacy_policy'),
-          body: _isBangla(context)
-              ? 'CashTrack আপনার আর্থিক ডেটা স্থানীয়ভাবে ডিভাইসে সংরক্ষণ করে। ক্লাউড ব্যাকআপ শুধুমাত্র আপনার অনুমতিতে হয়।'
-              : 'CashTrack stores your financial data locally on your device. Cloud backups only happen when you explicitly enable them.',
+          body: context.t('settings_privacy_body'),
         ),
       ),
       _divider(context),
@@ -1074,9 +1130,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         onTap: () => _showInfoDialog(
           context,
           title: context.t('terms_service'),
-          body: _isBangla(context)
-              ? 'এই অ্যাপটি ব্যক্তিগত অর্থ ট্র্যাকিংয়ের জন্য। আমদানি করা ডেটা যাচাই করা এবং ব্যাকআপ রাখা আপনার দায়িত্ব।'
-              : 'This app is for personal finance tracking. You are responsible for reviewing imported data and keeping your own backups.',
+          body: context.t('settings_terms_body'),
         ),
       ),
     ]);
@@ -1106,13 +1160,114 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               title: context.t('sign_out'),
               subtitle: context.t('sign_out_subtitle'),
               titleColor: AppColors.error,
+              trailing: _busyOperation == 'sign_out' ? _busyIndicator() : null,
               onTap: () => _confirmLogout(context),
               showChevron: false,
             ),
           ),
+          // Local-only sessions have no server account; signing out already
+          // erases their data.
+          if (AccountSessionService().currentKind != AccountKind.localOnly) ...[
+            const SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: isDark ? 0.10 : 0.05),
+                borderRadius: BorderRadius.circular(16),
+                border:
+                    Border.all(color: AppColors.error.withValues(alpha: 0.25)),
+              ),
+              child: _settingsTile(
+                context,
+                icon: Icons.delete_forever_rounded,
+                iconColor: AppColors.error,
+                title: context.t('settings_delete_account'),
+                subtitle: context.t('settings_delete_account_sub'),
+                titleColor: AppColors.error,
+                trailing: _busyOperation == 'delete_account'
+                    ? _busyIndicator()
+                    : null,
+                onTap: () => _confirmDeleteAccount(context),
+                showChevron: false,
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  /// Account deletion: warning (+ export offer) → re-authentication for
+  /// registered users → server deletion → local erase + sign-out.
+  Future<void> _confirmDeleteAccount(BuildContext context) async {
+    final session = AccountSessionService();
+    final kind = session.currentKind;
+
+    final proceed = await _showSignOutDialog(
+      context,
+      title: context.t('settings_delete_account_q'),
+      body: context.t('settings_delete_account_body'),
+      confirmLabel: context.t('settings_delete_permanently'),
+      offerExport: true,
+    );
+    if (!proceed || !context.mounted) return;
+
+    if (kind == AccountKind.registered) {
+      final reauthed = await _reauthenticate(context);
+      if (!reauthed || !context.mounted) return;
+    }
+
+    await _runExclusive(context, 'delete_account', () async {
+      final result = await session.deleteAccount();
+      if (!context.mounted) return;
+      switch (result) {
+        case DeleteAccountResult.deleted:
+          // Router redirects to login once auth state clears; this snackbar
+          // shows on the root messenger if the screen is still mounted.
+          _showSnack(context, context.t('settings_account_deleted'),
+              background: AppColors.success);
+        case DeleteAccountResult.requiresRecentLogin:
+          _showSnack(context, context.t('settings_reauth_expired'),
+              background: AppColors.error);
+        case DeleteAccountResult.failed:
+          _showSnack(context, context.t('settings_delete_account_failed'),
+              background: AppColors.error);
+      }
+    });
+  }
+
+  /// Confirms identity right before a destructive action. Returns true on
+  /// success; shows an error and returns false otherwise.
+  Future<bool> _reauthenticate(BuildContext context) async {
+    final auth = AuthService();
+    try {
+      if (auth.hasPasswordProvider) {
+        final password = await showDialog<String>(
+          context: context,
+          builder: (_) => const _PasswordPromptDialog(),
+        );
+        if (password == null || password.isEmpty) return false;
+        await auth.reauthenticateWithPassword(password);
+        return true;
+      }
+      return await auth.reauthenticateWithGoogle();
+    } on FirebaseAuthException catch (e) {
+      debugPrint('Re-authentication failed: ${e.code}');
+      if (!context.mounted) return false;
+      final key = switch (e.code) {
+        'wrong-password' || 'invalid-credential' => 'settings_reauth_wrong',
+        'user-mismatch' => 'settings_reauth_mismatch',
+        'too-many-requests' => 'settings_reauth_too_many',
+        _ => 'settings_reauth_failed',
+      };
+      _showSnack(context, context.t(key), background: AppColors.error);
+      return false;
+    } catch (e) {
+      debugPrint('Re-authentication failed: $e');
+      if (!context.mounted) return false;
+      _showSnack(context, context.t('settings_reauth_failed'),
+          background: AppColors.error);
+      return false;
+    }
   }
 
   // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1171,7 +1326,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     title,
                     style: AppTextStyles.bodyMd.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: titleColor ?? (isDark ? AppColors.darkText : AppColors.lightText),
+                      color: titleColor ??
+                          (isDark ? AppColors.darkText : AppColors.lightText),
                     ),
                   ),
                   if (subtitle.isNotEmpty) ...[
@@ -1179,7 +1335,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     Text(
                       subtitle,
                       style: AppTextStyles.caption.copyWith(
-                        color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
+                        color: isDark
+                            ? AppColors.darkTextTertiary
+                            : AppColors.lightTextTertiary,
                       ),
                     ),
                   ],
@@ -1190,12 +1348,123 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 (showChevron && onTap != null
                     ? Icon(Icons.chevron_right_rounded,
                         size: 20,
-                        color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary)
+                        color: isDark
+                            ? AppColors.darkTextTertiary
+                            : AppColors.lightTextTertiary)
                     : const SizedBox.shrink()),
           ],
         ),
       ),
     );
+  }
+
+  Widget _busyIndicator() {
+    return const SizedBox(
+      width: 20,
+      height: 20,
+      child: CircularProgressIndicator(strokeWidth: 2.2),
+    );
+  }
+
+  /// Runs [action] as the single in-flight long operation. A second tap while
+  /// anything is running is rejected with a message instead of starting a
+  /// concurrent backup/restore/sign-out.
+  Future<void> _runExclusive(
+    BuildContext context,
+    String operation,
+    Future<void> Function() action,
+  ) async {
+    if (_busyOperation != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.t('settings_operation_in_progress'))),
+      );
+      return;
+    }
+    setState(() => _busyOperation = operation);
+    try {
+      await action();
+    } finally {
+      if (mounted) setState(() => _busyOperation = null);
+    }
+  }
+
+  void _showSnack(BuildContext context, String message, {Color? background}) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: background),
+    );
+  }
+
+  /// Email of the signed-in user if they use email/password auth, else null.
+  String? _passwordAccountEmail() {
+    final user = AuthService().currentUser;
+    if (user == null || user.isAnonymous) return null;
+    final email = user.email?.trim();
+    if (email == null || email.isEmpty) return null;
+    final hasPasswordProvider =
+        user.providerData.any((p) => p.providerId == 'password');
+    return hasPasswordProvider ? email : null;
+  }
+
+  Future<void> _confirmPasswordReset(BuildContext context, String email) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(context.t('settings_change_password')),
+        content: Text(context
+            .t('settings_change_password_confirm', params: {'email': email})),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.t('cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(context.t('settings_send_link')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    await _runExclusive(context, 'reset_password', () async {
+      try {
+        await AuthService().resetPassword(email);
+        if (!context.mounted) return;
+        _showSnack(
+          context,
+          context.t('settings_reset_link_sent', params: {'email': email}),
+          background: AppColors.success,
+        );
+      } catch (e) {
+        debugPrint('Password reset email failed: $e');
+        if (!context.mounted) return;
+        _showSnack(context, context.t('settings_reset_link_failed'),
+            background: AppColors.error);
+      }
+    });
+  }
+
+  Future<void> _backupToCloud(BuildContext context) async {
+    await _runExclusive(context, 'cloud_backup', () async {
+      final result = await SyncService().backupToCloud();
+      if (result == SyncService.syncCompleteMessage) {
+        await ref.read(settingsProvider.notifier).update(
+            _lastCloudBackupKey, DateTime.now().toUtc().toIso8601String());
+        if (!context.mounted) return;
+        _showSnack(context, context.t('backup_complete'),
+            background: AppColors.success);
+      } else if (result == SyncService.syncSkippedSignInMessage) {
+        if (!context.mounted) return;
+        _showSnack(context, context.t('settings_sign_in_required_cloud'));
+      } else {
+        debugPrint('Cloud backup failed: $result');
+        if (!context.mounted) return;
+        _showSnack(context, context.t('settings_backup_failed'),
+            background: AppColors.error);
+      }
+    });
   }
 
   Widget _divider(BuildContext context) {
@@ -1204,7 +1473,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       padding: const EdgeInsets.only(left: 67),
       child: Divider(
         height: 1,
-        color: isDark ? AppColors.darkBorder.withValues(alpha: 0.4) : AppColors.lightBorder.withValues(alpha: 0.5),
+        color: isDark
+            ? AppColors.darkBorder.withValues(alpha: 0.4)
+            : AppColors.lightBorder.withValues(alpha: 0.5),
       ),
     );
   }
@@ -1216,7 +1487,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       child: Text(
         label.toUpperCase(),
         style: AppTextStyles.overline.copyWith(
-          color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
+          color:
+              isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
         ),
       ),
     );
@@ -1687,6 +1959,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   void _showTimePickerDialog(BuildContext context, String? current) async {
+    if (kIsWeb) {
+      // Local scheduled notifications are not available on web; don't
+      // persist a reminder that can never fire.
+      _showSnack(context, context.t('feature_not_supported_web'));
+      return;
+    }
     final initial =
         _timeFromString(current) ?? const TimeOfDay(hour: 20, minute: 0);
     final time = await showTimePicker(
@@ -1698,14 +1976,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     await ref
         .read(settingsProvider.notifier)
         .update('dailyReminderTime', value);
-    if (!kIsWeb) {
-      await NotificationService().scheduleDailyReminder(time);
-    } else {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.t('feature_not_supported_web'))),
-      );
-    }
+    await NotificationService().scheduleDailyReminder(time);
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1752,88 +2023,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   Future<void> _showPinDialog(BuildContext context, bool pinSet) async {
-    final pinController = TextEditingController();
-    final confirmController = TextEditingController();
-    final hasPin = await _hasPin();
+    // The secure store is the source of truth; the `appLockPinSet` flag can
+    // drift (e.g. legacy web builds), so don't rely on [pinSet] alone.
+    final hasPin = await AppLockPinStore.instance.hasPin();
     if (!context.mounted) return;
 
-    await showDialog(
+    final result = await showDialog<_PinDialogResult>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(hasPin ? context.t('change_pin') : context.t('set_pin')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: pinController,
-              keyboardType: TextInputType.number,
-              maxLength: 4,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: context.t('enter_pin'),
-                counterText: '',
-              ),
-            ),
-            const SizedBox(height: 6),
-            TextField(
-              controller: confirmController,
-              keyboardType: TextInputType.number,
-              maxLength: 4,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: context.t('confirm_pin'),
-                counterText: '',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          if (hasPin)
-            TextButton(
-              onPressed: () async {
-                await _removePin();
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(context.t('pin_removed'))),
-                  );
-                }
-              },
-              child: Text(context.t('remove_pin')),
-            ),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(context.t('cancel'))),
-          ElevatedButton(
-            onPressed: () async {
-              final pin = pinController.text.trim();
-              final confirm = confirmController.text.trim();
-              if (pin.length != 4 || confirm.length != 4) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.t('pin_invalid'))),
-                );
-                return;
-              }
-              if (pin != confirm) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.t('pin_mismatch'))),
-                );
-                return;
-              }
-              await _savePin(pin);
-              if (ctx.mounted) Navigator.pop(ctx);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(context.t('pin_saved'))),
-                );
-              }
-            },
-            child: Text(context.t('save')),
-          ),
-        ],
-      ),
+      builder: (_) => _PinSetupDialog(hasExistingPin: hasPin),
     );
+    if (result == null || !context.mounted) return;
+
+    try {
+      if (result.remove) {
+        await _removePin();
+        if (!context.mounted) return;
+        _showSnack(context, context.t('pin_removed'));
+      } else if (result.newPin != null) {
+        await _savePin(result.newPin!);
+        if (!context.mounted) return;
+        _showSnack(context, context.t('pin_saved'),
+            background: AppColors.success);
+      }
+    } catch (e) {
+      debugPrint('PIN update failed: $e');
+      if (!context.mounted) return;
+      _showSnack(context, context.t('settings_pin_save_failed'),
+          background: AppColors.error);
+    }
   }
 
   void _showAutoLockDialog(BuildContext context, int currentMinutes) {
@@ -1969,7 +2186,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       'debts': debts.map((e) => e.toJson()).toList(),
       'assets': assets.map((e) => e.toJson()).toList(),
       'investments': investments.map((e) => e.toJson()).toList(),
-      'settings': settings,
+      'settings': {
+        for (final entry in settings.entries)
+          if (!_nonExportableSettingKeys.contains(entry.key))
+            entry.key: entry.value,
+      },
       'profile': profile,
     });
   }
@@ -2064,7 +2285,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           pw.SizedBox(height: 12),
           pw.Text('Income: $currency${(income / 100).toStringAsFixed(2)}'),
           pw.Text('Expense: $currency${(expense / 100).toStringAsFixed(2)}'),
-          pw.Text('Net: $currency${((income - expense) / 100).toStringAsFixed(2)}'),
+          pw.Text(
+              'Net: $currency${((income - expense) / 100).toStringAsFixed(2)}'),
           pw.SizedBox(height: 16),
           pw.Text(
             'Recent Transactions',
@@ -2090,21 +2312,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   Future<void> _handleLocalBackup(BuildContext context) async {
-    try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.t('backup_started'))),
-      );
-      await BackupRestoreService().exportBackupFile();
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.t('backup_complete'))),
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Backup failed: $e')),
-      );
-    }
+    await _runExclusive(context, 'local_backup', () async {
+      try {
+        await BackupRestoreService().exportBackupFile();
+        if (!context.mounted) return;
+        _showSnack(context, context.t('backup_complete'),
+            background: AppColors.success);
+      } catch (e) {
+        // The service already logs + records telemetry; keep raw errors
+        // (paths, exception text) out of the UI.
+        if (!context.mounted) return;
+        _showSnack(context, context.t('settings_backup_failed'),
+            background: AppColors.error);
+      }
+    });
   }
 
   void _confirmLocalRestore(BuildContext context) {
@@ -2114,9 +2335,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(context.t('restore_local')),
         content: Text(
-          _isBangla(context)
-              ? 'আপনার সিলেক্ট করা CashTrack JSON ফাইল থেকে সমস্ত অ্যাকাউন্ট ও লেনদেন রিস্টোর হবে।'
-              : 'Restore all accounts, budgets, and transactions from a CashTrack JSON backup file.',
+          context.t('settings_restore_local_body'),
         ),
         actions: [
           TextButton(
@@ -2136,56 +2355,61 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   Future<void> _restoreFromLocalFile(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      SnackBar(content: Text(context.t('restore_data'))),
-    );
+    await _runExclusive(context, 'local_restore', () async {
+      final result = await BackupRestoreService().pickAndRestoreBackup();
+      if (!result.success && result.message == 'No backup file selected') {
+        return; // User cancelled the picker.
+      }
 
-    final result = await BackupRestoreService().pickAndRestoreBackup();
-    if (!result.success && result.message == 'No backup file selected') {
-      return;
-    }
+      if (!mounted) return;
+      _reloadAppDataProviders();
+      if (!context.mounted) return;
 
-    await _reloadAppDataProviders();
-    if (!context.mounted) return;
-
-    if (result.success) {
-      final total = result.restoredCounts.values.fold<int>(0, (sum, count) => sum + count);
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            _isBangla(context)
-                ? 'সফলভাবে $total টি রেকর্ড রিস্টোর করা হয়েছে!'
-                : 'Successfully restored $total records from backup!',
-          ),
-          backgroundColor: AppColors.success,
-        ),
-      );
-    } else {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(result.message),
-          backgroundColor: AppColors.error,
-        ),
-      );
-    }
+      if (result.success) {
+        final total = result.restoredCounts.values
+            .fold<int>(0, (sum, count) => sum + count);
+        _showSnack(
+          context,
+          context
+              .t('settings_restore_local_success', params: {'count': '$total'}),
+          background: AppColors.success,
+        );
+      } else {
+        // Service messages describe file/format problems in English only;
+        // show them as detail under a localized headline.
+        _showSnack(
+          context,
+          context.t('error_with_detail', params: {'error': result.message}),
+          background: AppColors.error,
+        );
+      }
+    });
   }
 
   Future<void> _restoreFromCloud(BuildContext context) async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.t('restore_data'))),
-    );
-
-    final result = await SyncService().restoreLatestBackupFromCloud();
-    await _reloadAppDataProviders();
-    if (!context.mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(result)),
-    );
+    await _runExclusive(context, 'cloud_restore', () async {
+      final result = await SyncService().restoreLatestBackupFromCloud();
+      if (!mounted) return;
+      if (result == SyncService.restoreCompleteMessage) {
+        _reloadAppDataProviders();
+        if (!context.mounted) return;
+        _showSnack(context, context.t('settings_restore_complete'),
+            background: AppColors.success);
+      } else if (result == SyncService.restoreSkippedSignInMessage) {
+        if (!context.mounted) return;
+        _showSnack(context, context.t('settings_sign_in_required_cloud'));
+      } else {
+        debugPrint('Cloud restore failed: $result');
+        if (!context.mounted) return;
+        _showSnack(context, context.t('settings_restore_failed'),
+            background: AppColors.error);
+      }
+    });
   }
 
-  Future<void> _reloadAppDataProviders() async {
+  /// Re-reads every data provider from Hive after a restore. The `load*`
+  /// methods are synchronous.
+  void _reloadAppDataProviders() {
     ref.read(transactionsProvider.notifier).loadTransactions();
     ref.read(categoriesProvider.notifier).loadCategories();
     ref.read(accountsProvider.notifier).loadAccounts();
@@ -2217,82 +2441,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
   }
 
-  bool _isBangla(BuildContext context) =>
-      Localizations.localeOf(context).languageCode == 'bn';
-
   String _hideAmountsSubtitle(BuildContext context, bool enabled) {
-    return _isBangla(context)
-        ? (enabled
-            ? 'ড্যাশবোর্ড, প্রোফাইল ও রিপোর্টে টাকার অঙ্ক লুকানো থাকবে'
-            : 'ব্যালেন্স ও রিপোর্টের অঙ্ক স্বাভাবিকভাবে দেখা যাবে')
-        : (enabled
-            ? 'Balances and reports stay masked until you reveal them'
-            : 'Balances and reports stay visible across the app');
+    return context.t(enabled
+        ? 'settings_hide_amounts_sub_on'
+        : 'settings_hide_amounts_sub_off');
   }
 
   String _pushNotificationsSubtitle(BuildContext context, bool enabled) {
-    return _isBangla(context)
-        ? (enabled
-            ? 'রিমাইন্ডার, বাজেট অ্যালার্ট ও সাপ্তাহিক সামারি নোটিফিকেশন আসবে'
-            : 'বন্ধ থাকলে অ্যাপের কোনো লোকাল নোটিফিকেশন দেখাবে না')
-        : (enabled
-            ? 'Daily reminders, alerts and weekly summaries can appear'
-            : 'When off, the app will not show local notifications');
+    return context
+        .t(enabled ? 'settings_push_sub_on' : 'settings_push_sub_off');
   }
 
   String _weeklyReportSubtitle(BuildContext context, bool enabled) {
-    return _isBangla(context)
-        ? (enabled
-            ? '\u09aa\u09cd\u09b0\u09a4\u09bf \u09b0\u09ac\u09bf\u09ac\u09be\u09b0 \u09b8\u0995\u09be\u09b2 \u09ef\u099f\u09be\u09af\u09bc \u0986\u09af\u09bc-\u09ac\u09cd\u09af\u09af\u09bc\u09c7\u09b0 \u09b8\u09be\u09ae\u09be\u09b0\u09bf \u09a8\u09cb\u099f\u09bf\u09ab\u09bf\u0995\u09c7\u09b6\u09a8 \u0986\u09b8\u09ac\u09c7'
-            : '\u09ac\u09a8\u09cd\u09a7 \u09a5\u09be\u0995\u09b2\u09c7 \u09b8\u09be\u09aa\u09cd\u09a4\u09be\u09b9\u09bf\u0995 \u09b8\u09be\u09ae\u09be\u09b0\u09bf \u09a8\u09cb\u099f\u09bf\u09ab\u09bf\u0995\u09c7\u09b6\u09a8 \u09af\u09be\u09ac\u09c7 \u09a8\u09be')
-        : (enabled
-            ? 'Every Sunday at 9 AM, a weekly income vs expense summary notification arrives'
-            : 'No weekly summary notification will be sent');
+    // Workmanager schedules a ~7-day periodic task starting near 9 AM; it is
+    // not pinned to a weekday, so the copy must not promise one.
+    if (enabled) return context.t('settings_weekly_report_on');
+    return context.t('settings_weekly_report_off');
   }
 
   String _notificationScheduleSubtitle(
       BuildContext context, String reminderLabel) {
-    return _isBangla(context)
-        ? 'দৈনিক রিমাইন্ডার সময়: $reminderLabel'
-        : 'Daily reminder time: $reminderLabel';
+    return context
+        .t('settings_daily_reminder_label', params: {'time': reminderLabel});
   }
 
-
-
   String _voiceInputSubtitle(BuildContext context) {
-    return _isBangla(context)
-        ? 'ট্রানজ্যাকশন ফর্মে মাইক বাটন দেখাবে এবং ভয়েস থেকে amount/note নিতে পারবে'
-        : 'Shows a mic button in the transaction form to capture amount and note';
+    return context.t('settings_voice_input_sub');
   }
 
   String _receiptOptionSubtitle(BuildContext context) {
-    return _isBangla(context)
-        ? 'ট্রানজ্যাকশনের সাথে ক্যামেরা/গ্যালারি থেকে রিসিপ্ট যোগ করা যাবে'
-        : 'Lets users attach a receipt image from camera or gallery';
+    return context.t('settings_receipt_option_sub');
   }
 
   String _screenshotProtectionSubtitle(BuildContext context) {
-    return _isBangla(context)
-        ? 'Android এ sensitive screen-এর screenshot ও recent preview ব্লক করবে'
-        : 'Blocks screenshots and recent-app previews on Android';
+    return context.t('settings_screenshot_protection_sub');
   }
 
   String _exportSubtitle(BuildContext context) {
-    return _isBangla(context)
-        ? 'CSV, JSON বা PDF আকারে ডেটা এক্সপোর্ট করুন'
-        : 'Export your data as CSV, JSON or PDF';
+    return context.t('settings_export_sub');
   }
 
   String _termsSubtitle(BuildContext context) {
-    return _isBangla(context)
-        ? 'ব্যবহার ও দায়িত্ব সম্পর্কিত সংক্ষিপ্ত তথ্য'
-        : 'A short summary of usage expectations';
+    return context.t('settings_terms_sub');
   }
 
   String _colorPickerSubtitle(BuildContext context) {
-    return _isBangla(context)
-        ? 'একটি অ্যাকসেন্ট রঙ বেছে নিন'
-        : 'Choose the accent color you want across the app';
+    return context.t('settings_accent_color_sub');
   }
 
   void _showExportDialog(BuildContext context) {
@@ -2360,9 +2554,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       icon: Icons.table_chart_rounded,
                       color: const Color(0xFF10B981),
                       title: 'CSV',
-                      subtitle: _isBangla(context)
-                          ? 'Excel / Google Sheets এ ওপেন করা যাবে'
-                          : 'Opens in Excel or Google Sheets',
+                      subtitle: context.t('settings_export_csv_sub'),
                       format: 'csv',
                     ),
                     const SizedBox(height: 10),
@@ -2372,9 +2564,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       icon: Icons.picture_as_pdf_rounded,
                       color: const Color(0xFFEF4444),
                       title: 'PDF',
-                      subtitle: _isBangla(context)
-                          ? 'প্রিন্ট বা শেয়ার করার জন্য উপযুক্ত'
-                          : 'Ready to print or share',
+                      subtitle: context.t('settings_export_pdf_sub'),
                       format: 'pdf',
                     ),
                     const SizedBox(height: 10),
@@ -2384,9 +2574,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                       icon: Icons.data_object_rounded,
                       color: const Color(0xFF3B82F6),
                       title: 'JSON',
-                      subtitle: _isBangla(context)
-                          ? 'সম্পূর্ণ ডেটা ব্যাকআপ ফরম্যাট'
-                          : 'Full data backup format',
+                      subtitle: context.t('settings_export_json_sub'),
                       format: 'json',
                     ),
                   ],
@@ -2503,30 +2691,102 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     );
   }
 
-  void _confirmLogout(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(context.t('sign_out_q')),
-        content: Text(context.t('sign_out_confirm')),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(context.t('cancel'))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await AuthService().signOut();
-              // Reload profile to clear stale user data
-              ref.read(userProfileProvider.notifier).reloadProfile();
-            },
-            child: Text(context.t('sign_out')),
-          ),
-        ],
-      ),
+  /// Sign-out erases this device's copy of the user's data so the next person
+  /// can't see it (or have it synced into their account):
+  ///  * registered account → back up first; if that fails, warn before erasing.
+  ///  * guest / local-only → data has no recoverable copy; warn + offer export.
+  Future<void> _confirmLogout(BuildContext context) async {
+    final session = AccountSessionService();
+    final kind = session.currentKind;
+
+    final proceed = await _showSignOutDialog(
+      context,
+      title: context.t('sign_out_q'),
+      body: kind == AccountKind.registered
+          ? context.t('settings_sign_out_registered_body')
+          : context.t('settings_sign_out_guest_body'),
+      confirmLabel: kind == AccountKind.registered
+          ? context.t('sign_out')
+          : context.t('settings_erase_and_sign_out'),
+      offerExport: kind != AccountKind.registered,
     );
+    if (!proceed || !context.mounted) return;
+
+    await _runExclusive(context, 'sign_out', () async {
+      if (kind == AccountKind.registered) {
+        final backup = await session.backupBeforeSignOut();
+        if (backup == SignOutBackupResult.failed) {
+          if (!context.mounted) return;
+          final eraseAnyway = await _showSignOutDialog(
+            context,
+            title: context.t('settings_backup_failed_title'),
+            body: context.t('settings_sign_out_backup_failed_body'),
+            confirmLabel: context.t('settings_erase_and_sign_out'),
+            offerExport: true,
+          );
+          if (!eraseAnyway) return;
+        }
+      }
+      try {
+        await session.eraseLocalDataAndSignOut();
+      } catch (e) {
+        debugPrint('Sign out failed: $e');
+        if (!context.mounted) return;
+        _showSnack(context, context.t('settings_sign_out_failed'),
+            background: AppColors.error);
+      }
+    });
+  }
+
+  /// Returns true when the user confirms. "Export backup" opens the share
+  /// sheet and then re-shows the same dialog, so the user still decides.
+  Future<bool> _showSignOutDialog(
+    BuildContext context, {
+    required String title,
+    required String body,
+    required String confirmLabel,
+    required bool offerExport,
+  }) async {
+    while (true) {
+      if (!context.mounted) return false;
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(title),
+          content: SingleChildScrollView(child: Text(body)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'cancel'),
+              child: Text(context.t('cancel')),
+            ),
+            if (offerExport)
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'export'),
+                child: Text(context.t('settings_export_backup_first')),
+              ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.error,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx, 'confirm'),
+              child: Text(confirmLabel),
+            ),
+          ],
+        ),
+      );
+      if (choice == 'confirm') return true;
+      if (choice != 'export' || !context.mounted) return false;
+      try {
+        await BackupRestoreService().exportBackupFile();
+      } catch (_) {
+        if (!context.mounted) return false;
+        _showSnack(context, context.t('settings_backup_failed'),
+            background: AppColors.error);
+      }
+    }
   }
 
   Future<void> _toggleBiometricLock(BuildContext context, bool enable) async {
@@ -2580,13 +2840,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          _isBangla(context)
-              ? (enable
-                  ? 'ট্রানজ্যাকশন ফর্মে ভয়েস ইনপুট চালু হয়েছে'
-                  : 'ভয়েস ইনপুট বন্ধ করা হয়েছে')
-              : (enable
-                  ? 'Voice input is enabled in the transaction form'
-                  : 'Voice input has been turned off'),
+          context.t(enable
+              ? 'settings_voice_toggled_on'
+              : 'settings_voice_toggled_off'),
         ),
       ),
     );
@@ -2603,13 +2859,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          _isBangla(context)
-              ? (enable
-                  ? 'রিসিপ্ট ছবি অপশন চালু হয়েছে'
-                  : 'রিসিপ্ট ছবি অপশন বন্ধ করা হয়েছে')
-              : (enable
-                  ? 'Receipt image support is enabled'
-                  : 'Receipt image support has been turned off'),
+          context.t(enable
+              ? 'settings_receipt_toggled_on'
+              : 'settings_receipt_toggled_off'),
         ),
       ),
     );
@@ -2617,25 +2869,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Future<void> _toggleScreenshotProtection(
       BuildContext context, bool enable) async {
+    if (kIsWeb) {
+      // Don't persist a protection flag the browser cannot enforce.
+      _showSnack(context, context.t('feature_not_supported_web'));
+      return;
+    }
     await ref
         .read(settingsProvider.notifier)
         .update('screenshotProtection', enable);
     final applied =
         await ScreenshotProtectionService.instance.apply(enabled: enable);
     if (!context.mounted) return;
-    if (kIsWeb) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.t('feature_not_supported_web'))),
-      );
-      return;
-    }
     if (!applied) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _isBangla(context)
-                ? 'এই ডিভাইসে screenshot protection পুরোপুরি support নাও করতে পারে'
-                : 'This device may not fully support screenshot protection',
+            context.t('settings_screenshot_maybe_unsupported'),
           ),
         ),
       );
@@ -2659,31 +2908,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     }
   }
 
+  // The PIN itself goes only to [AppLockPinStore]; settings state carries
+  // just the `appLockPinSet` flag so the PIN can't leak into exports/UI.
   Future<void> _savePin(String pin) async {
-    if (kIsWeb) {
-      await ref.read(settingsProvider.notifier).update('appLockPin', pin);
-    } else {
-      await _secureStorage.write(key: _pinKey, value: pin);
-    }
+    await AppLockPinStore.instance.write(pin);
     await ref.read(settingsProvider.notifier).update('appLockPinSet', true);
   }
 
   Future<void> _removePin() async {
-    if (kIsWeb) {
-      await ref.read(settingsProvider.notifier).update('appLockPin', null);
-    } else {
-      await _secureStorage.delete(key: _pinKey);
-    }
+    await AppLockPinStore.instance.delete();
     await ref.read(settingsProvider.notifier).update('appLockPinSet', false);
-  }
-
-  Future<bool> _hasPin() async {
-    if (kIsWeb) {
-      final v = ref.read(settingsProvider)['appLockPin'];
-      return v != null && (v as String).isNotEmpty;
-    }
-    final v = await _secureStorage.read(key: _pinKey);
-    return v != null && v.isNotEmpty;
   }
 
   String _timeToString(TimeOfDay time) {
@@ -2735,11 +2969,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   Future<void> _syncSmsTrackPermission() async {
     final settings = ref.read(settingsProvider);
     final smsTrack = settings['smsTrack'] ?? false;
-    if (smsTrack) {
+    if (smsTrack && !kIsWeb) {
       final messenger = ScaffoldMessenger.of(context);
-      final disabledMessage = context.t('language') == 'bn'
-          ? 'এসএমএস অটো-ইমপোর্ট অনুমতি না পাওয়ায় এটি বন্ধ করা হয়েছে.'
-          : 'SMS Auto-Import has been disabled as permission was not granted.';
+      final disabledMessage = context.t('settings_sms_disabled_no_permission');
 
       final isGranted = await SmsService.isPermissionGranted();
       if (!isGranted && mounted) {
@@ -2765,92 +2997,405 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       if (bytes == null) return;
 
       final csvString = utf8.decode(bytes);
-      final rows = const CsvToListConverter(shouldParseNumbers: false)
-          .convert(csvString);
-      if (rows.isEmpty) {
+      final parseResult =
+          await StatementParserService().parseCsvContent(csvString);
+      if (!parseResult.isSuccess || parseResult.items.isEmpty) {
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.t('import_empty'))),
+          SnackBar(
+            content: Text(
+              parseResult.errorMessage ?? context.t('import_empty'),
+            ),
+          ),
         );
         return;
       }
 
       await _ensureImportDependenciesLoaded();
-      final categories = ref.read(categoriesProvider);
-      final accounts = ref.read(accountsProvider);
-      final categoryMap = {
-        for (final c in categories) c.name.toLowerCase(): c.id,
-      };
-      final accountMap = {
-        for (final a in accounts) a.name.toLowerCase(): a.id,
-      };
-
-      final headerRow =
-          rows.first.map((e) => e.toString().trim().toLowerCase()).toList();
-      final hasHeader = headerRow.contains('date') ||
-          headerRow.contains('type') ||
-          headerRow.contains('amount');
-      final startIndex = hasHeader ? 1 : 0;
-
-      int imported = 0;
       if (!context.mounted) return;
-      final AppL10n l10n = AppL10n.of(context);
-      for (var i = startIndex; i < rows.length; i++) {
-        final row = rows[i];
-        if (row.isEmpty) continue;
-
-        final typeStr = _cell(row, headerRow, 'type', 1);
-        final amountStr = _cell(row, headerRow, 'amount', 3);
-        final dateStr = _cell(row, headerRow, 'date', 0);
-        if (typeStr.isEmpty || amountStr.isEmpty || dateStr.isEmpty) continue;
-
-        final type = _parseType(typeStr, l10n);
-        final amount = _parseAmount(amountStr);
-        final date = _parseDate(dateStr);
-        if (type == null || amount == null || date == null) continue;
-
-        final categoryName = _cell(row, headerRow, 'category', 2);
-        final accountName = _cell(row, headerRow, 'account', 4);
-        final note = _cell(row, headerRow, 'note', 5);
-
-        final categoryId = categoryMap[categoryName.toLowerCase()] ??
-            AppConstants.defaultCategoryId;
-        final accountId = accountMap[accountName.toLowerCase()] ??
-            AppConstants.defaultAccountId;
-
-        final tx = TransactionModel(
-          id: DateTime.now().millisecondsSinceEpoch.toString() + i.toString(),
-          type: type,
-          amount: amount,
-          categoryId: categoryId,
-          accountId: accountId,
-          date: date,
-          note: note.isEmpty ? null : note,
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        );
-
-        await ref.read(transactionsProvider.notifier).addTransaction(tx);
-        await _applyAccountAndBudget(tx);
-        imported++;
-      }
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(context.t('import_complete',
-                  params: {'count': imported.toString()}))),
-        );
-      }
+      _showStatementPreviewModal(context, parseResult);
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(context.t('error_with_detail', params: {
-            'error': e.toString(),
-          }))),
+            content: Text(
+              context.t('error_with_detail', params: {'error': e.toString()}),
+            ),
+          ),
         );
       }
+    }
+  }
+
+  void _showStatementPreviewModal(
+    BuildContext context,
+    StatementParseResult parseResult,
+  ) {
+    final accounts = ref.read(accountsProvider);
+    final categories = ref.read(categoriesProvider);
+    final categoryMap = {
+      for (final c in categories) c.name.toLowerCase(): c.id,
+    };
+
+    String selectedAccountId =
+        accounts.isNotEmpty ? accounts.first.id : AppConstants.defaultAccountId;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            final currency =
+                (ref.read(settingsProvider)['currency'] as String?) ?? '৳';
+            final selectedCount = parseResult.selectedCount;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+
+            return SafeArea(
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.88,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).dividerColor,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            context.t('statement_import_preview'),
+                            style: AppTextStyles.h5,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            parseResult.detectedFormat,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // Account selector
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedAccountId,
+                      decoration: InputDecoration(
+                        labelText: context.t('select_target_account'),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      items: accounts.map((acc) {
+                        return DropdownMenuItem<String>(
+                          value: acc.id,
+                          child: Text(
+                            acc.nickname?.isNotEmpty == true
+                                ? acc.nickname!
+                                : acc.name,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setModalState(() => selectedAccountId = val);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    // Summary pills
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.success.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  context.t('income'),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.success,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '$currency${(parseResult.totalIncomePaisa / 100.0).toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.success,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.error.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  context.t('expense'),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.error,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '$currency${(parseResult.totalExpensePaisa / 100.0).toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.error,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      context.t('selected_items', params: {
+                        'selected': selectedCount.toString(),
+                        'total': parseResult.items.length.toString(),
+                      }),
+                      style: AppTextStyles.caption.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // List of parsed transactions
+                    Expanded(
+                      child: ListView.separated(
+                        itemCount: parseResult.items.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (ctx, idx) {
+                          final item = parseResult.items[idx];
+                          final isIncome = item.type == TransactionType.income;
+                          final dateStr =
+                              DateFormat('dd MMM yyyy').format(item.date);
+
+                          return CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            value: item.isSelected,
+                            activeColor: AppColors.primary,
+                            onChanged: (val) {
+                              setModalState(() {
+                                item.isSelected = val ?? false;
+                              });
+                            },
+                            title: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    item.description,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Text(
+                                  '${isIncome ? '+' : '-'} $currency${item.amountInTaka.toStringAsFixed(0)}',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: isIncome
+                                        ? AppColors.success
+                                        : AppColors.error,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            subtitle: Row(
+                              children: [
+                                Text(
+                                  dateStr,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.5),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? Colors.white10
+                                        : Colors.black.withValues(alpha: 0.05),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    item.suggestedCategory,
+                                    style: const TextStyle(fontSize: 10),
+                                  ),
+                                ),
+                                if (item.isDuplicate) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.warning
+                                          .withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      context.t('already_imported'),
+                                      style: const TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.warning,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    // Action button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: selectedCount == 0
+                            ? null
+                            : () async {
+                                Navigator.pop(sheetCtx);
+                                await _commitStatementImport(
+                                  context: context,
+                                  items: parseResult.items
+                                      .where((i) => i.isSelected)
+                                      .toList(),
+                                  targetAccountId: selectedAccountId,
+                                  categoryMap: categoryMap,
+                                );
+                              },
+                        child: Text(
+                          context.t('import_selected_btn', params: {
+                            'count': selectedCount.toString(),
+                          }),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _commitStatementImport({
+    required BuildContext context,
+    required List<ParsedStatementItem> items,
+    required String targetAccountId,
+    required Map<String, String> categoryMap,
+  }) async {
+    int imported = 0;
+    for (int i = 0; i < items.length; i++) {
+      final item = items[i];
+      final categoryId = categoryMap[item.suggestedCategory.toLowerCase()] ??
+          AppConstants.defaultCategoryId;
+
+      final tx = TransactionModel(
+        id: '${DateTime.now().millisecondsSinceEpoch}_import_$i',
+        type: item.type,
+        amount: item.amount,
+        categoryId: categoryId,
+        accountId: targetAccountId,
+        date: item.date,
+        note: item.description,
+        smsId: item.trxId,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      await ref.read(transactionsProvider.notifier).addTransaction(tx);
+      await _applyAccountAndBudget(tx);
+      imported++;
+    }
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context
+                .t('import_complete', params: {'count': imported.toString()}),
+          ),
+        ),
+      );
     }
   }
 
@@ -2864,57 +3409,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         account.balance + delta,
       );
     }
-  }
-
-  String _cell(
-    List<dynamic> row,
-    List<String> header,
-    String key,
-    int fallbackIndex,
-  ) {
-    final idx = header.indexOf(key);
-    if (idx >= 0 && idx < row.length) {
-      return row[idx].toString().trim();
-    }
-    if (fallbackIndex < row.length) {
-      return row[fallbackIndex].toString().trim();
-    }
-    return '';
-  }
-
-  TransactionType? _parseType(String raw, AppL10n l10n) {
-    final s = raw.trim().toLowerCase();
-    if (s == 'income' || s == l10n.t('income').toLowerCase()) {
-      return TransactionType.income;
-    }
-    if (s == 'expense' || s == l10n.t('expense').toLowerCase()) {
-      return TransactionType.expense;
-    }
-    return null;
-  }
-
-  int? _parseAmount(String raw) {
-    final cleaned = raw.replaceAll(RegExp(r'[^0-9\\.-]'), '');
-    final d = double.tryParse(cleaned);
-    return d != null ? (d * 100).toInt() : null;
-  }
-
-  DateTime? _parseDate(String raw) {
-    final trimmed = raw.trim();
-    final iso = DateTime.tryParse(trimmed);
-    if (iso != null) return iso;
-    final formats = [
-      DateFormat('dd/MM/yyyy'),
-      DateFormat('MM/dd/yyyy'),
-      DateFormat('dd-MM-yyyy'),
-      DateFormat('yyyy-MM-dd'),
-    ];
-    for (final f in formats) {
-      try {
-        return f.parseStrict(trimmed);
-      } catch (_) {}
-    }
-    return null;
   }
 
   Future<void> _ensureImportDependenciesLoaded() async {
@@ -2972,22 +3466,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     }
   }
 
-
-
   void _showBackgroundRunningTipsDialog(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           icon: const Icon(
             Icons.info_outline_rounded,
             size: 40,
             color: AppColors.info,
           ),
           title: Text(
-            ctx.t('language') == 'bn' ? 'ব্যাকগ্রাউন্ড রানিং টিপস' : 'Background Run Tips',
+            ctx.t('settings_background_tips_title'),
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
           content: Text(
@@ -3005,11 +3498,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
                 child: Text(
-                  ctx.t('language') == 'bn' ? 'ঠিক আছে' : 'OK',
+                  ctx.t('ok'),
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
@@ -3017,6 +3512,252 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           ],
         );
       },
+    );
+  }
+}
+
+/// Outcome of [_PinSetupDialog]: either a validated new PIN or a removal
+/// request. The current PIN has already been verified when required.
+class _PinDialogResult {
+  const _PinDialogResult.save(String pin)
+      : newPin = pin,
+        remove = false;
+  const _PinDialogResult.remove()
+      : newPin = null,
+        remove = true;
+
+  final String? newPin;
+  final bool remove;
+}
+
+/// Set / change / remove the app-lock PIN.
+///
+/// When a PIN already exists the current PIN must be entered before it can be
+/// changed or removed, so an unlocked device left unattended can't silently
+/// disable the lock. Owns its controllers so they are disposed correctly.
+class _PinSetupDialog extends StatefulWidget {
+  const _PinSetupDialog({required this.hasExistingPin});
+
+  final bool hasExistingPin;
+
+  @override
+  State<_PinSetupDialog> createState() => _PinSetupDialogState();
+}
+
+class _PinSetupDialogState extends State<_PinSetupDialog> {
+  final _currentCtrl = TextEditingController();
+  final _pinCtrl = TextEditingController();
+  final _confirmCtrl = TextEditingController();
+  String? _error;
+  bool _verifying = false;
+
+  @override
+  void dispose() {
+    _currentCtrl.dispose();
+    _pinCtrl.dispose();
+    _confirmCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<bool> _currentPinOk() async {
+    if (!widget.hasExistingPin) return true;
+    final current = _currentCtrl.text.trim();
+    if (!AppLockPinStore.isValidFormat(current)) {
+      setState(() => _error = context.t('settings_pin_current_wrong'));
+      return false;
+    }
+    // Shares the lock screen's persisted limiter, so this dialog can't be
+    // used to brute-force the PIN on an unattended unlocked device.
+    final result = await AppLockPinStore.instance.verifyWithLimit(current);
+    if (!mounted) return false;
+    switch (result.status) {
+      case PinVerifyStatus.success:
+        return true;
+      case PinVerifyStatus.lockedOut:
+        final seconds = (result.retryAfter ?? Duration.zero).inSeconds;
+        final time =
+            '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
+        setState(
+            () => _error = context.t('pin_locked_out', params: {'time': time}));
+        return false;
+      case PinVerifyStatus.incorrect:
+      case PinVerifyStatus.noPin:
+        setState(() => _error = context.t('settings_pin_current_wrong'));
+        return false;
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_verifying) return;
+    final pin = _pinCtrl.text.trim();
+    final confirm = _confirmCtrl.text.trim();
+    if (!AppLockPinStore.isValidFormat(pin) ||
+        !AppLockPinStore.isValidFormat(confirm)) {
+      setState(() => _error = context.t('pin_invalid'));
+      return;
+    }
+    if (pin != confirm) {
+      setState(() => _error = context.t('pin_mismatch'));
+      return;
+    }
+    setState(() => _verifying = true);
+    final ok = await _currentPinOk();
+    if (!mounted) return;
+    setState(() => _verifying = false);
+    if (ok) Navigator.pop(context, _PinDialogResult.save(pin));
+  }
+
+  Future<void> _remove() async {
+    if (_verifying) return;
+    setState(() => _verifying = true);
+    final ok = await _currentPinOk();
+    if (!mounted) return;
+    setState(() => _verifying = false);
+    if (ok) Navigator.pop(context, const _PinDialogResult.remove());
+  }
+
+  Widget _pinField(TextEditingController controller, String label,
+      {bool autofocus = false}) {
+    return TextField(
+      controller: controller,
+      autofocus: autofocus,
+      keyboardType: TextInputType.number,
+      inputFormatters: [
+        FilteringTextInputFormatter.digitsOnly,
+        LengthLimitingTextInputFormatter(AppLockPinStore.pinLength),
+      ],
+      obscureText: true,
+      enableSuggestions: false,
+      autocorrect: false,
+      onChanged: (_) {
+        if (_error != null) setState(() => _error = null);
+      },
+      decoration: InputDecoration(labelText: label),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPin = widget.hasExistingPin;
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(hasPin ? context.t('change_pin') : context.t('set_pin')),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (hasPin) ...[
+              _pinField(_currentCtrl, context.t('settings_current_pin'),
+                  autofocus: true),
+              const SizedBox(height: 6),
+            ],
+            _pinField(
+              _pinCtrl,
+              hasPin ? context.t('settings_new_pin') : context.t('enter_pin'),
+              autofocus: !hasPin,
+            ),
+            const SizedBox(height: 6),
+            _pinField(_confirmCtrl, context.t('confirm_pin')),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        if (hasPin)
+          TextButton(
+            onPressed: _verifying ? null : _remove,
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: Text(context.t('remove_pin')),
+          ),
+        TextButton(
+          onPressed: _verifying ? null : () => Navigator.pop(context),
+          child: Text(context.t('cancel')),
+        ),
+        ElevatedButton(
+          onPressed: _verifying ? null : _submit,
+          child: Text(context.t('save')),
+        ),
+      ],
+    );
+  }
+}
+
+/// Asks an email/password user for their password before a destructive
+/// action. Returns the entered password, or null when cancelled.
+class _PasswordPromptDialog extends StatefulWidget {
+  const _PasswordPromptDialog();
+
+  @override
+  State<_PasswordPromptDialog> createState() => _PasswordPromptDialogState();
+}
+
+class _PasswordPromptDialogState extends State<_PasswordPromptDialog> {
+  final _controller = TextEditingController();
+  bool _obscure = true;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = _controller.text;
+    if (value.isEmpty) return;
+    Navigator.pop(context, value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(context.t('settings_confirm_identity')),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(context.t('settings_enter_password_to_continue')),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            obscureText: _obscure,
+            enableSuggestions: false,
+            autocorrect: false,
+            keyboardType: TextInputType.visiblePassword,
+            onSubmitted: (_) => _submit(),
+            decoration: InputDecoration(
+              labelText: context.t('settings_password'),
+              suffixIcon: IconButton(
+                icon: Icon(_obscure
+                    ? Icons.visibility_rounded
+                    : Icons.visibility_off_rounded),
+                onPressed: () => setState(() => _obscure = !_obscure),
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(context.t('cancel')),
+        ),
+        ElevatedButton(
+          onPressed: _submit,
+          child: Text(context.t('settings_continue')),
+        ),
+      ],
     );
   }
 }

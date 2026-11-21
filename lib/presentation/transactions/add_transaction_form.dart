@@ -12,12 +12,14 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../../core/l10n/app_l10n.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../data/models/account_model.dart';
 import '../../data/models/category_model.dart';
 import '../../data/models/transaction_model.dart';
 import '../../services/duplicate_detection_service.dart';
-import '../../services/local_receipt_service.dart';
+import '../../services/receipt_ocr_service.dart';
+import '../../services/sms_service.dart';
 import '../providers/app_providers.dart';
 import 'calculator_bottom_sheet.dart';
 
@@ -36,8 +38,7 @@ class AddTransactionForm extends ConsumerStatefulWidget {
   final bool embedded;
 
   @override
-  ConsumerState<AddTransactionForm> createState() =>
-      _AddTransactionFormState();
+  ConsumerState<AddTransactionForm> createState() => _AddTransactionFormState();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -56,6 +57,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
   DateTime _date = DateTime.now();
   String? _categoryId;
   String? _accountId = 'acc_cash';
+  String? _toAccountId;
   String _amountStr = '';
   String? _receiptPath;
   bool _isRecurring = false;
@@ -67,19 +69,36 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
   bool _isListening = false;
   bool _speechInitialized = false;
 
-
   // Animations
   late AnimationController _entryCtrl;
   late AnimationController _typeSwitchCtrl;
   late Animation<double> _entryFade;
 
-
   // ── Computed helpers ───────────────────────────────────────────────────────
 
   bool get _isEditMode => widget.transactionToEdit != null;
 
-  int get _amount =>
-      _amountStr.isEmpty ? 0 : ((double.tryParse(_amountStr) ?? 0) * 100).toInt();
+  bool get _hasUnsavedChanges {
+    if (_isEditMode) {
+      final t = widget.transactionToEdit!;
+      return _amount != t.amount ||
+          _type != t.type ||
+          _categoryId != (t.categoryId.isEmpty ? null : t.categoryId) ||
+          _accountId != t.accountId ||
+          _toAccountId != t.toAccountId ||
+          _noteController.text != (t.note ?? '') ||
+          _receiptPath != t.receiptUrl ||
+          _isRecurring != t.isRecurring ||
+          _recurringType != t.recurringType;
+    }
+    return (_amountStr.isNotEmpty && _amountStr != '0') ||
+        _noteController.text.trim().isNotEmpty ||
+        _receiptPath != null;
+  }
+
+  int get _amount => _amountStr.isEmpty
+      ? 0
+      : ((double.tryParse(_amountStr) ?? 0) * 100).toInt();
 
   // Colors
   Color get _expColor => const Color(0xFFEF4444);
@@ -135,18 +154,20 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
     final t = widget.transactionToEdit;
     if (t != null) {
       final repo = ref.read(transactionRepositoryProvider);
-      final isAlreadySaved = repo.getAllTransactions().any((item) => item.id == t.id);
+      final isAlreadySaved =
+          repo.getAllTransactions().any((item) => item.id == t.id);
       _isPendingSms = !isAlreadySaved;
 
       _type = t.type;
       _date = t.date;
-      _categoryId = t.categoryId;
-      _accountId = t.accountId;
+      _categoryId = t.categoryId.isEmpty ? null : t.categoryId;
+      _accountId = t.accountId.isEmpty ? null : t.accountId;
+      _toAccountId = t.toAccountId;
       _isRecurring = t.isRecurring;
       _recurringType = t.recurringType;
       final amountInDouble = t.amount / 100;
-      _amountStr = amountInDouble.toStringAsFixed(
-          amountInDouble == amountInDouble.truncate() ? 0 : 2);
+      _amountStr = amountInDouble
+          .toStringAsFixed(amountInDouble == amountInDouble.truncate() ? 0 : 2);
       _noteController.text = t.note ?? '';
       _receiptPath = t.receiptUrl;
     }
@@ -185,15 +206,25 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
     final cats = _filteredCategories;
     final settings = ref.watch(settingsProvider);
 
-
-
     final voiceEnabled = settings['voiceTransactionInput'] == true;
     final receiptEnabled = settings['receiptImageAttachment'] == true;
 
-    final body = FadeTransition(
+    final card = FadeTransition(
       opacity: _entryFade,
-      child: _buildCard(context, isDark, cats, accounts,
-          voiceEnabled, receiptEnabled),
+      child: _buildCard(
+          context, isDark, cats, accounts, voiceEnabled, receiptEnabled),
+    );
+
+    final body = PopScope(
+      canPop: !_hasUnsavedChanges || _isSaving,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldPop = await _showDiscardConfirmDialog();
+        if (shouldPop && mounted) {
+          _closeScreen(force: true);
+        }
+      },
+      child: card,
     );
 
     if (widget.embedded) {
@@ -270,6 +301,11 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                         _buildTypeSwitcher(isDark),
                         const SizedBox(height: 16),
                         _buildAmountDisplay(isDark),
+                        if (_type != TransactionType.transfer &&
+                            cats.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          _buildQuickCategoryChips(context, cats, isDark),
+                        ],
                         const SizedBox(height: 16),
                         _buildFieldsSection(context, cats, accounts, isDark),
                       ],
@@ -297,6 +333,10 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                   _buildTypeSwitcher(isDark),
                   const SizedBox(height: 20),
                   _buildAmountDisplay(isDark),
+                  if (_type != TransactionType.transfer && cats.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    _buildQuickCategoryChips(context, cats, isDark),
+                  ],
                   const SizedBox(height: 16),
                   _buildFieldsSection(context, cats, accounts, isDark),
                   const SizedBox(height: 14),
@@ -504,6 +544,12 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
             color: _incColor,
             icon: Icons.arrow_downward_rounded,
           ),
+          _typeChip(
+            label: context.t('transfer'),
+            type: TransactionType.transfer,
+            color: _xfrColor,
+            icon: Icons.swap_horiz_rounded,
+          ),
         ],
       ),
     );
@@ -526,6 +572,26 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
           setState(() {
             _type = type;
             _categoryId = null;
+            if (type == TransactionType.transfer) {
+              if (_toAccountId == null || _toAccountId == _accountId) {
+                final allAccs = ref.read(accountsProvider);
+                final other = allAccs.firstWhere(
+                  (a) => a.id != _accountId,
+                  orElse: () => allAccs.isNotEmpty
+                      ? allAccs.first
+                      : const AccountModel(
+                          id: '',
+                          name: '',
+                          nameBn: '',
+                          type: AccountType.cash,
+                          balance: 0,
+                        ),
+                );
+                if (other.id.isNotEmpty && other.id != _accountId) {
+                  _toAccountId = other.id;
+                }
+              }
+            }
           });
         },
         child: AnimatedContainer(
@@ -564,19 +630,27 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                         .withValues(alpha: 0.35),
               ),
               const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight:
-                      selected ? FontWeight.w800 : FontWeight.w600,
-                  letterSpacing: -0.1,
-                  color: selected
-                      ? Colors.white
-                      : Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.4),
+              // Segments are a third of the width each; on small screens, with
+              // Bangla labels or large text scale, the label must shrink
+              // rather than overflow. scaleDown keeps the whole word readable.
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      letterSpacing: -0.1,
+                      color: selected
+                          ? Colors.white
+                          : Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.4),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -593,7 +667,11 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
   Widget _buildAmountDisplay(bool isDark) {
     final display = _amountStr.isEmpty ? '0' : _amountStr;
     final len = display.replaceAll('.', '').length;
-    final fontSize = len > 9 ? 34.0 : len > 6 ? 46.0 : 58.0;
+    final fontSize = len > 9
+        ? 34.0
+        : len > 6
+            ? 46.0
+            : 58.0;
     final hasAmount = _amountStr.isNotEmpty && _amountStr != '0';
 
     return AnimatedContainer(
@@ -647,7 +725,6 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
               textAlign: TextAlign.center,
             ),
           ),
-
         ],
       ),
     );
@@ -658,6 +735,124 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
   // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildFieldsSection(
+    BuildContext context,
+    List<CategoryModel> cats,
+    List<AccountModel> accounts,
+    bool isDark,
+  ) {
+    if (_type == TransactionType.transfer) {
+      return _buildTransferFields(context, accounts, isDark);
+    }
+    return _buildStandardFields(context, cats, accounts, isDark);
+  }
+
+  Widget _buildTransferFields(
+    BuildContext context,
+    List<AccountModel> accounts,
+    bool isDark,
+  ) {
+    final fromAcc = accounts.cast<AccountModel?>().firstWhere(
+          (a) => a?.id == _accountId,
+          orElse: () => null,
+        );
+    final toAcc = accounts.cast<AccountModel?>().firstWhere(
+          (a) => a?.id == _toAccountId,
+          orElse: () => null,
+        );
+
+    return Column(
+      children: [
+        // Row 1: From Account -> Swap -> To Account
+        Row(
+          children: [
+            Expanded(
+              child: _fieldTile(
+                context: context,
+                isDark: isDark,
+                icon: Icons.account_balance_wallet_rounded,
+                label: context.t('from_account'),
+                value: fromAcc != null
+                    ? (fromAcc.nickname?.isNotEmpty == true
+                        ? fromAcc.nickname
+                        : fromAcc.name)
+                    : null,
+                placeholder: context.t('select'),
+                isFilled: fromAcc != null,
+                onTap: () => _showAccountSheet(accounts, isSource: true),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: IconButton(
+                onPressed: _swapAccounts,
+                icon: Icon(
+                  Icons.swap_horiz_rounded,
+                  color: _activeColor,
+                  size: 24,
+                ),
+                tooltip: context.t('swap_accounts'),
+              ),
+            ),
+            Expanded(
+              child: _fieldTile(
+                context: context,
+                isDark: isDark,
+                icon: Icons.account_balance_rounded,
+                label: context.t('to_account'),
+                value: toAcc != null
+                    ? (toAcc.nickname?.isNotEmpty == true
+                        ? toAcc.nickname
+                        : toAcc.name)
+                    : null,
+                placeholder: context.t('select'),
+                isFilled: toAcc != null,
+                onTap: () => _showAccountSheet(accounts, isSource: false),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        // Row 2: Date + Note
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _fieldTile(
+                context: context,
+                isDark: isDark,
+                icon: Icons.calendar_month_rounded,
+                label: context.t('date'),
+                value: _dateLabel(_date),
+                isFilled: false,
+                onTap: _pickDate,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: _noteTile(context, isDark)),
+          ],
+        ),
+        // Recurring Tile
+        const SizedBox(height: 10),
+        _buildRecurringTile(context, isDark),
+        // Receipt preview
+        if (_receiptPath != null) ...[
+          const SizedBox(height: 10),
+          _buildReceiptPreview(context, isDark),
+        ],
+      ],
+    );
+  }
+
+  void _swapAccounts() {
+    HapticFeedback.selectionClick();
+    setState(() {
+      final temp = _accountId;
+      _accountId = _toAccountId;
+      _toAccountId = temp;
+    });
+  }
+
+  Widget _buildStandardFields(
     BuildContext context,
     List<CategoryModel> cats,
     List<AccountModel> accounts,
@@ -692,7 +887,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                     : null,
                 placeholder: context.t('select'),
                 isFilled: selAcc != null,
-                onTap: () => _showAccountSheet(accounts),
+                onTap: () => _showAccountSheet(accounts, isSource: true),
               ),
             ),
             const SizedBox(width: 10),
@@ -730,6 +925,9 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
             Expanded(child: _noteTile(context, isDark)),
           ],
         ),
+        // Recurring Tile
+        const SizedBox(height: 10),
+        _buildRecurringTile(context, isDark),
         // Receipt preview
         if (_receiptPath != null) ...[
           const SizedBox(height: 10),
@@ -737,6 +935,246 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
         ],
       ],
     );
+  }
+
+  Widget _buildQuickCategoryChips(
+    BuildContext context,
+    List<CategoryModel> cats,
+    bool isDark,
+  ) {
+    final quickCats = cats.take(6).toList();
+    if (quickCats.isEmpty) return const SizedBox.shrink();
+
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: quickCats.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (ctx, i) {
+          final c = quickCats[i];
+          final isSelected = _categoryId == c.id;
+          return ActionChip(
+            avatar: Text(c.icon, style: const TextStyle(fontSize: 14)),
+            label: Text(
+              c.name,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected
+                    ? Colors.white
+                    : Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.8),
+              ),
+            ),
+            backgroundColor: isSelected
+                ? _activeColor
+                : (isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : const Color(0xFFF1F3F5)),
+            side: BorderSide(
+              color: isSelected
+                  ? _activeColor
+                  : Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.08),
+            ),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+            onPressed: () {
+              HapticFeedback.selectionClick();
+              setState(() {
+                _categoryId = isSelected ? null : c.id;
+              });
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildRecurringTile(BuildContext context, bool isDark) {
+    final isBn = Localizations.localeOf(context).languageCode == 'bn';
+    final currentFreq = _recurringType ?? RecurringType.monthly;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: _isRecurring
+            ? _activeColor.withValues(alpha: isDark ? 0.09 : 0.05)
+            : (isDark
+                ? Colors.white.withValues(alpha: 0.04)
+                : const Color(0xFFF6F7F9)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _isRecurring
+              ? _activeColor.withValues(alpha: 0.3)
+              : (isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.06)),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: _isRecurring
+                      ? _activeColor.withValues(alpha: 0.18)
+                      : (isDark
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : Colors.black.withValues(alpha: 0.05)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.repeat_rounded,
+                  size: 16,
+                  color: _isRecurring
+                      ? _activeColor
+                      : Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.5),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      context.t('recurring_payment'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    Text(
+                      _isRecurring
+                          ? _frequencyLabel(currentFreq)
+                          : (isBn
+                              ? 'লেনদেনটি পুনরাবৃত্তি করুন'
+                              : 'Repeat this transaction'),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: _isRecurring
+                            ? _activeColor
+                            : Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.45),
+                        fontWeight:
+                            _isRecurring ? FontWeight.w600 : FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _isRecurring,
+                activeThumbColor: _activeColor,
+                onChanged: (val) {
+                  HapticFeedback.lightImpact();
+                  setState(() {
+                    _isRecurring = val;
+                    if (val && _recurringType == null) {
+                      _recurringType = RecurringType.monthly;
+                    }
+                  });
+                },
+              ),
+            ],
+          ),
+          if (_isRecurring) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _frequencyChip(
+                    RecurringType.daily, context.t('daily'), currentFreq),
+                const SizedBox(width: 6),
+                _frequencyChip(
+                    RecurringType.weekly, context.t('weekly'), currentFreq),
+                const SizedBox(width: 6),
+                _frequencyChip(
+                    RecurringType.monthly, context.t('monthly'), currentFreq),
+                const SizedBox(width: 6),
+                _frequencyChip(
+                    RecurringType.yearly, context.t('yearly'), currentFreq),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _frequencyChip(
+      RecurringType type, String label, RecurringType selected) {
+    final isSelected = type == selected;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          setState(() => _recurringType = type);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? _activeColor : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected
+                  ? _activeColor
+                  : Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.15),
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              color: isSelected
+                  ? Colors.white
+                  : Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.7),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _frequencyLabel(RecurringType type) {
+    switch (type) {
+      case RecurringType.daily:
+        return context.t('daily');
+      case RecurringType.weekly:
+        return context.t('weekly');
+      case RecurringType.monthly:
+        return context.t('monthly');
+      case RecurringType.yearly:
+        return context.t('yearly');
+    }
   }
 
   Widget _fieldTile({
@@ -758,8 +1196,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
         highlightColor: _activeColor.withValues(alpha: 0.03),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           decoration: BoxDecoration(
             color: isFilled
                 ? _activeColor.withValues(alpha: isDark ? 0.10 : 0.05)
@@ -776,8 +1213,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black
-                    .withValues(alpha: isDark ? 0.08 : 0.02),
+                color: Colors.black.withValues(alpha: isDark ? 0.08 : 0.02),
                 blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
@@ -975,7 +1411,8 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                           focusedBorder: InputBorder.none,
                           disabledBorder: InputBorder.none,
                           isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 2),
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 2),
                           hintText: context.t('add_note'),
                           hintStyle: TextStyle(
                             fontSize: 12.5,
@@ -1102,8 +1539,6 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
     );
   }
 
-
-
   // ─────────────────────────────────────────────────────────────────────────
   // Numpad
   // ─────────────────────────────────────────────────────────────────────────
@@ -1192,7 +1627,8 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                     key,
                     style: TextStyle(
                       fontSize: 25,
-                      fontWeight: FontWeight.w700, // Bold numbers for premium readability
+                      fontWeight: FontWeight
+                          .w700, // Bold numbers for premium readability
                       color: isDot
                           ? Theme.of(context)
                               .colorScheme
@@ -1241,95 +1677,131 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
   Widget _buildSaveButton() {
     final ready = _amount > 0;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: (ready && !_isSaving) ? _submit : null,
-        borderRadius: BorderRadius.circular(18),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
-          height: 56,
-          decoration: BoxDecoration(
-            gradient: ready
-                ? LinearGradient(
-                    colors: [
-                      _activeColor,
-                      Color.lerp(_activeColor, Colors.black, 0.18)!,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : null,
-            color: ready
-                ? null
-                : Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.06),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap:
+                (ready && !_isSaving) ? () => _submit(keepOpen: false) : null,
             borderRadius: BorderRadius.circular(18),
-            boxShadow: ready
-                ? [
-                    BoxShadow(
-                      color: _activeColor.withValues(alpha: 0.4),
-                      blurRadius: 22,
-                      offset: const Offset(0, 8),
-                    ),
-                    BoxShadow(
-                      color: _activeColor.withValues(alpha: 0.15),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Center(
-            child: _isSaving
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2.5,
-                    ),
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        _isEditMode
-                            ? Icons.check_circle_rounded
-                            : Icons.check_rounded,
-                        size: 20,
-                        color: ready
-                            ? Colors.white
-                            : Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.2),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        _isEditMode
-                            ? context.t('update_transaction')
-                            : context.t('save_transaction'),
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.2,
-                          color: ready
-                              ? Colors.white
-                              : Theme.of(context)
-                                  .colorScheme
-                                  .onSurface
-                                  .withValues(alpha: 0.2),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              height: 56,
+              decoration: BoxDecoration(
+                gradient: ready
+                    ? LinearGradient(
+                        colors: [
+                          _activeColor,
+                          Color.lerp(_activeColor, Colors.black, 0.18)!,
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                color: ready
+                    ? null
+                    : Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: ready
+                    ? [
+                        BoxShadow(
+                          color: _activeColor.withValues(alpha: 0.4),
+                          blurRadius: 22,
+                          offset: const Offset(0, 8),
                         ),
+                        BoxShadow(
+                          color: _activeColor.withValues(alpha: 0.15),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Center(
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.5,
+                        ),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            _isEditMode
+                                ? Icons.check_circle_rounded
+                                : Icons.check_rounded,
+                            size: 20,
+                            color: ready
+                                ? Colors.white
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.2),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            _isEditMode
+                                ? context.t('update_transaction')
+                                : context.t('save_transaction'),
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.2,
+                              color: ready
+                                  ? Colors.white
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withValues(alpha: 0.2),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+              ),
+            ),
           ),
         ),
-      ),
+        if (!_isEditMode) ...[
+          const SizedBox(height: 6),
+          TextButton.icon(
+            onPressed:
+                (ready && !_isSaving) ? () => _submit(keepOpen: true) : null,
+            icon: Icon(
+              Icons.add_circle_outline_rounded,
+              size: 16,
+              color: ready
+                  ? _activeColor
+                  : Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.3),
+            ),
+            label: Text(
+              context.t('save_and_add_another'),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: ready
+                    ? _activeColor
+                    : Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.3),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -1385,8 +1857,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
           ...sorted.map(
             (c) => _pickerListTile(
               context: context,
-              leading: Text(c.icon,
-                  style: const TextStyle(fontSize: 24)),
+              leading: Text(c.icon, style: const TextStyle(fontSize: 24)),
               title: c.name,
               subtitle: c.nameBn.isNotEmpty ? c.nameBn : null,
               selected: _categoryId == c.id,
@@ -1430,7 +1901,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
     );
   }
 
-  void _showAccountSheet(List<AccountModel> accs) {
+  void _showAccountSheet(List<AccountModel> accs, {bool isSource = true}) {
     if (accs.isEmpty) {
       _ensureDefaultAccounts().then((_) {
         if (!mounted) return;
@@ -1439,7 +1910,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
           _showSnack(context.t('no_accounts'));
           return;
         }
-        _showAccountSheet(refreshed);
+        _showAccountSheet(refreshed, isSource: isSource);
       });
       return;
     }
@@ -1458,8 +1929,14 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
         return a.name.compareTo(b.name);
       });
 
+    final title = isSource
+        ? (_type == TransactionType.transfer
+            ? context.t('from_account')
+            : context.t('select_account'))
+        : context.t('to_account');
+
     _showPickerSheet(
-      title: context.t('select_account'),
+      title: title,
       onActionTap: () {
         Navigator.pop(context);
         context.push('/accounts');
@@ -1467,51 +1944,77 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
       builder: (sheetSetState) {
         return [
           ...sorted.map(
-            (a) => _pickerListTile(
-              context: context,
-              leading: Text(a.icon ?? '💳',
-                  style: const TextStyle(fontSize: 24)),
-              title: a.nickname?.isNotEmpty == true ? a.nickname! : a.name,
-              subtitle: a.nickname?.isNotEmpty == true
+            (a) {
+              final isSelected =
+                  isSource ? (_accountId == a.id) : (_toAccountId == a.id);
+              final balDouble = a.balance / 100;
+              final balStr = balDouble
+                  .toStringAsFixed(balDouble == balDouble.truncate() ? 0 : 2);
+              final subDetail = a.nickname?.isNotEmpty == true
                   ? '${a.name}${a.accountNumber?.isNotEmpty == true ? " • ${a.accountNumber}" : ""}'
-                  : (a.accountNumber?.isNotEmpty == true ? a.accountNumber : null),
-              selected: _accountId == a.id,
-              onTap: () {
-                setState(() => _accountId = a.id);
-                Navigator.pop(context);
-              },
-              trailing: IconButton(
-                icon: Icon(
-                  localPinned.contains(a.id)
-                      ? Icons.push_pin_rounded
-                      : Icons.push_pin_outlined,
-                  size: 18,
-                  color: localPinned.contains(a.id)
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.4),
-                ),
-                splashRadius: 20,
-                tooltip: localPinned.contains(a.id)
-                    ? context.t('unpin_account')
-                    : context.t('pin_account'),
-                onPressed: () async {
-                  if (localPinned.contains(a.id)) {
-                    localPinned.remove(a.id);
-                  } else {
-                    localPinned.add(a.id);
-                  }
-                  await ref
-                      .read(settingsProvider.notifier)
-                      .updatePinnedAccounts(localPinned.toList());
-                  if (!mounted) return;
+                  : (a.accountNumber?.isNotEmpty == true
+                      ? a.accountNumber!
+                      : '');
+
+              return _pickerListTile(
+                context: context,
+                leading:
+                    Text(a.icon ?? '💳', style: const TextStyle(fontSize: 24)),
+                title: a.nickname?.isNotEmpty == true ? a.nickname! : a.name,
+                subtitle: subDetail.isNotEmpty
+                    ? '$subDetail • $_currency$balStr'
+                    : '$_currency$balStr',
+                selected: isSelected,
+                onTap: () {
+                  setState(() {
+                    if (isSource) {
+                      _accountId = a.id;
+                      if (_type == TransactionType.transfer &&
+                          _toAccountId == a.id) {
+                        _toAccountId = null;
+                      }
+                    } else {
+                      _toAccountId = a.id;
+                      if (_accountId == a.id) {
+                        _accountId = null;
+                      }
+                    }
+                  });
                   Navigator.pop(context);
-                  _showAccountSheet(accs);
                 },
-              ),
-            ),
+                trailing: IconButton(
+                  icon: Icon(
+                    localPinned.contains(a.id)
+                        ? Icons.push_pin_rounded
+                        : Icons.push_pin_outlined,
+                    size: 18,
+                    color: localPinned.contains(a.id)
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.4),
+                  ),
+                  splashRadius: 20,
+                  tooltip: localPinned.contains(a.id)
+                      ? context.t('unpin_account')
+                      : context.t('pin_account'),
+                  onPressed: () async {
+                    if (localPinned.contains(a.id)) {
+                      localPinned.remove(a.id);
+                    } else {
+                      localPinned.add(a.id);
+                    }
+                    await ref
+                        .read(settingsProvider.notifier)
+                        .updatePinnedAccounts(localPinned.toList());
+                    if (!mounted) return;
+                    Navigator.pop(context);
+                    _showAccountSheet(accs, isSource: isSource);
+                  },
+                ),
+              );
+            },
           )
         ];
       },
@@ -1532,8 +2035,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
         child: Container(
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
           child: SizedBox(
@@ -1604,8 +2106,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
         title,
         style: AppTextStyles.body1.copyWith(
           fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-          color:
-              selected ? primary : Theme.of(context).colorScheme.onSurface,
+          color: selected ? primary : Theme.of(context).colorScheme.onSurface,
         ),
       ),
       subtitle: subtitle != null && subtitle.isNotEmpty
@@ -1625,14 +2126,12 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (selected)
-                  Icon(Icons.check_circle_rounded,
-                      color: primary, size: 20),
+                  Icon(Icons.check_circle_rounded, color: primary, size: 20),
                 trailing,
               ],
             )
           : (selected
-              ? Icon(Icons.check_circle_rounded,
-                  color: primary, size: 20)
+              ? Icon(Icons.check_circle_rounded, color: primary, size: 20)
               : null),
       onTap: onTap,
     );
@@ -1658,7 +2157,16 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
       ),
     );
     if (picked != null && mounted) {
-      setState(() => _date = picked);
+      setState(() {
+        _date = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          _date.hour,
+          _date.minute,
+          _date.second,
+        );
+      });
     }
   }
 
@@ -1668,9 +2176,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
       return context.t('today');
     }
     final yest = now.subtract(const Duration(days: 1));
-    if (d.year == yest.year &&
-        d.month == yest.month &&
-        d.day == yest.day) {
+    if (d.year == yest.year && d.month == yest.month && d.day == yest.day) {
       return context.t('yesterday');
     }
     return DateFormat('dd MMM yyyy').format(d);
@@ -1701,8 +2207,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         title: Text(context.t('paste_sms'),
             style: const TextStyle(fontWeight: FontWeight.w700)),
         content: TextField(
@@ -1741,6 +2246,28 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
   }
 
   void _parseSmsText(String sms) {
+    // 1. Try advanced SmsService parser first (supports Bangladeshi banks and MFS)
+    final parsedTx = SmsService().parseFromText(sms);
+    if (parsedTx != null) {
+      final amtInDouble = parsedTx.amount / 100;
+      setState(() {
+        _amountStr = amtInDouble
+            .toStringAsFixed(amtInDouble == amtInDouble.truncate() ? 0 : 2);
+        _type = parsedTx.type;
+        if (parsedTx.accountId.isNotEmpty) {
+          _accountId = parsedTx.accountId;
+        }
+        if (parsedTx.categoryId.isNotEmpty) {
+          _categoryId = parsedTx.categoryId;
+        }
+        _date = parsedTx.date;
+        _noteController.text = parsedTx.note ?? sms;
+      });
+      _showSnack(context.t('sms_parsed_review'));
+      return;
+    }
+
+    // 2. Fallback regex parser for non-standard text
     final lower = sms.toLowerCase();
     final amountMatch =
         RegExp(r'(\d+(?:,\d{3})*(?:\.\d{1,2})?)').firstMatch(sms);
@@ -1775,7 +2302,9 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
 
     // Auto-select first matching category
     final cats = _filteredCategories;
-    if (cats.isNotEmpty && _categoryId == null) {
+    if (cats.isNotEmpty &&
+        _categoryId == null &&
+        _type != TransactionType.transfer) {
       setState(() => _categoryId = cats.first.id);
     }
 
@@ -1817,8 +2346,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
             }
           },
           onStatus: (status) {
-            if (mounted &&
-                (status == 'done' || status == 'notListening')) {
+            if (mounted && (status == 'done' || status == 'notListening')) {
               setState(() => _isListening = false);
             }
           },
@@ -1859,8 +2387,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
     final normalized = transcript.toLowerCase();
 
     // Extract amount
-    final amountMatch =
-        RegExp(r'(\d+(?:\.\d{1,2})?)').firstMatch(transcript);
+    final amountMatch = RegExp(r'(\d+(?:\.\d{1,2})?)').firstMatch(transcript);
     if (amountMatch != null) {
       setState(() => _amountStr = amountMatch.group(1)!);
     }
@@ -1910,8 +2437,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Voice Input Not Available'),
         content: const Text(
           'Speech recognition is not available on this device.\n\n'
@@ -1942,8 +2468,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1953,9 +2478,8 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .dividerColor
-                        .withValues(alpha: 0.5),
+                    color:
+                        Theme.of(context).dividerColor.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -1998,12 +2522,73 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
     );
 
     if (source == null || !mounted) return;
-    final savedPath = await LocalReceiptService().pickAndSaveReceipt(
+
+    _showSnack(context.t('scanning_receipt'));
+
+    final scanResult = await ReceiptOcrService().scanReceipt(
       source: source,
-      imageQuality: 80,
+      availableCategories: _filteredCategories,
     );
-    if (savedPath != null && mounted) {
-      setState(() => _receiptPath = savedPath);
+
+    if (scanResult != null && mounted) {
+      setState(() {
+        if (scanResult.imagePath != null) {
+          _receiptPath = scanResult.imagePath;
+        }
+
+        // 1. Auto-fill Amount
+        if (scanResult.amount != null && scanResult.amount! > 0) {
+          final amt = scanResult.amount!;
+          _amountStr = amt.toStringAsFixed(amt == amt.truncate() ? 0 : 2);
+        }
+
+        // 2. Auto-fill Date
+        if (scanResult.date != null) {
+          _date = scanResult.date!;
+        }
+
+        // 3. Auto-fill Note/Merchant
+        if (scanResult.merchant != null && scanResult.merchant!.isNotEmpty) {
+          String noteText = scanResult.merchant!;
+          if (scanResult.itemsSummary != null &&
+              scanResult.itemsSummary!.isNotEmpty) {
+            noteText += ' (${scanResult.itemsSummary})';
+          }
+          if (_noteController.text.trim().isEmpty) {
+            _noteController.text = noteText;
+          }
+        }
+
+        // 4. Auto-select matching category
+        if (scanResult.suggestedCategory != null &&
+            scanResult.suggestedCategory!.isNotEmpty) {
+          final cats = _filteredCategories;
+          final target = scanResult.suggestedCategory!.toLowerCase();
+          final matched = cats.firstWhere(
+            (c) =>
+                c.name.toLowerCase().contains(target) ||
+                c.nameBn.toLowerCase().contains(target) ||
+                target.contains(c.name.toLowerCase()),
+            orElse: () => cats.isNotEmpty
+                ? cats.first
+                : const CategoryModel(
+                    id: '',
+                    name: '',
+                    nameBn: '',
+                    icon: '',
+                    colorHex: '#000000',
+                    type: CategoryType.expense,
+                  ),
+          );
+          if (matched.id.isNotEmpty) {
+            _categoryId = matched.id;
+          }
+        }
+      });
+
+      if (scanResult.amount != null || scanResult.merchant != null) {
+        _showSnack(context.t('receipt_scan_success'));
+      }
     }
   }
 
@@ -2011,8 +2596,25 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
   // Submit Logic
   // ─────────────────────────────────────────────────────────────────────────
 
-  Future<void> _submit() async {
+  Future<void> _submit({bool keepOpen = false}) async {
     if (_isSaving || _amount <= 0) return;
+
+    final isBn = Localizations.localeOf(context).languageCode == 'bn';
+
+    if (_type == TransactionType.transfer) {
+      if (_accountId == null || _accountId!.isEmpty) {
+        _showSnack(context.t('select_account_prompt'));
+        return;
+      }
+      if (_toAccountId == null || _toAccountId!.isEmpty) {
+        _showSnack(context.t('select_dest_account'));
+        return;
+      }
+      if (_accountId == _toAccountId) {
+        _showSnack(context.t('source_dest_different'));
+        return;
+      }
+    }
 
     final note = _noteController.text.trim();
     final prev = _isPendingSms ? null : widget.transactionToEdit;
@@ -2022,8 +2624,11 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
         ? widget.transactionToEdit!.copyWith(
             amount: _amount,
             type: _type,
-            categoryId: _categoryId ?? '',
+            categoryId:
+                _type == TransactionType.transfer ? '' : (_categoryId ?? ''),
             accountId: _accountId ?? '',
+            toAccountId:
+                _type == TransactionType.transfer ? _toAccountId : null,
             date: _date,
             note: note.isEmpty ? null : note,
             receiptUrl: _receiptPath,
@@ -2035,8 +2640,11 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
             id: now.millisecondsSinceEpoch.toString(),
             amount: _amount,
             type: _type,
-            categoryId: _categoryId ?? '',
+            categoryId:
+                _type == TransactionType.transfer ? '' : (_categoryId ?? ''),
             accountId: _accountId ?? '',
+            toAccountId:
+                _type == TransactionType.transfer ? _toAccountId : null,
             date: _date,
             note: note.isEmpty ? null : note,
             receiptUrl: _receiptPath,
@@ -2074,18 +2682,30 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
 
       if (!mounted) return;
       HapticFeedback.mediumImpact();
-      _showSnack(
-          _isEditMode ? context.t('updated') : context.t('saved'));
 
-      if (widget.embedded) {
-        Navigator.of(context).pop();
+      if (keepOpen && !_isEditMode) {
+        _showSnack(isBn
+            ? 'লেনদেন সংরক্ষিত হয়েছে! পরবর্তী লেনদেন লিখুন।'
+            : 'Transaction saved! Enter next transaction.');
+        setState(() {
+          _amountStr = '';
+          _noteController.clear();
+          _receiptPath = null;
+          _isRecurring = false;
+          _recurringType = null;
+        });
       } else {
-        _closeScreen();
+        _showSnack(_isEditMode ? context.t('updated') : context.t('saved'));
+
+        if (widget.embedded) {
+          Navigator.of(context).pop();
+        } else {
+          _closeScreen(force: true);
+        }
       }
     } catch (e) {
       if (!mounted) return;
-      _showSnack(
-          context.t('error_with_detail', params: {'error': '$e'}));
+      _showSnack(context.t('error_with_detail', params: {'error': '$e'}));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -2100,12 +2720,14 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
     final orig = dupPair.original;
     final score = (dupPair.similarityScore * 100).toStringAsFixed(0);
     final dateStr = DateFormat('dd MMM, hh:mm a').format(orig.date);
+    final origAmt = orig.amount / 100;
+    final origAmtStr =
+        origAmt.toStringAsFixed(origAmt == origAmt.truncate() ? 0 : 2);
 
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         icon: Container(
           width: 52,
           height: 52,
@@ -2118,8 +2740,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
         ),
         title: Text(
           isBn ? 'ডুপ্লিকেট লেনদেন?' : 'Duplicate Transaction?',
-          style:
-              const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -2130,10 +2751,8 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                   : 'A similar transaction already exists:',
               style: TextStyle(
                 fontSize: 13,
-                color: Theme.of(ctx)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.6),
+                color:
+                    Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
             const SizedBox(height: 12),
@@ -2142,8 +2761,8 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
               decoration: BoxDecoration(
                 color: Colors.orange.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                    color: Colors.orange.withValues(alpha: 0.25)),
+                border:
+                    Border.all(color: Colors.orange.withValues(alpha: 0.25)),
               ),
               child: Column(
                 children: [
@@ -2151,7 +2770,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '$_currency${orig.amount.toStringAsFixed(0)}',
+                        '$_currency$origAmtStr',
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
@@ -2228,42 +2847,54 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
   // Balance & Budget Sync
   // ─────────────────────────────────────────────────────────────────────────
 
-  int _signedAmount(TransactionType type, int amount) =>
-      type == TransactionType.income ? amount : -amount;
-
   Future<void> _syncBalance(
       TransactionModel? prev, TransactionModel curr) async {
     final notifier = ref.read(accountsProvider.notifier);
-    final ce = _signedAmount(curr.type, curr.amount);
 
-    if (prev == null) {
-      final acc = notifier.getAccountById(curr.accountId);
+    Future<void> adjustBalance(String? accountId, int delta) async {
+      if (accountId == null || accountId.isEmpty || delta == 0) return;
+      final acc = notifier.getAccountById(accountId);
       if (acc != null) {
-        await notifier.updateBalance(curr.accountId, acc.balance + ce);
+        await notifier.updateBalance(accountId, acc.balance + delta);
       }
-      return;
     }
 
-    final pe = _signedAmount(prev.type, prev.amount);
-    if (prev.accountId == curr.accountId) {
-      final acc = notifier.getAccountById(curr.accountId);
-      if (acc != null) {
-        await notifier.updateBalance(
-            curr.accountId, acc.balance + ce - pe);
+    // 1. Revert previous transaction if in edit mode
+    if (prev != null) {
+      switch (prev.type) {
+        case TransactionType.income:
+          await adjustBalance(prev.accountId, -prev.amount);
+          break;
+        case TransactionType.expense:
+        case TransactionType.lent:
+        case TransactionType.borrowed:
+          await adjustBalance(prev.accountId, prev.amount);
+          break;
+        case TransactionType.transfer:
+          await adjustBalance(prev.accountId, prev.amount); // return to source
+          await adjustBalance(
+              prev.toAccountId, -prev.amount); // remove from destination
+          break;
       }
-    } else {
-      // Different accounts
-      final prevAcc = notifier.getAccountById(prev.accountId);
-      if (prevAcc != null) {
-        await notifier.updateBalance(prev.accountId, prevAcc.balance - pe);
-      }
-      final currAcc = notifier.getAccountById(curr.accountId);
-      if (currAcc != null) {
-        await notifier.updateBalance(curr.accountId, currAcc.balance + ce);
-      }
+    }
+
+    // 2. Apply current transaction
+    switch (curr.type) {
+      case TransactionType.income:
+        await adjustBalance(curr.accountId, curr.amount);
+        break;
+      case TransactionType.expense:
+      case TransactionType.lent:
+      case TransactionType.borrowed:
+        await adjustBalance(curr.accountId, -curr.amount);
+        break;
+      case TransactionType.transfer:
+        await adjustBalance(curr.accountId, -curr.amount); // deduct from source
+        await adjustBalance(
+            curr.toAccountId, curr.amount); // credit to destination
+        break;
     }
   }
-
 
   // ─────────────────────────────────────────────────────────────────────────
   // Default Data Helpers
@@ -2271,8 +2902,7 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
 
   Future<void> _ensureDefaultCategories() async {
     final notifier = ref.read(categoriesProvider.notifier);
-    final existingIds =
-        ref.read(categoriesProvider).map((e) => e.id).toSet();
+    final existingIds = ref.read(categoriesProvider).map((e) => e.id).toSet();
 
     for (final cat in [
       ...DefaultCategories.expenseCategories,
@@ -2294,15 +2924,46 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
     }
   }
 
-
-
   // ─────────────────────────────────────────────────────────────────────────
   // Utility Helpers
   // ─────────────────────────────────────────────────────────────────────────
 
+  Future<bool> _showDiscardConfirmDialog() async {
+    final res = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          context.t('discard_unsaved_title'),
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          context.t('discard_unsaved_content'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.t('cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(context.t('discard')),
+          ),
+        ],
+      ),
+    );
+    return res ?? false;
+  }
 
-
-  void _closeScreen() {
+  void _closeScreen({bool force = false}) async {
+    if (!force && _hasUnsavedChanges && !_isSaving) {
+      final shouldPop = await _showDiscardConfirmDialog();
+      if (!shouldPop || !mounted) return;
+    }
     if (context.canPop()) {
       context.pop();
     } else {
@@ -2318,8 +2979,8 @@ class _AddTransactionFormState extends ConsumerState<AddTransactionForm>
         SnackBar(
           content: Text(message),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         ),
       );

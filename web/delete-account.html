@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delete Your Account — CashTrack</title>
+    <meta name="description" content="How to delete your CashTrack account and associated data.">
+    <style>
+        :root {
+            --primary: #2D7A7B;
+            --danger: #C62828;
+            --bg: #FAFBFC;
+            --text: #1B1F23;
+            --muted: #57606A;
+            --border: #D0D7DE;
+            --card: #FFFFFF;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Noto Sans Bengali', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+        }
+        .container { max-width: 720px; margin: 0 auto; padding: 40px 24px 80px; }
+        h1 { color: var(--primary); font-size: 28px; margin-bottom: 8px; }
+        .subtitle { color: var(--muted); font-size: 15px; margin-bottom: 8px; }
+        .last-updated { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+        .lang-switch { margin-bottom: 24px; font-size: 14px; }
+        .lang-switch a { margin-right: 12px; }
+        h2 {
+            color: var(--primary); font-size: 20px; margin: 28px 0 12px;
+            padding-top: 16px; border-top: 1px solid var(--border);
+        }
+        h3 { font-size: 16px; margin: 16px 0 8px; }
+        p, li { font-size: 15px; color: #333; margin-bottom: 10px; }
+        ol, ul { padding-left: 24px; margin-bottom: 16px; }
+        a { color: var(--primary); }
+        .card {
+            background: var(--card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 20px; margin: 16px 0;
+        }
+        .warning {
+            border-left: 4px solid var(--danger); background: #FFF5F5;
+            padding: 12px 16px; border-radius: 8px; margin: 16px 0;
+        }
+        .button {
+            display: inline-block; background: var(--danger); color: #fff !important;
+            text-decoration: none; padding: 12px 20px; border-radius: 10px;
+            font-weight: 600; margin: 8px 0;
+        }
+        table { width: 100%; border-collapse: collapse; margin: 12px 0 16px; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: top; }
+        .footer {
+            margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--border);
+            color: var(--muted); font-size: 13px; text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Delete your CashTrack account</h1>
+        <p class="subtitle">CashTrack — personal finance app by the CashTrack developer (iamjahid.2025@gmail.com)</p>
+        <p class="last-updated">Last updated: November 20, 2026</p>
+        <p class="lang-switch"><a href="#en">English</a> <a href="#bn">বাংলা</a></p>
+
+        <!-- ───────────────────────────── English ───────────────────────────── -->
+        <section id="en" lang="en">
+            <div class="warning">
+                <strong>Deletion is permanent.</strong> Your financial records cannot be recovered afterwards.
+                If you want to keep a copy, export a backup first in the app:
+                <em>Settings → Data &amp; Sync → Local Backup (JSON)</em>.
+            </div>
+
+            <h2>Option 1 — Delete in the app (immediate)</h2>
+            <div class="card">
+                <ol>
+                    <li>Open CashTrack and sign in.</li>
+                    <li>Go to <strong>Settings</strong> and scroll to the bottom.</li>
+                    <li>Tap <strong>Delete Account</strong> and read the warning.</li>
+                    <li>Confirm your identity (enter your password, or choose your Google account again).</li>
+                    <li>Your account and data are deleted immediately and you are signed out.</li>
+                </ol>
+            </div>
+
+            <h2>Option 2 — Request deletion without the app</h2>
+            <div class="card">
+                <p>If you no longer have the app installed, email us a deletion request.
+                   <strong>Send it from the email address you use to sign in to CashTrack</strong>,
+                   so we can verify that the account is yours.</p>
+                <a class="button"
+                   href="mailto:iamjahid.2025@gmail.com?subject=CashTrack%20account%20deletion%20request&amp;body=Please%20delete%20my%20CashTrack%20account%20and%20all%20associated%20data.%0A%0AAccount%20email%3A%20%0ASign-in%20method%20(Google%20or%20email%2Fpassword)%3A%20%0A">
+                    Email a deletion request
+                </a>
+                <p>Or write to <a href="mailto:iamjahid.2025@gmail.com">iamjahid.2025@gmail.com</a>
+                   with the subject “CashTrack account deletion request”.</p>
+                <p>We will reply to confirm and complete the deletion within <strong>30 days</strong>.
+                   We may ask you to confirm the request if it was not sent from the account’s email address.</p>
+            </div>
+
+            <h2>What is deleted</h2>
+            <ul>
+                <li>Your CashTrack sign-in account (Firebase Authentication).</li>
+                <li>All cloud-synced data: transactions, accounts (bKash, Nagad, Rocket, bank, cash), categories, budgets, savings goals, debts, assets, investments, split expenses and sync records.</li>
+                <li>Your profile information stored by CashTrack.</li>
+                <li>When you delete in the app: all CashTrack data on that device, including notes, shopping lists, bills and receipt photos.</li>
+            </ul>
+
+            <h2>What may be kept, and for how long</h2>
+            <table>
+                <tr><th>Data</th><th>Kept?</th></tr>
+                <tr>
+                    <td>Data on your phone (email requests only)</td>
+                    <td>We cannot reach your device. Uninstall the app or clear its storage to remove it.</td>
+                </tr>
+                <tr>
+                    <td>Anonymous usage analytics (Firebase Analytics)</td>
+                    <td>Not linked to your name or financial data. Expires automatically under Google Analytics’ retention period.</td>
+                </tr>
+                <tr>
+                    <td>Email correspondence about your request</td>
+                    <td>Kept only as long as needed to handle the request.</td>
+                </tr>
+            </table>
+            <p>We do not keep your financial records after deletion. We do not sell your data.</p>
+
+            <h2>Delete your data but keep the account</h2>
+            <p>To remove CashTrack data from one phone only, sign out in <em>Settings → Sign Out</em>
+               (your data is backed up to your account first, then erased from the device).
+               To remove cloud data while keeping your sign-in, email us using Option 2 and say so in the request.</p>
+        </section>
+
+        <!-- ───────────────────────────── বাংলা ───────────────────────────── -->
+        <section id="bn" lang="bn">
+            <h2 style="border-top: 2px solid var(--primary);">CashTrack অ্যাকাউন্ট মুছে ফেলুন</h2>
+            <div class="warning">
+                <strong>মুছে ফেলা স্থায়ী।</strong> এরপর আপনার আর্থিক তথ্য আর ফিরে পাওয়া যাবে না।
+                কপি রাখতে চাইলে আগে অ্যাপে ব্যাকআপ এক্সপোর্ট করুন:
+                <em>সেটিংস → ডেটা ও সিঙ্ক → লোকাল ব্যাকআপ (JSON)</em>।
+            </div>
+
+            <h3>উপায় ১ — অ্যাপ থেকে মুছুন (সাথে সাথে)</h3>
+            <div class="card">
+                <ol>
+                    <li>CashTrack খুলে সাইন ইন করুন।</li>
+                    <li><strong>সেটিংস</strong>-এ যান এবং একদম নিচে স্ক্রল করুন।</li>
+                    <li><strong>অ্যাকাউন্ট মুছে ফেলুন</strong> চাপুন এবং সতর্কবার্তা পড়ুন।</li>
+                    <li>পরিচয় নিশ্চিত করুন (পাসওয়ার্ড দিন, অথবা আবার আপনার Google অ্যাকাউন্ট বেছে নিন)।</li>
+                    <li>আপনার অ্যাকাউন্ট ও ডেটা সাথে সাথে মুছে যাবে এবং আপনি সাইন আউট হয়ে যাবেন।</li>
+                </ol>
+            </div>
+
+            <h3>উপায় ২ — অ্যাপ ছাড়াই মুছে ফেলার অনুরোধ</h3>
+            <div class="card">
+                <p>অ্যাপ ইনস্টল না থাকলে আমাদের ইমেইলে অনুরোধ পাঠান।
+                   <strong>যে ইমেইল দিয়ে CashTrack-এ সাইন ইন করেন, সেই ইমেইল থেকেই পাঠান</strong>,
+                   যাতে আমরা নিশ্চিত হতে পারি অ্যাকাউন্টটি আপনার।</p>
+                <a class="button"
+                   href="mailto:iamjahid.2025@gmail.com?subject=CashTrack%20account%20deletion%20request&amp;body=Please%20delete%20my%20CashTrack%20account%20and%20all%20associated%20data.%0A%0AAccount%20email%3A%20%0ASign-in%20method%20(Google%20or%20email%2Fpassword)%3A%20%0A">
+                    ইমেইলে অনুরোধ পাঠান
+                </a>
+                <p>অথবা <a href="mailto:iamjahid.2025@gmail.com">iamjahid.2025@gmail.com</a>-এ
+                   “CashTrack account deletion request” বিষয় দিয়ে লিখুন।</p>
+                <p>আমরা উত্তর দিয়ে নিশ্চিত করব এবং <strong>৩০ দিনের মধ্যে</strong> মুছে ফেলা সম্পন্ন করব।</p>
+            </div>
+
+            <h3>যা মুছে ফেলা হয়</h3>
+            <ul>
+                <li>আপনার CashTrack সাইন-ইন অ্যাকাউন্ট।</li>
+                <li>ক্লাউডে সিঙ্ক হওয়া সব ডেটা: লেনদেন, অ্যাকাউন্ট (বিকাশ, নগদ, রকেট, ব্যাংক, ক্যাশ), ক্যাটাগরি, বাজেট, সঞ্চয়ের লক্ষ্য, দেনা, সম্পদ, বিনিয়োগ, ভাগাভাগি খরচ ও সিঙ্ক রেকর্ড।</li>
+                <li>CashTrack-এ সংরক্ষিত আপনার প্রোফাইল তথ্য।</li>
+                <li>অ্যাপ থেকে মুছলে: ওই ডিভাইসের সব CashTrack ডেটা, নোট, শপিং লিস্ট, বিল ও রিসিপ্টের ছবিসহ।</li>
+            </ul>
+
+            <h3>যা থাকতে পারে</h3>
+            <ul>
+                <li><strong>ফোনের ডেটা (শুধু ইমেইল অনুরোধের ক্ষেত্রে):</strong> আমরা আপনার ফোনে পৌঁছাতে পারি না। অ্যাপ আনইনস্টল করুন বা অ্যাপের স্টোরেজ মুছে দিন।</li>
+                <li><strong>বেনামি ব্যবহার-পরিসংখ্যান (Firebase Analytics):</strong> আপনার নাম বা আর্থিক তথ্যের সাথে যুক্ত নয়; Google Analytics-এর নির্ধারিত সময় পরে নিজে থেকেই মুছে যায়।</li>
+                <li><strong>অনুরোধ সংক্রান্ত ইমেইল:</strong> শুধু অনুরোধটি সম্পন্ন করতে যতদিন দরকার।</li>
+            </ul>
+            <p>মুছে ফেলার পর আমরা আপনার আর্থিক তথ্য রাখি না। আমরা আপনার ডেটা বিক্রি করি না।</p>
+
+            <h3>অ্যাকাউন্ট রেখে শুধু ডেটা মুছতে চাইলে</h3>
+            <p>শুধু একটি ফোন থেকে ডেটা সরাতে <em>সেটিংস → সাইন আউট</em> করুন (আগে ব্যাকআপ হয়, তারপর ডিভাইস থেকে মুছে যায়)।
+               সাইন-ইন রেখে ক্লাউডের ডেটা মুছতে চাইলে উপায় ২-এর মাধ্যমে ইমেইল করে সেটি জানান।</p>
+        </section>
+
+        <div class="footer">
+            <a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms</a><br>
+            &copy; 2026 CashTrack. Made with ❤️ in Bangladesh 🇧🇩
+        </div>
+    </div>
+</body>
+</html>

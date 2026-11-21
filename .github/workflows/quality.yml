@@ -16,7 +16,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
+          # Pinned to the release toolchain. Unpinned "stable" changes under us
+          # (e.g. newer SDKs stop re-exporting Cupertino from material.dart)
+          # and breaks CI without any code change. Bump deliberately.
           channel: stable
+          flutter-version: 3.38.7
           cache: true
       - run: flutter pub get
       - run: dart format --output=none lib test

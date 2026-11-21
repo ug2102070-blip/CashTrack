@@ -21,6 +21,11 @@ class CustomBottomNavBar extends StatelessWidget {
         location.startsWith('/assets') ||
         location.startsWith('/split-expenses') ||
         location.startsWith('/emi-calculator') ||
+        location.startsWith('/dps-calculator') ||
+        location.startsWith('/sanchayapatra-calculator') ||
+        location.startsWith('/zakat-calculator') ||
+        location.startsWith('/shopping-planner') ||
+        location.startsWith('/utility-bills') ||
         location.startsWith('/goals') ||
         location.startsWith('/subscriptions');
   }

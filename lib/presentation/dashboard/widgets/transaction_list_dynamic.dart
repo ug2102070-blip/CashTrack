@@ -14,12 +14,14 @@ class TransactionListDynamic extends ConsumerWidget {
   final List<TransactionModel> transactions;
   final String currency;
   final bool hideAmounts;
+  final EdgeInsetsGeometry margin;
 
   const TransactionListDynamic({
     super.key,
     required this.transactions,
     required this.currency,
     required this.hideAmounts,
+    this.margin = const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
   });
 
   @override
@@ -34,7 +36,7 @@ class TransactionListDynamic extends ConsumerWidget {
     const compact = false;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      margin: margin,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
@@ -45,8 +47,8 @@ class TransactionListDynamic extends ConsumerWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.04),
-            blurRadius: 12,
+            color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.035),
+            blurRadius: 14,
             offset: const Offset(0, 4),
           ),
         ],
@@ -131,98 +133,145 @@ class TransactionListDynamic extends ConsumerWidget {
 
   Widget _buildTransaction(BuildContext context, TransactionModel transaction,
       Map<String, String> catMap, bool compact) {
-    final isIncome = transaction.type == TransactionType.income;
-    final color = isIncome ? AppColors.success : AppColors.error;
+    final (icon, color, label, isSignedNegative, isTransfer) = switch (transaction.type) {
+      TransactionType.income => (
+          Icons.arrow_downward_rounded,
+          AppColors.success,
+          context.t('income'),
+          false,
+          false
+        ),
+      TransactionType.expense => (
+          Icons.arrow_upward_rounded,
+          AppColors.error,
+          context.t('expense'),
+          true,
+          false
+        ),
+      TransactionType.transfer => (
+          Icons.swap_horiz_rounded,
+          Theme.of(context).colorScheme.primary,
+          context.t('transfer'),
+          false,
+          true
+        ),
+      TransactionType.lent => (
+          Icons.arrow_outward_rounded,
+          AppColors.warning,
+          context.t('lent'),
+          true,
+          false
+        ),
+      TransactionType.borrowed => (
+          Icons.arrow_back_rounded,
+          Colors.purple,
+          context.t('borrowed'),
+          false,
+          false
+        ),
+    };
     final bgColor = color.withValues(alpha: 0.1);
 
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 12 : 16,
-        vertical: compact ? 9 : 13,
-      ),
-      child: Row(
-        children: [
-          // Icon container
-          Container(
-            width: compact ? 36 : 44,
-            height: compact ? 36 : 44,
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(compact ? 10 : 13),
+    final title = (isTransfer && (transaction.note?.isNotEmpty ?? false))
+        ? transaction.note!
+        : (transaction.categoryId.isNotEmpty
+            ? _categoryDisplayName(transaction.categoryId, catMap)
+            : (transaction.note?.isNotEmpty ?? false)
+                ? transaction.note!
+                : label);
+
+    return InkWell(
+      onTap: () => context.push('/add-transaction', extra: transaction),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 12 : 16,
+          vertical: compact ? 9 : 13,
+        ),
+        child: Row(
+          children: [
+            // Icon container
+            Container(
+              width: compact ? 36 : 44,
+              height: compact ? 36 : 44,
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(compact ? 10 : 13),
+              ),
+              child: Icon(
+                icon,
+                color: color,
+                size: compact ? 16 : 19,
+              ),
             ),
-            child: Icon(
-              isIncome
-                  ? Icons.arrow_downward_rounded
-                  : Icons.arrow_upward_rounded,
-              color: color,
-              size: compact ? 16 : 19,
+            SizedBox(width: compact ? 10 : 13),
+            // Title & date
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTextStyles.body2.copyWith(
+                      fontWeight: FontWeight.w600,
+                      fontSize: compact ? 13 : 14,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _formatDate(context, transaction.date),
+                    style: AppTextStyles.caption.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.45),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          SizedBox(width: compact ? 10 : 13),
-          // Title & date
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            // Amount
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  _categoryDisplayName(transaction.categoryId, catMap),
+                  isTransfer
+                      ? formatAmount(currency, transaction.amount, hide: hideAmounts)
+                      : formatSignedAmount(
+                          currency,
+                          isSignedNegative ? -transaction.amount : transaction.amount,
+                          hide: hideAmounts,
+                        ),
                   style: AppTextStyles.body2.copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontSize: compact ? 13 : 14,
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    letterSpacing: -0.2,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  _formatDate(context, transaction.date),
-                  style: AppTextStyles.caption.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.45),
-                    fontSize: 11,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
-          // Amount
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                formatSignedAmount(
-                  currency,
-                  isIncome ? transaction.amount : -transaction.amount,
-                  hide: hideAmounts,
-                ),
-                style: AppTextStyles.body2.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  letterSpacing: -0.2,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  isIncome ? context.t('income') : context.t('expense'),
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

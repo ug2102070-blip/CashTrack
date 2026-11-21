@@ -140,6 +140,34 @@ service cloud.firestore {
             && request.resource.data.migratedAt is string;
       }
 
+      // Profile (ProfileSyncService). Limits mirror ProfileStore.
+      match /profile/info {
+        allow get: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+            && hasOnlyKeys(request.resource.data, ['fullName', 'phone', 'dob', 'updatedAt'])
+            && request.resource.data.keys().hasAll(['fullName', 'phone', 'dob', 'updatedAt'])
+            && request.resource.data.fullName is string
+            && request.resource.data.fullName.size() <= 60
+            && request.resource.data.phone is string
+            && request.resource.data.phone.size() <= 20
+            && request.resource.data.dob is string
+            && request.resource.data.dob.size() <= 40
+            && isValidTimestamp(request.resource.data.updatedAt);
+        allow delete: if isOwner(userId);
+      }
+
+      match /profile/photo {
+        allow get: if isOwner(userId);
+        // Base64 JPEG, resized client-side; empty string = photo removed.
+        allow create, update: if isOwner(userId)
+            && hasOnlyKeys(request.resource.data, ['data', 'updatedAt'])
+            && request.resource.data.keys().hasAll(['data', 'updatedAt'])
+            && request.resource.data.data is string
+            && request.resource.data.data.size() <= 700000
+            && isValidTimestamp(request.resource.data.updatedAt);
+        allow delete: if isOwner(userId);
+      }
+
       // Financial Collections with granular validation
       match /transactions/{documentId} {
         allow read: if isOwner(userId);

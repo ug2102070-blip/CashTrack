@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/l10n/app_l10n.dart';
-import '../../core/theme/app_text_styles.dart';
 
 class CalculatorScreen extends StatefulWidget {
   const CalculatorScreen({super.key});
@@ -49,87 +48,28 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: Text(context.t('calculator')),
+        actions: [
+          IconButton(
+            onPressed: () {
+              if (_result.isNotEmpty) {
+                context.pop(_result);
+              } else if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/tools');
+              }
+            },
+            icon: const Icon(Icons.check_rounded),
+            tooltip: context.t('calculator'),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Column(
           children: [
-            // ── Top bar ──────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 8, 16, 0),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      if (context.canPop()) {
-                        context.pop();
-                      } else {
-                        context.go('/tools');
-                      }
-                    },
-                    icon: Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.07)
-                            : Colors.black.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        Icons.arrow_back_rounded,
-                        size: 18,
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.65),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      context.t('calculator'),
-                      style: AppTextStyles.h2.copyWith(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.3,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () {
-                      if (_result.isNotEmpty) {
-                        context.pop(_result);
-                      } else if (context.canPop()) {
-                        context.pop();
-                      } else {
-                        context.go('/tools');
-                      }
-                    },
-                    icon: Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.07)
-                            : Colors.black.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        Icons.check_rounded,
-                        size: 18,
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.65),
-                      ),
-                    ),
-                    tooltip: context.t('calculator'),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Display ──────────────────────────────────────────────
+// ── Display ──────────────────────────────────────────────
             Expanded(
               flex: 2,
               child: _buildDisplay(context, primary, isDark),
@@ -214,17 +154,25 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 
   // ── Buttons grid ──────────────────────────────────────────────────────────
   Widget _buildButtons(BuildContext context, Color primary, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-      child: GridView.builder(
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: _buttons.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 4,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 1.15,
-        ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const crossAxisCount = 4;
+        final mainAxisCount = (_buttons.length / 4).ceil();
+        final cellWidth = (constraints.maxWidth - 32 - (crossAxisCount - 1) * 10) / crossAxisCount;
+        final cellHeight = (constraints.maxHeight - (mainAxisCount - 1) * 10) / mainAxisCount;
+        final aspectRatio = cellWidth / cellHeight;
+        
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+          child: GridView.builder(
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _buttons.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: aspectRatio > 0 ? aspectRatio : 1.0,
+            ),
         itemBuilder: (_, i) {
           final label = _buttons[i][0];
           final type = _buttons[i][1];
@@ -237,6 +185,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
           );
         },
       ),
+    );
+      },
     );
   }
 

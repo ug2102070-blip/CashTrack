@@ -68,12 +68,14 @@ class TransactionRepository {
     DateTime end,
   ) {
     final userId = _getCurrentUserId();
+    final s = DateTime(start.year, start.month, start.day, 0, 0, 0, 0);
+    final e = DateTime(end.year, end.month, end.day, 23, 59, 59, 999);
     return _decodedValues()
         .where((t) =>
             !t.isDeleted &&
             t.userId == userId &&
-            t.date.isAfter(start.subtract(const Duration(days: 1))) &&
-            t.date.isBefore(end.add(const Duration(days: 1))))
+            !t.date.isBefore(s) &&
+            !t.date.isAfter(e))
         .toList();
   }
 
@@ -113,9 +115,10 @@ class TransactionRepository {
         t.userId == userId);
 
     if (start != null && end != null) {
+      final s = DateTime(start.year, start.month, start.day, 0, 0, 0, 0);
+      final e = DateTime(end.year, end.month, end.day, 23, 59, 59, 999);
       transactions = transactions.where((t) =>
-          t.date.isAfter(start.subtract(const Duration(days: 1))) &&
-          t.date.isBefore(end.add(const Duration(days: 1))));
+          !t.date.isBefore(s) && !t.date.isAfter(e));
     }
 
     return transactions.fold<int>(0, (sum, t) => sum + t.amount);
@@ -129,9 +132,10 @@ class TransactionRepository {
         t.userId == userId);
 
     if (start != null && end != null) {
+      final s = DateTime(start.year, start.month, start.day, 0, 0, 0, 0);
+      final e = DateTime(end.year, end.month, end.day, 23, 59, 59, 999);
       transactions = transactions.where((t) =>
-          t.date.isAfter(start.subtract(const Duration(days: 1))) &&
-          t.date.isBefore(end.add(const Duration(days: 1))));
+          !t.date.isBefore(s) && !t.date.isAfter(e));
     }
 
     return transactions.fold<int>(0, (sum, t) => sum + t.amount);
