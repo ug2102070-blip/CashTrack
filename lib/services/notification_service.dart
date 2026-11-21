@@ -11,6 +11,7 @@ import '../core/routes/app_router.dart';
 import '../data/models/transaction_model.dart';
 import '../data/models/budget_model.dart';
 import '../data/models/category_model.dart';
+import 'recurring_transaction_service.dart';
 // à¦¨à¦¿à¦šà§‡à¦° à¦‡à¦®à¦ªà§‹à¦°à§ à¦Ÿà¦—à§ à¦²à§‹ à¦¯à§‹à¦— à¦•à¦°à¦¾ à¦¹à§Ÿà§‡à¦›à§‡
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
@@ -413,6 +414,7 @@ void callbackDispatcher() {
     switch (task) {
       case 'budgetCheck':
         await _checkBudgetStatus();
+        await RecurringTransactionService().processDueTransactions();
         break;
       case NotificationService._weeklySummaryTask:
         await _sendWeeklySummary();

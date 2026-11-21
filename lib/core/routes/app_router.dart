@@ -30,6 +30,11 @@ import '../../presentation/notifications/notifications_screen.dart';
 import '../../presentation/search/search_screen.dart';
 import '../../presentation/tools/calculator_screen.dart';
 import '../../presentation/tools/emi_calculator_screen.dart';
+import '../../presentation/tools/dps_calculator_screen.dart';
+import '../../presentation/tools/sanchayapatra_calculator_screen.dart';
+import '../../presentation/tools/zakat_calculator_screen.dart';
+import '../../presentation/tools/shopping_planner_screen.dart';
+import '../../presentation/tools/utility_bills_screen.dart';
 import '../../presentation/tools/notes_screen.dart';
 import '../../presentation/tools/tools_screen.dart';
 import '../../presentation/split_expenses/split_expenses_screen.dart';
@@ -272,6 +277,41 @@ final appRouter = GoRouter(
           ),
         ),
         GoRoute(
+          path: '/dps-calculator',
+          pageBuilder: (context, state) => slideRightTransitionPage(
+            child: const DpsCalculatorScreen(),
+            state: state,
+          ),
+        ),
+        GoRoute(
+          path: '/sanchayapatra-calculator',
+          pageBuilder: (context, state) => slideRightTransitionPage(
+            child: const SanchayapatraCalculatorScreen(),
+            state: state,
+          ),
+        ),
+        GoRoute(
+          path: '/zakat-calculator',
+          pageBuilder: (context, state) => slideRightTransitionPage(
+            child: const ZakatCalculatorScreen(),
+            state: state,
+          ),
+        ),
+        GoRoute(
+          path: '/shopping-planner',
+          pageBuilder: (context, state) => slideRightTransitionPage(
+            child: const ShoppingPlannerScreen(),
+            state: state,
+          ),
+        ),
+        GoRoute(
+          path: '/utility-bills',
+          pageBuilder: (context, state) => slideRightTransitionPage(
+            child: const UtilityBillsScreen(),
+            state: state,
+          ),
+        ),
+        GoRoute(
           path: '/split-expenses',
           pageBuilder: (context, state) => fadeSlideTransitionPage(
             child: const SplitExpensesScreen(),
@@ -366,7 +406,12 @@ class MainLayout extends StatelessWidget {
     final hideBottomNav = ['/add-transaction', '/login'].contains(location) || isWideScreen;
     final isKeyboardOpen = mediaQuery.viewInsets.bottom > 100;
     // Hide the shell FAB on screens that have their own FAB or when typing (keyboard open)
-    final hideShellFab = ['/add-transaction', '/login'].contains(location) || isKeyboardOpen || isWideScreen;
+    final hideShellFab = [
+      '/add-transaction', 
+      '/login'
+    ].contains(location) || 
+    isKeyboardOpen || 
+    isWideScreen;
 
     // Pages that are presented modally or have a custom AppBar
     // will not show the generic shell AppBar.
@@ -597,9 +642,14 @@ class MainLayout extends StatelessWidget {
                                               const EdgeInsets.all(24),
                                           child: Center(
                                             child: ConstrainedBox(
-                                              constraints:
-                                                  const BoxConstraints(
-                                                      maxWidth: 1000),
+                                              constraints: BoxConstraints(
+                                                // The dashboard benefits from a
+                                                // wider workspace; form screens
+                                                // remain intentionally focused.
+                                                maxWidth: location == '/dashboard'
+                                                    ? 1440
+                                                    : 1000,
+                                              ),
                                               child: child,
                                             ),
                                           ),

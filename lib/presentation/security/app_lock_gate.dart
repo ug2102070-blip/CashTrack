@@ -1,16 +1,17 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/l10n/app_l10n.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../services/app_lock_pin_store.dart';
 import '../../services/sms_service.dart';
 import '../providers/app_providers.dart';
 
@@ -25,16 +26,17 @@ class AppLockGate extends ConsumerStatefulWidget {
 
 class _AppLockGateState extends ConsumerState<AppLockGate>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   final LocalAuthentication _localAuth = LocalAuthentication();
-  static const String _pinKey = 'app_lock_pin';
 
   bool _locked = false;
   bool _checking = false;
   String? _error;
   DateTime? _lastInactiveAt;
-  String? _pin;
   String _enteredPin = '';
+
+  /// Remaining brute-force lockout; keypad is disabled while > 0.
+  Duration _lockoutRemaining = Duration.zero;
+  Timer? _lockoutTimer;
 
   late final AnimationController _shakeController;
   late final Animation<double> _shakeAnimation;
@@ -52,7 +54,7 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
       CurvedAnimation(parent: _shakeController, curve: Curves.easeInOut),
     );
 
-    _loadPin();
+    _refreshLockout();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -65,6 +67,7 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _lockoutTimer?.cancel();
     _shakeController.dispose();
     super.dispose();
   }
@@ -93,22 +96,55 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
           _enteredPin = '';
           _error = null;
         });
+        _refreshLockout();
         _attemptAutoBiometric();
       }
     }
   }
 
-  Future<void> _loadPin() async {
-    if (kIsWeb) {
-      _pin = ref.read(settingsProvider)['appLockPin'] as String?;
-    } else {
-      _pin = await _secureStorage.read(key: _pinKey);
-    }
-    if (mounted) setState(() {});
+  /// Reads the persisted lockout (survives app restarts) and keeps a
+  /// once-per-second countdown running until it expires.
+  Future<void> _refreshLockout() async {
+    final remaining = await AppLockPinStore.instance.lockoutRemaining();
+    if (!mounted) return;
+    _applyLockout(remaining);
+  }
+
+  void _applyLockout(Duration remaining) {
+    _lockoutTimer?.cancel();
+    setState(() => _lockoutRemaining = remaining);
+    if (remaining <= Duration.zero) return;
+    final deadline = DateTime.now().add(remaining);
+    _lockoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      final left = deadline.difference(DateTime.now());
+      if (left <= Duration.zero) {
+        timer.cancel();
+        setState(() {
+          _lockoutRemaining = Duration.zero;
+          _error = null;
+        });
+      } else {
+        setState(() => _lockoutRemaining = left);
+      }
+    });
+  }
+
+  bool get _isLockedOut => _lockoutRemaining > Duration.zero;
+
+  String _formatLockout(Duration d) {
+    // Round up so the UI never shows 0:00 while still locked.
+    final totalSeconds = (d.inMilliseconds / 1000).ceil();
+    final m = totalSeconds ~/ 60;
+    final s = (totalSeconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
   }
 
   void _syncLockState(Map<String, dynamic> settings) {
-    _loadPin();
+    _refreshLockout();
     if (!_lockRequired(settings)) {
       if (_locked) setState(() => _locked = false);
       return;
@@ -152,8 +188,12 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
       );
       if (ok) {
         HapticFeedback.mediumImpact();
+        // Strong (biometric/device) auth proves the owner: clear PIN failures.
+        await AppLockPinStore.instance.resetAttempts();
+        _lockoutTimer?.cancel();
         if (mounted) {
           setState(() {
+            _lockoutRemaining = Duration.zero;
             _locked = false;
             _enteredPin = '';
             _error = null;
@@ -172,7 +212,8 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
   }
 
   void _onDigitPressed(String digit, BuildContext context) {
-    if (_enteredPin.length >= 4) return;
+    if (_isLockedOut || _checking) return;
+    if (_enteredPin.length >= AppLockPinStore.pinLength) return;
     HapticFeedback.selectionClick();
 
     setState(() {
@@ -180,7 +221,7 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
       _error = null;
     });
 
-    if (_enteredPin.length == 4) {
+    if (_enteredPin.length == AppLockPinStore.pinLength) {
       _validatePin(context);
     }
   }
@@ -194,26 +235,36 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
     });
   }
 
-  void _validatePin(BuildContext context) {
-    if (_pin == null || _pin!.isEmpty) {
-      setState(() => _error = context.t('pin_invalid'));
-      _shakeAndReset();
-      return;
-    }
+  Future<void> _validatePin(BuildContext context) async {
+    setState(() => _checking = true);
+    final result = await AppLockPinStore.instance.verifyWithLimit(_enteredPin);
+    if (!mounted) return;
+    setState(() => _checking = false);
 
-    if (_enteredPin == _pin) {
-      HapticFeedback.mediumImpact();
-      setState(() {
-        _locked = false;
-        _enteredPin = '';
-        _error = null;
-      });
-    } else {
-      HapticFeedback.heavyImpact();
-      setState(() {
-        _error = context.t('pin_incorrect');
-      });
-      _shakeAndReset();
+    switch (result.status) {
+      case PinVerifyStatus.success:
+        HapticFeedback.mediumImpact();
+        setState(() {
+          _locked = false;
+          _enteredPin = '';
+          _error = null;
+        });
+      case PinVerifyStatus.incorrect:
+        HapticFeedback.heavyImpact();
+        setState(() {
+          _error = context.t('pin_attempts_left', params: {
+            'count': '${result.attemptsBeforeLockout ?? 0}',
+          });
+        });
+        _shakeAndReset();
+      case PinVerifyStatus.lockedOut:
+        HapticFeedback.heavyImpact();
+        setState(() => _error = null);
+        _applyLockout(result.retryAfter ?? Duration.zero);
+        _shakeAndReset();
+      case PinVerifyStatus.noPin:
+        setState(() => _error = context.t('pin_invalid'));
+        _shakeAndReset();
     }
   }
 
@@ -232,7 +283,6 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
     ref.listen<Map<String, dynamic>>(settingsProvider, (prev, next) {
       final wasRequired = prev != null && _lockRequired(prev);
       final isRequired = _lockRequired(next);
-      _loadPin();
       if (!isRequired) {
         if (_locked) setState(() => _locked = false);
       } else if (!wasRequired && isRequired) {
@@ -241,6 +291,7 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
           _enteredPin = '';
           _error = null;
         });
+        _refreshLockout();
         _attemptAutoBiometric();
       }
     });
@@ -260,9 +311,8 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
           ),
         );
       },
-      child: isLockedScreen
-          ? _buildLockScreen(context, settings)
-          : widget.child,
+      child:
+          isLockedScreen ? _buildLockScreen(context, settings) : widget.child,
     );
   }
 
@@ -270,6 +320,10 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
     final biometricLock = settings['biometricLock'] == true;
     final pinSet = settings['appLockPinSet'] == true;
     final theme = Theme.of(context);
+    final String? lockMessage = _isLockedOut
+        ? context.t('pin_locked_out',
+            params: {'time': _formatLockout(_lockoutRemaining)})
+        : _error;
     final primary = theme.colorScheme.primary;
     final isDark = theme.brightness == Brightness.dark;
 
@@ -339,8 +393,8 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
 
                   // Lock Pill
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 5),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                     decoration: BoxDecoration(
                       color: primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(16),
@@ -379,8 +433,8 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
                     const SizedBox(height: 16),
                   ],
 
-                  // Error Message
-                  if (_error != null)
+                  // Error / lockout message
+                  if (lockMessage != null)
                     Container(
                       margin: const EdgeInsets.only(bottom: 16),
                       padding: const EdgeInsets.symmetric(
@@ -395,12 +449,15 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
                           Icon(Icons.error_outline_rounded,
                               size: 15, color: theme.colorScheme.error),
                           const SizedBox(width: 6),
-                          Text(
-                            _error!,
-                            style: TextStyle(
-                              color: theme.colorScheme.error,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                          Flexible(
+                            child: Text(
+                              lockMessage,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: theme.colorScheme.error,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],
@@ -408,8 +465,28 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
                     ),
 
                   // Numeric Keypad
+                  // Disabled during a lockout; biometric (if enabled) stays
+                  // available through the button below the keypad.
                   if (pinSet)
-                    _buildNumpad(context, primary, biometricLock, isDark),
+                    IgnorePointer(
+                      ignoring: _isLockedOut,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 200),
+                        opacity: _isLockedOut ? 0.35 : 1,
+                        child: _buildNumpad(
+                            context, primary, biometricLock, isDark),
+                      ),
+                    ),
+                  if (pinSet && _isLockedOut && biometricLock && !kIsWeb) ...[
+                    const SizedBox(height: 16),
+                    TextButton.icon(
+                      onPressed: _checking
+                          ? null
+                          : () => _unlockWithBiometric(context),
+                      icon: const Icon(Icons.fingerprint_rounded),
+                      label: Text(context.t('unlock_with_biometrics')),
+                    ),
+                  ],
 
                   // Biometric-only fallback button
                   if (!pinSet && biometricLock) ...[
@@ -529,7 +606,8 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
     );
   }
 
-  Widget _buildNumpadRow(List<String> digits, BuildContext context, bool isDark) {
+  Widget _buildNumpadRow(
+      List<String> digits, BuildContext context, bool isDark) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: digits.map((d) => _buildDigitKey(d, context, isDark)).toList(),

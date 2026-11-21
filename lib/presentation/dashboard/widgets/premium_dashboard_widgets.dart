@@ -56,12 +56,12 @@ class _FinancialHealthScoreState extends State<FinancialHealthScore>
     super.dispose();
   }
 
-  String _getScoreLabel(double score) {
-    if (score <= 0) return 'No Data';
-    if (score >= 85) return 'Excellent';
-    if (score >= 70) return 'Good';
-    if (score >= 50) return 'Fair';
-    return 'Poor';
+  String _getScoreLabel(double score, bool isBangla) {
+    if (score <= 0) return isBangla ? 'তথ্য নেই' : 'No Data';
+    if (score >= 85) return isBangla ? 'চমৎকার' : 'Excellent';
+    if (score >= 70) return isBangla ? 'ভালো' : 'Good';
+    if (score >= 50) return isBangla ? 'মোটামুটি' : 'Fair';
+    return isBangla ? 'সতর্কতা' : 'Poor';
   }
 
   Color _getScoreColor(double score) {
@@ -75,13 +75,14 @@ class _FinancialHealthScoreState extends State<FinancialHealthScore>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
 
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, child) {
         final currentScore = _animation.value;
         final scoreColor = _getScoreColor(currentScore);
-        final label = _getScoreLabel(currentScore);
+        final label = _getScoreLabel(currentScore, isBangla);
 
         return Container(
           padding: const EdgeInsets.all(20),
@@ -102,7 +103,7 @@ class _FinancialHealthScoreState extends State<FinancialHealthScore>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'FINANCIAL HEALTH',
+                    isBangla ? 'আর্থিক স্বাস্থ্য স্কোর' : 'FINANCIAL HEALTH',
                     style: AppTextStyles.overline.copyWith(
                       color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
                     ),
@@ -268,6 +269,7 @@ class SpendingHeatmap extends StatelessWidget {
       }
     }
 
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -287,13 +289,13 @@ class SpendingHeatmap extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'SPENDING INTENSITY',
+                isBangla ? 'ব্যয়ের তীব্রতা' : 'SPENDING INTENSITY',
                 style: AppTextStyles.overline.copyWith(
                   color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
                 ),
               ),
               Text(
-                'Last 4 Weeks',
+                isBangla ? 'বিগত ৪ সপ্তাহ' : 'Last 4 Weeks',
                 style: AppTextStyles.caption.copyWith(
                   color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
                 ),
@@ -400,6 +402,7 @@ class UpcomingBillsTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -417,7 +420,7 @@ class UpcomingBillsTimeline extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'UPCOMING BILLS',
+            isBangla ? 'আসন্ন বিল' : 'UPCOMING BILLS',
             style: AppTextStyles.overline.copyWith(
               color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
             ),
@@ -428,7 +431,9 @@ class UpcomingBillsTimeline extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Text(
-                  'No upcoming bills in the next 30 days',
+                  isBangla
+                      ? 'আগামী ৩০ দিনে কোনো আসন্ন বিল নেই'
+                      : 'No upcoming bills in the next 30 days',
                   style: AppTextStyles.caption.copyWith(
                     color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                   ),
@@ -505,7 +510,10 @@ class WeeklySpendingStreak extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final List<String> days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
+    final List<String> days = isBangla
+        ? ['সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি', 'রবি']
+        : ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -526,7 +534,7 @@ class WeeklySpendingStreak extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'WEEKLY STREAK',
+                isBangla ? 'সাপ্তাহিক স্ট্রিক' : 'WEEKLY STREAK',
                 style: AppTextStyles.overline.copyWith(
                   color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
                 ),
@@ -536,7 +544,9 @@ class WeeklySpendingStreak extends StatelessWidget {
                   const Icon(Icons.local_fire_department_rounded, color: Colors.orange, size: 16),
                   const SizedBox(width: 4),
                   Text(
-                    '$streakDays Days Under Budget',
+                    isBangla
+                        ? '$streakDays দিন বাজেটের মধ্যে'
+                        : '$streakDays Days Under Budget',
                     style: AppTextStyles.caption.copyWith(
                       fontWeight: FontWeight.bold,
                       color: Colors.orange,
@@ -730,6 +740,7 @@ class SmartRecommendations extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -747,7 +758,7 @@ class SmartRecommendations extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'SMART RECOMMENDATIONS',
+            isBangla ? 'স্মার্ট আর্থিক পরামর্শ' : 'SMART RECOMMENDATIONS',
             style: AppTextStyles.overline.copyWith(
               color: isDark ? AppColors.darkTextTertiary : AppColors.lightTextTertiary,
             ),

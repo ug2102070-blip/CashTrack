@@ -8,7 +8,10 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/l10n/app_l10n.dart';
 import '../providers/app_providers.dart';
+import '../../data/models/budget_model.dart';
+import '../../data/models/category_model.dart';
 import '../../data/models/debt_model.dart';
+import '../../data/models/goal_model.dart';
 import '../../data/models/transaction_model.dart';
 
 class ToolsScreen extends ConsumerStatefulWidget {
@@ -74,20 +77,28 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
     final settings = ref.watch(settingsProvider);
     final currency = (settings['currency'] as String?) ?? '৳';
     final splitGroups = ref.watch(splitGroupsProvider);
+    final now = DateTime.now();
 
-    final budgets = ref.watch(budgetsProvider.notifier).getBudgetsForCurrentMonth();
+    // Watch budgets reactively for current month
+    final allBudgets = ref.watch(budgetsProvider);
+    final budgets = allBudgets
+        .where((b) => b.month.year == now.year && b.month.month == now.month)
+        .toList();
+
     final goals = ref.watch(goalsProvider);
     final debts = ref.watch(debtsProvider);
     final investments = ref.watch(investmentsProvider);
     final assets = ref.watch(assetsProvider);
-    final now = DateTime.now();
-
     final transactions = ref.watch(transactionsProvider);
+    final categories = ref.watch(categoriesProvider);
+
     final budgetCategoryIds = budgets.map((b) => b.categoryId).toSet();
     
+    // Financial amounts in Paisa
     final totalBudget = budgets.fold<int>(0, (s, b) => s + b.amount);
     final totalSpent = transactions
-        .where((t) => t.type == TransactionType.expense && 
+        .where((t) => !t.isDeleted &&
+                      t.type == TransactionType.expense && 
                       t.date.year == now.year && 
                       t.date.month == now.month &&
                       budgetCategoryIds.contains(t.categoryId))
@@ -99,6 +110,11 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
         : budgetProgress >= 0.7
             ? AppColors.warning
             : AppColors.success;
+
+    // Daily safe-to-spend calculation
+    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+    final daysRemaining = (daysInMonth - now.day + 1).clamp(1, 31);
+    final dailySafeToSpend = budgetRemaining > 0 ? (budgetRemaining / daysRemaining).round() : 0;
 
     // Goals
     final activeGoals = goals.where((g) => !g.isCompleted).toList();
@@ -128,12 +144,27 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
     final totalInvested = investments.fold<int>(0, (s, i) => s + i.investedAmount);
     final currentInvestValue = investments.fold<int>(0, (s, i) => s + i.currentValue);
     final investReturn = currentInvestValue - totalInvested;
-
     final totalAssets = assets.fold<int>(0, (s, a) => s + a.currentValue);
 
+    // Net worth = (Assets + Investments + Lent) - Borrowed
+    final netWorth = (totalAssets + currentInvestValue + lent) - borrowed;
+
     // Subscriptions
-    final allTransactions = ref.watch(transactionsProvider);
-    final subCount = allTransactions.where((t) => t.isRecurring && t.recurringType != null).length;
+    final subCount = transactions.where((t) => !t.isDeleted && t.isRecurring && t.recurringType != null).length;
+
+    // BDT values (Paisa / 100) for UI display
+    final totalBudgetBDT = totalBudget / 100.0;
+    final totalSpentBDT = totalSpent / 100.0;
+    final budgetRemainingBDT = budgetRemaining / 100.0;
+    final dailySafeToSpendBDT = dailySafeToSpend / 100.0;
+    final totalGoalSavedBDT = totalGoalSaved / 100.0;
+    final totalGoalTargetBDT = totalGoalTarget / 100.0;
+    final lentBDT = lent / 100.0;
+    final borrowedBDT = borrowed / 100.0;
+    final totalInvestedBDT = totalInvested / 100.0;
+    final investReturnBDT = investReturn / 100.0;
+    final totalAssetsBDT = totalAssets / 100.0;
+    final netWorthBDT = netWorth / 100.0;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -152,9 +183,9 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
                 index: 1,
                 child: _buildQuickStatsStrip(
                   context, isDark, primary, currency,
-                  totalBudget.toDouble(), totalSpent.toDouble(), budgetRemaining.toDouble(), budgetProgress, budgetColor,
-                  totalGoalSaved.toDouble(), totalGoalTarget.toDouble(), overallGoalProgress,
-                  activeGoals.length, lent.toDouble(), borrowed.toDouble(), subCount, splitGroups.length,
+                  totalBudgetBDT, totalSpentBDT, budgetRemainingBDT, budgetProgress, budgetColor,
+                  totalGoalSavedBDT, totalGoalTargetBDT, overallGoalProgress,
+                  activeGoals.length, lentBDT, borrowedBDT, subCount, splitGroups.length,
                 ),
               ),
             ),
@@ -165,7 +196,8 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
                 index: 2,
                 child: _buildBudgetCard(
                   context, isDark, primary, currency,
-                  budgetProgress, budgetColor, budgetRemaining.toDouble(), totalBudget.toDouble(), totalSpent.toDouble(), budgets,
+                  budgetProgress, budgetColor, budgetRemainingBDT, totalBudgetBDT, totalSpentBDT,
+                  dailySafeToSpendBDT, daysRemaining, budgets, transactions, categories,
                 ),
               ),
             ),
@@ -176,20 +208,20 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
                 index: 3,
                 child: _buildGoalsCard(
                   context, isDark, primary, currency,
-                  overallGoalProgress, totalGoalSaved.toDouble(), totalGoalTarget.toDouble(), activeGoals,
+                  overallGoalProgress, totalGoalSavedBDT, totalGoalTargetBDT, activeGoals,
                 ),
               ),
             ),
 
-            // ── Wealth Overview (Debts, Investments, Assets as a vertical list)
+            // ── Wealth Overview (Net Worth, Debts, Investments, Assets)
             SliverToBoxAdapter(
               child: _anim(
                 index: 4,
                 child: _buildWealthSection(
                   context, isDark, primary, currency,
-                  lent.toDouble(), borrowed.toDouble(), dueSoon,
-                  totalInvested.toDouble(), investReturn.toDouble(),
-                  totalAssets.toDouble(), assets.isEmpty,
+                  netWorthBDT, lentBDT, borrowedBDT, dueSoon,
+                  totalInvestedBDT, investReturnBDT,
+                  totalAssetsBDT, assets.isEmpty,
                 ),
               ),
             ),
@@ -347,8 +379,9 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
             icon: Icons.handshake_rounded,
             label: context.t('debts_loans'),
             value: (lent + borrowed) > 0 ? '$currency${_fmt(lent + borrowed)}' : '–',
-            subtitle: (lent + borrowed) > 0 ? context.t('net_balance') : 'No debts',
+            subtitle: (lent + borrowed) > 0 ? context.t('net_balance') : context.t('no_debts'),
             accentColor: AppColors.warning,
+            onTap: () => context.push('/debts'),
           ),
           const SizedBox(width: 10),
           _quickStatChip(
@@ -359,6 +392,7 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
             subtitle: activeGoalCount > 0 ? '$activeGoalCount ${context.t('active_goals_short')}' : context.t('no_goals_yet'),
             accentColor: const Color(0xFF8B5CF6),
             progress: activeGoalCount > 0 ? overallGoalProgress : null,
+            onTap: () => context.push('/goals'),
           ),
 
           const SizedBox(width: 10),
@@ -370,6 +404,7 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
             subtitle: totalBudget > 0 ? '${(budgetProgress * 100).toStringAsFixed(0)}% ${context.t('spent')}' : context.t('no_budget_set'),
             accentColor: budgetColor,
             progress: totalBudget > 0 ? budgetProgress : null,
+            onTap: () => context.push('/budget'),
           ),
           const SizedBox(width: 10),
         ],
@@ -451,7 +486,9 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
   Widget _buildBudgetCard(
     BuildContext context, bool isDark, Color primary, String currency,
     double budgetProgress, Color budgetColor, double budgetRemaining,
-    double totalBudget, double totalSpent, List budgets,
+    double totalBudget, double totalSpent, double dailySafeToSpend,
+    int daysRemaining, List<BudgetModel> budgets,
+    List<TransactionModel> transactions, List<CategoryModel> categories,
   ) {
     return GestureDetector(
       onTap: () => context.push('/budget'),
@@ -499,7 +536,7 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
               ]),
             ),
             if (totalBudget > 0)
-              _statusTag(budgetProgress, budgetColor),
+              _statusTag(context, budgetProgress, budgetColor),
             const SizedBox(width: 6),
             Icon(Icons.chevron_right_rounded, size: 18, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.25)),
           ]),
@@ -534,6 +571,31 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
                 ),
               ],
             ),
+            // Daily safe-to-spend banner
+            Container(
+              margin: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: budgetColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: budgetColor.withValues(alpha: 0.15)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.savings_outlined, size: 13, color: budgetColor),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${context.t('daily_safe_spend')}: $currency${_fmt(dailySafeToSpend)} / day · ${context.t('days_left_in_month', params: {'days': daysRemaining.toString()})}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: budgetColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 14),
             // Segmented progress bar
             ClipRRect(
@@ -565,16 +627,35 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
             if (budgets.isNotEmpty) ...[
               const SizedBox(height: 12),
               ...budgets.take(3).map((b) {
-                final p = b.amount > 0 ? (b.spent / b.amount).clamp(0.0, 1.0) : 0.0;
+                final spentInPaisa = b.getSpent(transactions);
+                final spentBDT = spentInPaisa / 100.0;
+                final amountBDT = b.amount / 100.0;
+                final p = amountBDT > 0 ? (spentBDT / amountBDT).clamp(0.0, 1.0) : 0.0;
                 final bColor = p >= 0.9 ? AppColors.error : p >= 0.7 ? AppColors.warning : AppColors.success;
+                final cat = categories.firstWhere(
+                  (c) => c.id == b.categoryId,
+                  orElse: () => CategoryModel(
+                    id: b.categoryId,
+                    name: b.categoryId,
+                    nameBn: b.categoryId,
+                    icon: '📁',
+                    colorHex: '#4F46E5',
+                    type: CategoryType.expense,
+                  ),
+                );
+                final isBn = Localizations.localeOf(context).languageCode == 'bn';
+                final catName = isBn ? cat.nameBn : cat.name;
+
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 6),
                   child: Row(children: [
+                    Text(cat.icon, style: const TextStyle(fontSize: 12)),
+                    const SizedBox(width: 6),
                     SizedBox(
-                      width: 70,
+                      width: 75,
                       child: Text(
-                        '${b.categoryId}',
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)),
+                        catName,
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
                         maxLines: 1, overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -591,7 +672,7 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text('${(p * 100).toStringAsFixed(0)}%', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: bColor)),
+                    Text('$currency${_fmt(spentBDT)} / $currency${_fmt(amountBDT)}', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: bColor)),
                   ]),
                 );
               }),
@@ -616,8 +697,8 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
     );
   }
 
-  Widget _statusTag(double progress, Color color) {
-    final label = progress >= 0.9 ? 'Critical' : progress >= 0.7 ? 'Warning' : 'On Track';
+  Widget _statusTag(BuildContext context, double progress, Color color) {
+    final label = progress >= 0.9 ? context.t('critical') : progress >= 0.7 ? context.t('warning') : context.t('on_track');
     final icon = progress >= 0.9 ? Icons.warning_rounded : progress >= 0.7 ? Icons.bolt_rounded : Icons.check_circle_rounded;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -637,7 +718,8 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
   // ── Goals Card ─────────────────────────────────────────────────────────────
   Widget _buildGoalsCard(
     BuildContext context, bool isDark, Color primary, String currency,
-    double overallGoalProgress, double totalGoalSaved, double totalGoalTarget, List activeGoals,
+    double overallGoalProgress, double totalGoalSaved, double totalGoalTarget,
+    List<GoalModel> activeGoals,
   ) {
     const goalPurple = Color(0xFF8B5CF6);
 
@@ -742,7 +824,9 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
             const SizedBox(height: 10),
             // Individual goals
             ...activeGoals.take(3).map((g) {
-              final gp = g.targetAmount > 0 ? (g.currentAmount / g.targetAmount).clamp(0.0, 1.0) : 0.0;
+              final currentBDT = g.currentAmount / 100.0;
+              final targetBDT = g.targetAmount / 100.0;
+              final gp = targetBDT > 0 ? (currentBDT / targetBDT).clamp(0.0, 1.0) : 0.0;
               final gColor = _goalColor(activeGoals.indexOf(g));
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
@@ -777,7 +861,7 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
                   const SizedBox(width: 10),
                   Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                     Text('${(gp * 100).toStringAsFixed(0)}%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: gColor)),
-                    Text('$currency${_fmt(g.currentAmount)}', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4))),
+                    Text('$currency${_fmt(currentBDT)}', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4))),
                   ]),
                 ]),
               );
@@ -805,7 +889,7 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
   // ── Wealth Section ─────────────────────────────────────────────────────────
   Widget _buildWealthSection(
     BuildContext context, bool isDark, Color primary, String currency,
-    double lent, double borrowed, int dueSoon,
+    double netWorth, double lent, double borrowed, int dueSoon,
     double totalInvested, double returns,
     double totalAssetValue, bool assetsEmpty,
   ) {
@@ -841,7 +925,7 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
           ),
           const SizedBox(width: 8),
           Text(
-            'Wealth Overview',
+            context.t('wealth_overview'),
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w800,
@@ -852,6 +936,79 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
         ]),
         const SizedBox(height: 14),
 
+        // Net Worth Highlight Card
+        Container(
+          padding: const EdgeInsets.all(14),
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isDark
+                  ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
+                  : [primary.withValues(alpha: 0.08), primary.withValues(alpha: 0.02)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: primary.withValues(alpha: isDark ? 0.25 : 0.18),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.t('net_worth'),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$currency${_fmt(netWorth)}',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: netWorth >= 0 ? AppColors.success : AppColors.error,
+                      letterSpacing: -0.8,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: (netWorth >= 0 ? AppColors.success : AppColors.error).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      netWorth >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                      size: 14,
+                      color: netWorth >= 0 ? AppColors.success : AppColors.error,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      netWorth >= 0 ? context.t('on_track') : context.t('warning'),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: netWorth >= 0 ? AppColors.success : AppColors.error,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
         // Debts row
         _wealthRow(
           context, isDark,
@@ -859,7 +1016,7 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
           iconColor: AppColors.warning,
           title: context.t('debts_loans'),
           value: '$currency${_fmt(lent + borrowed)}',
-          subtitle: dueSoon > 0 ? context.t('due_count', params: {'count': dueSoon.toString()}) : context.t('net_balance'),
+          subtitle: (lent + borrowed) > 0 ? (dueSoon > 0 ? context.t('due_count', params: {'count': dueSoon.toString()}) : context.t('net_balance')) : context.t('no_debts'),
           subtitleColor: dueSoon > 0 ? AppColors.warning : null,
           showBadge: dueSoon > 0,
           onTap: () => context.push('/debts'),
@@ -963,6 +1120,27 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
   Widget _buildQuickActions(BuildContext context, bool isDark, Color primary, int subCount) {
     final tools = [
       _ToolItem(
+        icon: Icons.account_balance_rounded,
+        color: const Color(0xFF4F46E5),
+        label: context.t('dps_calculator_title'),
+        sub: context.t('dps_calculator_subtitle'),
+        route: '/dps-calculator',
+      ),
+      _ToolItem(
+        icon: Icons.savings_rounded,
+        color: const Color(0xFF059669),
+        label: context.t('sanchayapatra_calculator_title'),
+        sub: context.t('sanchayapatra_calculator_subtitle'),
+        route: '/sanchayapatra-calculator',
+      ),
+      _ToolItem(
+        icon: Icons.volunteer_activism_rounded,
+        color: const Color(0xFF16A34A),
+        label: context.t('zakat_calculator_title'),
+        sub: context.t('zakat_calculator_subtitle'),
+        route: '/zakat-calculator',
+      ),
+      _ToolItem(
         icon: Icons.calculate_rounded,
         color: const Color(0xFF7C3AED),
         label: context.t('emi_calculator'),
@@ -970,11 +1148,32 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
         route: '/emi-calculator',
       ),
       _ToolItem(
+        icon: Icons.calculate_outlined,
+        color: const Color(0xFFF59E0B),
+        label: context.t('calculator'),
+        sub: context.t('basic_math'),
+        route: '/calculator',
+      ),
+      _ToolItem(
         icon: Icons.description_rounded,
         color: const Color(0xFF10B981),
         label: context.t('reports_export'),
         sub: context.t('download_reports'),
         route: '/reports',
+      ),
+      _ToolItem(
+        icon: Icons.shopping_basket_rounded,
+        color: const Color(0xFF0284C7),
+        label: context.t('shopping_planner'),
+        sub: context.t('shopping_planner_sub'),
+        route: '/shopping-planner',
+      ),
+      _ToolItem(
+        icon: Icons.receipt_long_rounded,
+        color: const Color(0xFF8B5CF6),
+        label: context.t('utility_bills'),
+        sub: context.t('utility_bills_sub'),
+        route: '/utility-bills',
       ),
       _ToolItem(
         icon: Icons.note_alt_rounded,
@@ -1014,7 +1213,7 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
         ),
         // Horizontal scrollable tool cards
         SizedBox(
-          height: 108,
+          height: 120,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
@@ -1098,9 +1297,12 @@ class _ToolsScreenState extends ConsumerState<ToolsScreen>
   }
 
   String _fmt(double v) {
-    if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
-    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}K';
-    return v.toStringAsFixed(0);
+    final absV = v.abs();
+    final sign = v < 0 ? '-' : '';
+    if (absV >= 10000000) return '$sign${(absV / 10000000).toStringAsFixed(1)}Cr';
+    if (absV >= 100000) return '$sign${(absV / 100000).toStringAsFixed(1)}L';
+    if (absV >= 1000) return '$sign${(absV / 1000).toStringAsFixed(1)}K';
+    return '$sign${absV.toStringAsFixed(0)}';
   }
 }
 

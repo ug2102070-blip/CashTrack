@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../../core/l10n/app_l10n.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -11,11 +12,15 @@ import '../../../data/models/transaction_model.dart';
 class ExpenseChartDynamic extends ConsumerStatefulWidget {
   final bool compact;
   final bool showLegend;
+  final EdgeInsetsGeometry margin;
+  final bool hideAmounts;
 
   const ExpenseChartDynamic({
     super.key,
     this.compact = false,
     this.showLegend = true,
+    this.margin = const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+    this.hideAmounts = false,
   });
 
   @override
@@ -74,11 +79,11 @@ class _ExpenseChartDynamicState extends ConsumerState<ExpenseChartDynamic>
             : -1;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      margin: widget.margin,
       padding: EdgeInsets.all(widget.compact ? 16 : 20),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isDark
               ? Colors.white.withValues(alpha: 0.06)
@@ -86,9 +91,9 @@ class _ExpenseChartDynamicState extends ConsumerState<ExpenseChartDynamic>
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.035),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
           ),
           if (!isDark)
             BoxShadow(
@@ -207,7 +212,9 @@ class _ExpenseChartDynamicState extends ConsumerState<ExpenseChartDynamic>
   ) {
     final Map<String, double> data = {};
     for (var t in transactions.where((t) => t.type == type)) {
-      data[t.categoryId] = (data[t.categoryId] ?? 0) + t.amount;
+      // TransactionModel.amount is stored in Paisa (1 BDT = 100 Paisa).
+      // Convert to Taka so amounts and totals represent actual currency units.
+      data[t.categoryId] = (data[t.categoryId] ?? 0) + (t.amount / 100.0);
     }
     // Sort by value descending
     final sorted = data.entries.toList()
@@ -368,7 +375,9 @@ class _ExpenseChartDynamicState extends ConsumerState<ExpenseChartDynamic>
               const SizedBox(height: 2),
               // Amount in TK
               Text(
-                '$currency${_formatAmount(touchedAmount)}',
+                widget.hideAmounts
+                    ? '$currency\u00A0••••••'
+                    : '$currency${_formatAmount(touchedAmount)}',
                 style: TextStyle(
                   fontSize: widget.compact ? 10 : 12,
                   fontWeight: FontWeight.w700,
@@ -402,7 +411,9 @@ class _ExpenseChartDynamicState extends ConsumerState<ExpenseChartDynamic>
             ] else ...[
               // Default: show total
               Text(
-                '$currency${_formatAmount(total)}',
+                widget.hideAmounts
+                    ? '$currency\u00A0••••••'
+                    : '$currency${_formatAmount(total)}',
                 style: TextStyle(
                   fontSize: widget.compact ? 16 : 19,
                   fontWeight: FontWeight.w900,
@@ -572,6 +583,6 @@ class _ExpenseChartDynamicState extends ConsumerState<ExpenseChartDynamic>
     } else if (amount >= 10000) {
       return '${(amount / 1000).toStringAsFixed(1)}K';
     }
-    return amount.toStringAsFixed(0);
+    return NumberFormat('#,##0').format(amount);
   }
 }

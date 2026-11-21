@@ -132,60 +132,66 @@ class _NotesScreenState extends State<NotesScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).dividerColor,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(context.t('edit_note'),
-                  style: AppTextStyles.h5.copyWith(fontWeight: FontWeight.w800)),
-              const SizedBox(height: 12),
-              TextField(
-                controller: titleCtrl,
-                decoration: InputDecoration(
-                  labelText: context.t('title'),
-                  border:
-                      OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: contentCtrl,
-                minLines: 4,
-                maxLines: 8,
-                decoration: InputDecoration(
-                  labelText: context.t('note'),
-                  border:
-                      OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Row(
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+              maxWidth: 560,
+            ),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: Text(context.t('cancel')),
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).dividerColor,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
+                  const SizedBox(height: 14),
+                  Text(context.t('edit_note'),
+                      style: AppTextStyles.h5.copyWith(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: titleCtrl,
+                    decoration: InputDecoration(
+                      labelText: context.t('title'),
+                      border:
+                          OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: contentCtrl,
+                    minLines: 4,
+                    maxLines: 8,
+                    decoration: InputDecoration(
+                      labelText: context.t('note'),
+                      border:
+                          OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: Text(context.t('cancel')),
+                        ),
+                      ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: ElevatedButton(
@@ -216,8 +222,10 @@ class _NotesScreenState extends State<NotesScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 
   Map<String, List<_NoteEntry>> _groupByDate(List<_NoteEntry> items) {
     final map = <String, List<_NoteEntry>>{};

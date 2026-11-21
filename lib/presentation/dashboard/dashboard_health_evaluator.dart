@@ -13,6 +13,53 @@ class DashboardHealth {
   final double score;
   final String statusText;
   final String detailText;
+
+  String localizedStatus(bool isBangla) {
+    if (!isBangla) return statusText;
+    switch (statusText) {
+      case 'No Data':
+        return 'কোনো তথ্য নেই';
+      case 'Excellent status':
+        return 'চমৎকার আর্থিক অবস্থা';
+      case 'Healthy status':
+        return 'স্বাস্থ্যকর আর্থিক অবস্থা';
+      case 'Fair status':
+        return 'মোটামুটি আর্থিক অবস্থা';
+      case 'Critical status':
+        return 'সতর্কতামূলক অবস্থা';
+      default:
+        return statusText;
+    }
+  }
+
+  String localizedDetail(bool isBangla) {
+    if (!isBangla) return detailText;
+    switch (statusText) {
+      case 'No Data':
+        return 'শুরু করতে আপনার আয়, ব্যয় এবং বাজেট যোগ করুন।';
+      case 'Excellent status':
+        return 'আপনার সঞ্চয়ের হার চমৎকার, বাজেট নিয়ন্ত্রণে রয়েছে এবং ঋণ যথাযথভাবে পরিচালিত হচ্ছে। দারুণ কাজ!';
+      case 'Healthy status':
+        if (detailText.contains('exceeded')) {
+          return 'সার্বিকভাবে ভালো, তবে কিছু বাজেটের সীমা অতিক্রম করেছে। স্কোর উন্নত করতে ক্যাটাগরি খরচ পর্যবেক্ষণ করুন।';
+        }
+        return 'আর্থিক ভারসাম্য ভালো। সেরা স্কোর অর্জন করতে মাসিক সঞ্চয়ের হার আরও কিছুটা বাড়ানোর চেষ্টা করুন।';
+      case 'Fair status':
+        if (detailText.contains('spent more')) {
+          return 'এই মাসে আপনার ব্যয় আয়ের চেয়ে বেশি হয়েছে। অবিলম্বে অপ্রয়োজনীয় খরচ কমান।';
+        } else if (detailText.contains('Outstanding') || detailText.contains('debts')) {
+          return 'বকেয়া ঋণ আপনার স্কোর কমিয়ে দিচ্ছে। ঋণ পরিশোধের দিকে নজর দিন।';
+        }
+        return 'আপনার আর্থিক অভ্যাস মাঝারি মানের। বাজেট মেনে চলা এবং সঞ্চয় বৃদ্ধির দিকে মনোনিবেশ করুন।';
+      case 'Critical status':
+        if (detailText.contains('severe')) {
+          return 'সতর্কতা: অতিরিক্ত ব্যয় আশঙ্কাজনক। অপ্রয়োজনীয় ব্যয় বন্ধ করে ঋণ পরিশোধে অগ্রাধিকার দিন।';
+        }
+        return 'সতর্কতামূলক অবস্থা। মূল ব্যয়ের ক্যাটাগরিতে বাজেট সেট করুন এবং অপ্রয়োজনীয় ব্যয় কমিয়ে ফেলুন।';
+      default:
+        return detailText;
+    }
+  }
 }
 
 /// Pure dashboard business logic, deliberately separated from widgets so it

@@ -19,6 +19,7 @@ import 'package:go_router/go_router.dart';
 import 'widgets/expense_chart_dynamic.dart';
 import 'widgets/transaction_list_dynamic.dart';
 import 'widgets/premium_dashboard_widgets.dart';
+import 'widgets/daily_budget_tracker_card.dart';
 import 'dashboard_health_evaluator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../services/sms_service.dart';
@@ -116,10 +117,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 
   Widget _anim({required int index, required Widget child}) {
+    final safeIndex = index.clamp(0, _fadeAnims.length - 1);
     return FadeTransition(
-      opacity: _fadeAnims[index],
+      opacity: _fadeAnims[safeIndex],
       child: SlideTransition(
-        position: _slideAnims[index],
+        position: _slideAnims[safeIndex],
         child: child,
       ),
     );
@@ -149,340 +151,371 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final allTransactions = ref.watch(transactionsProvider);
     final alertCount = _alertCount(summary, budgets, debts, allTransactions);
 
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
+    final profile = ref.watch(userProfileProvider);
+    final fullName = (profile['fullName'] ?? '').trim();
+
+    // Calculate this month's stats
+    final savingsAmount = (summary.totalIncome - summary.totalExpense)
+        .clamp(0.0, double.infinity);
+    final savingsRate = summary.totalIncome > 0
+        ? (savingsAmount / summary.totalIncome * 100)
+        : 0.0;
+
+    // Budget stats
+    final totalBudget = budgets.fold<double>(0, (sum, b) => sum + b.amount);
+    final totalBudgetSpent =
+        budgets.fold<double>(0, (sum, b) => sum + b.getSpent(allTransactions));
+    final remainingBudget =
+        (totalBudget - totalBudgetSpent).clamp(0.0, double.infinity);
+    final budgetProgress =
+        totalBudget > 0 ? (totalBudgetSpent / totalBudget) : 0.0;
+
+    final categories = ref.watch(categoriesProvider);
+    final goals = ref.watch(goalsProvider);
+
+    final health = DashboardHealthEvaluator.evaluate(
+      summary: summary,
+      budgets: budgets,
+      debts: debts,
+      transactions: allTransactions,
+    );
+    final healthScore = health.score;
+    final healthTrendText = health.localizedStatus(isBangla);
+    final healthDetailText = health.localizedDetail(isBangla);
+
+    // 2. Generate dynamic AI Insights
+    String aiInsightText = isBangla
+        ? 'এখানে আপনার ব্যয়ের ধারা বিশ্লেষণ করা হবে। অন্তর্দৃষ্টি পেতে কয়েকটি লেনদেন যোগ করুন!'
+        : 'I will analyze your spending patterns here. Try adding some transactions to get your first insight!';
+    if (allTransactions.isNotEmpty) {
+      final categoryMap = {
+        for (final c in categories)
+          c.id: isBangla && c.nameBn.isNotEmpty ? c.nameBn : c.name
+      };
+
+      // Budget overrun check
+      BudgetModel? worstOverrun;
+      int maxOverrun = 0;
+      for (final b in budgets) {
+        final spent = b.getSpent(allTransactions);
+        if (spent > b.amount) {
+          final overrun = spent - b.amount;
+          if (overrun > maxOverrun) {
+            maxOverrun = overrun;
+            worstOverrun = b;
+          }
+        }
+      }
+
+      if (worstOverrun != null) {
+        final catName = categoryMap[worstOverrun.categoryId] ??
+            (isBangla ? 'এই ক্যাটাগরি' : 'this category');
+        final formattedOverrun = formatAmount(currency, maxOverrun);
+        aiInsightText = isBangla
+            ? '"$catName" ক্যাটাগরিতে খরচ আপনার বাজেটের চেয়ে $formattedOverrun বেশি হয়েছে। এই মাসে "$catName" খরচ সীমিত রাখুন।'
+            : 'Your spending in "$catName" has exceeded your budget by $formattedOverrun. Consider limiting purchases in "$catName" for the rest of the month.';
+      } else {
+        // High spending category check
+        final recentExpenses = allTransactions
+            .where((t) => t.type == TransactionType.expense && !t.isDeleted)
+            .toList();
+        if (recentExpenses.isNotEmpty) {
+          final Map<String, double> categorySums = {};
+          double totalRecentExpense = 0;
+          for (final tx in recentExpenses) {
+            categorySums[tx.categoryId] =
+                (categorySums[tx.categoryId] ?? 0) + tx.amount;
+            totalRecentExpense += tx.amount;
+          }
+
+          String? highestCatId;
+          double highestCatSum = 0;
+          categorySums.forEach((catId, sum) {
+            if (sum > highestCatSum) {
+              highestCatSum = sum;
+              highestCatId = catId;
+            }
+          });
+
+          if (highestCatId != null && totalRecentExpense > 0) {
+            final ratio = (highestCatSum / totalRecentExpense) * 100;
+            final catName = categoryMap[highestCatId] ??
+                (isBangla ? 'বিবিধ' : 'Miscellaneous');
+            final formattedHighest = formatAmount(currency, highestCatSum);
+            if (ratio > 30) {
+              aiInsightText = isBangla
+                  ? '"$catName" আপনার মোট খরচের ${ratio.toStringAsFixed(0)}% ($formattedHighest)। সাশ্রয়ী বিকল্প খোঁজা আপনাকে সঞ্চয়ে সাহায্য করবে।'
+                  : '"$catName" accounts for ${ratio.toStringAsFixed(0)}% of your total expenses ($formattedHighest). Finding cheaper alternatives or buying in bulk could help you save.';
+            } else if (summary.totalIncome > 0) {
+              final sRate = ((summary.totalIncome - summary.totalExpense) /
+                      summary.totalIncome) *
+                  100;
+              if (sRate > 20) {
+                aiInsightText = isBangla
+                    ? 'দারুণ! আপনার সঞ্চয়ের হার এই মাসে ${sRate.toStringAsFixed(0)}%। জরুরি তহবিল গঠনে এটি বজায় রাখুন।'
+                    : 'Amazing! Your savings rate is at ${sRate.toStringAsFixed(0)}% this month. Keep it up to build your wealth/emergency fund faster.';
+              } else if (sRate >= 0) {
+                aiInsightText = isBangla
+                    ? 'আপনি বর্তমানে আয়ের ${sRate.toStringAsFixed(0)}% সঞ্চয় করছেন। নিয়মিত সঞ্চয়ের অভ্যাস বজায় রাখুন।'
+                    : 'You are currently saving ${sRate.toStringAsFixed(0)}% of your income. Try automating a portion of your savings to build consistent habits.';
+              } else {
+                final overSpentAmt = formatAmount(
+                    currency, summary.totalExpense - summary.totalIncome);
+                aiInsightText = isBangla
+                    ? 'আপনার ব্যয় আয়ের চেয়ে $overSpentAmt বেশি। অপ্রয়োজনীয় ব্যয় ও সাবস্ক্রিপশন কমানোর চেষ্টা করুন।'
+                    : 'Your expenses are higher than your income by $overSpentAmt. Let\'s identify non-essential subscriptions or lifestyle costs to cut back.';
+              }
+            } else {
+              aiInsightText = isBangla
+                  ? 'লেনদেন ট্র্যাকিং চমৎকার চলছে! সম্পূর্ণ ড্যাশবোর্ড পেতে খাবার, ইউটিলিটি ইত্যাদিতে বাজেট সেট করুন।'
+                  : 'Tracking looks good so far! Try setting budgets for categories like Food, Utilities, and Transport to build a complete dashboard.';
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Compute dynamic Weekly Spending Streak
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final currentMonday = today.subtract(Duration(days: now.weekday - 1));
+
+    final dailyBudgetLimit = totalBudget > 0 ? (totalBudget / 30.0) : 100000.0;
+    final List<bool> dailyStatus = List.generate(7, (index) {
+      final dayDate = currentMonday.add(Duration(days: index));
+      if (dayDate.isAfter(today)) {
+        return false;
+      }
+      final dayExpense = allTransactions.where((t) {
+        if (t.type != TransactionType.expense || t.isDeleted) return false;
+        final txDay = DateTime(t.date.year, t.date.month, t.date.day);
+        return txDay.isAtSameMomentAs(dayDate);
+      }).fold<int>(0, (sum, t) => sum + t.amount);
+      return dayExpense <= dailyBudgetLimit;
+    });
+    final streakDays = dailyStatus.where((status) => status).length;
+
+    // 4. Retrieve and sort real upcoming bills
+    final List<UpcomingBillItem> upcomingBills = [];
+    final todayNormalized = DateTime(now.year, now.month, now.day);
+    final thirtyDaysAhead = todayNormalized.add(const Duration(days: 30));
+
+    DateTime advanceDate(DateTime date, RecurringType type, int anchorDay) {
+      switch (type) {
+        case RecurringType.daily:
+          return date.add(const Duration(days: 1));
+        case RecurringType.weekly:
+          return date.add(const Duration(days: 7));
+        case RecurringType.monthly:
+          final nextMonth = DateTime(date.year, date.month + 1, 1);
+          final maxDay = DateTime(nextMonth.year, nextMonth.month + 1, 0).day;
+          final safeDay = anchorDay <= maxDay ? anchorDay : maxDay;
+          return DateTime(nextMonth.year, nextMonth.month, safeDay);
+        case RecurringType.yearly:
+          final nextYear = DateTime(date.year + 1, date.month, 1);
+          final maxDay = DateTime(nextYear.year, nextYear.month + 1, 0).day;
+          final safeDay = anchorDay <= maxDay ? anchorDay : maxDay;
+          return DateTime(nextYear.year, nextYear.month, safeDay);
+      }
+    }
+
+    final recurringTxs = allTransactions.where(
+        (t) => t.isRecurring && t.recurringType != null && !t.isDeleted);
+    for (final tx in recurringTxs) {
+      var currentOccur = DateTime(tx.date.year, tx.date.month, tx.date.day);
+      while (currentOccur.isBefore(todayNormalized)) {
+        currentOccur =
+            advanceDate(currentOccur, tx.recurringType!, tx.date.day);
+      }
+      if (currentOccur.isBefore(thirtyDaysAhead) ||
+          currentOccur.isAtSameMomentAs(thirtyDaysAhead)) {
+        final diffDays = currentOccur.difference(todayNormalized).inDays;
+        String dueMsg = '';
+        Color bColor = AppColors.primary;
+        if (diffDays == 0) {
+          dueMsg = isBangla ? 'আজ প্রদেয়' : 'Due today';
+          bColor = AppColors.error;
+        } else if (diffDays == 1) {
+          dueMsg = isBangla ? 'আগামীকাল প্রদেয়' : 'Due tomorrow';
+          bColor = AppColors.error;
+        } else if (diffDays <= 3) {
+          dueMsg = isBangla ? '$diffDays দিনের মধ্যে প্রদেয়' : 'Due in $diffDays days';
+          bColor = AppColors.warning;
+        } else {
+          dueMsg = isBangla ? '$diffDays দিনের মধ্যে প্রদেয়' : 'Due in $diffDays days';
+          bColor = AppColors.success;
+        }
+
+        final categoryMap = {
+          for (final c in categories)
+            c.id: isBangla && c.nameBn.isNotEmpty ? c.nameBn : c.name
+        };
+        final nameLabel = tx.note?.isNotEmpty == true
+            ? tx.note!
+            : (categoryMap[tx.categoryId] ?? (isBangla ? 'নিয়মিত বিল' : 'Recurring Bill'));
+
+        upcomingBills.add(UpcomingBillItem(
+          name: nameLabel,
+          amount: formatAmount(currency, tx.amount),
+          dueDate: dueMsg,
+          color: bColor,
+        ));
+      }
+    }
+
+    final detectedSubs =
+        SubscriptionDetectorService().detectSubscriptions(allTransactions);
+    for (final sub in detectedSubs) {
+      final alreadyAdded = upcomingBills
+          .any((b) => b.name.toLowerCase() == sub.merchantName.toLowerCase());
+      if (alreadyAdded) continue;
+
+      final nextDate = DateTime(sub.nextExpectedDate.year,
+          sub.nextExpectedDate.month, sub.nextExpectedDate.day);
+      if (nextDate
+              .isAfter(todayNormalized.subtract(const Duration(days: 1))) &&
+          nextDate.isBefore(thirtyDaysAhead.add(const Duration(days: 1)))) {
+        final diffDays = nextDate.difference(todayNormalized).inDays;
+        String dueMsg = '';
+        Color bColor = AppColors.primary;
+        if (diffDays == 0) {
+          dueMsg = isBangla ? 'আজ প্রদেয়' : 'Due today';
+          bColor = AppColors.error;
+        } else if (diffDays == 1) {
+          dueMsg = isBangla ? 'আগামীকাল প্রদেয়' : 'Due tomorrow';
+          bColor = AppColors.error;
+        } else if (diffDays <= 3) {
+          dueMsg = isBangla ? '$diffDays দিনের মধ্যে প্রদেয়' : 'Due in $diffDays days';
+          bColor = AppColors.warning;
+        } else {
+          dueMsg = isBangla ? '$diffDays দিনের মধ্যে প্রদেয়' : 'Due in $diffDays days';
+          bColor = AppColors.success;
+        }
+
+        upcomingBills.add(UpcomingBillItem(
+          name: sub.merchantName,
+          amount: formatAmount(currency, sub.amount),
+          dueDate: dueMsg,
+          color: bColor,
+        ));
+      }
+    }
+
+    int getDays(String msg) {
+      if (msg.contains('today') || msg.contains('আজ')) return 0;
+      if (msg.contains('tomorrow') || msg.contains('আগামীকাল')) return 1;
+      final reg = RegExp(r'\d+');
+      final match = reg.firstMatch(msg);
+      if (match != null) {
+        return int.parse(match.group(0)!);
+      }
+      return 99;
+    }
+
+    upcomingBills
+        .sort((a, b) => getDays(a.dueDate).compareTo(getDays(b.dueDate)));
+
+    // 5. Compute real spending intensity heatmap data
+    final startMonday = currentMonday.subtract(const Duration(days: 21));
+    double maxDailySpend = 0.0;
+    final List<double> dailySpends = List.generate(28, (index) {
+      final dayDate = startMonday.add(Duration(days: index));
+      final dayExpense = allTransactions.where((t) {
+        if (t.type != TransactionType.expense || t.isDeleted) return false;
+        final txDay = DateTime(t.date.year, t.date.month, t.date.day);
+        return txDay.isAtSameMomentAs(dayDate);
+      }).fold<double>(0, (sum, t) => sum + t.amount);
+
+      if (dayExpense > maxDailySpend) {
+        maxDailySpend = dayExpense;
+      }
+      return dayExpense;
+    });
+
+    final List<int> heatmapData = dailySpends.map((spend) {
+      if (spend == 0) return 0;
+      if (maxDailySpend == 0) return 0;
+      final ratio = spend / maxDailySpend;
+      if (ratio <= 0.33) return 1;
+      if (ratio <= 0.66) return 2;
+      return 3;
+    }).toList();
+
+    // 6. Generate dynamic Smart Recommendations
+    final List<SmartRecommendationItem> recommendations = [];
+
+    if (budgets.isEmpty) {
+      recommendations.add(SmartRecommendationItem(
+        icon: Icons.pie_chart_rounded,
+        title: isBangla ? 'মাসিক বাজেট তৈরি করুন' : 'Create a monthly budget',
+        desc: isBangla
+            ? 'এই মাসের জন্য কোনো বাজেট সেট করা হয়নি। খরচ নিয়ন্ত্রণে বাজেট সীমা তৈরি করুন।'
+            : 'You haven\'t set any budgets for this month. Setting limits is key to saving.',
+        color: AppColors.primary,
+      ));
+    }
+
+    final hasEmergencyGoal = goals.any((g) =>
+        g.name.toLowerCase().contains('emergency') || g.name.contains('জরুরি'));
+    if (!hasEmergencyGoal) {
+      final recommendedAmount =
+          summary.totalIncome > 0 ? (summary.totalIncome * 0.15) : 300000.0;
+      final formattedRec = formatAmount(currency, recommendedAmount);
+      recommendations.add(SmartRecommendationItem(
+        icon: Icons.savings_rounded,
+        title: isBangla
+            ? 'জরুরি তহবিলের লক্ষ্য শুরু করুন'
+            : 'Start a goal for Emergency Fund',
+        desc: isBangla
+            ? 'আপনার প্রোফাইলের ভিত্তিতে প্রতি মাসে $formattedRec সঞ্চয় করার পরামর্শ দেওয়া হচ্ছে।'
+            : 'Based on your profile, saving $formattedRec monthly is recommended.',
+        color: AppColors.success,
+      ));
+    }
+
+    if (totalBudget > 0 && (totalBudgetSpent / totalBudget) >= 0.85) {
+      recommendations.add(SmartRecommendationItem(
+        icon: Icons.warning_amber_rounded,
+        title: isBangla
+            ? 'ক্যাটাগরি খরচ পর্যালোচনা করুন'
+            : 'Review category spending',
+        desc: isBangla
+            ? 'আপনি মোট বাজেটের ৮৫% এর বেশি ব্যবহার করে ফেলেছেন। অপ্রয়োজনীয় ব্যয় সীমিত করুন।'
+            : 'You have utilized over 85% of your total budget. Trim down on leisure categories.',
+        color: AppColors.warning,
+      ));
+    }
+
+    final hasBorrowedDebt =
+        debts.any((d) => d.type == DebtType.borrowed && !d.isSettled);
+    if (hasBorrowedDebt) {
+      recommendations.add(SmartRecommendationItem(
+        icon: Icons.payment_rounded,
+        title: isBangla ? 'বকেয়া ঋণ পরিশোধ করুন' : 'Clear outstanding debts',
+        desc: isBangla
+            ? 'আপনার সক্রিয় বকেয়া ঋণ রয়েছে। এগুলো পরিশোধ করলে আপনার ট্রাস্ট স্কোর উন্নত হবে।'
+            : 'You have active borrowed debts. Paying them off will improve your trust score.',
+        color: AppColors.error,
+      ));
+    }
+
+    if (recommendations.length < 2) {
+      recommendations.add(SmartRecommendationItem(
+        icon: Icons.security_rounded,
+        title: isBangla
+            ? 'সাবস্ক্রিপশন সার্ভিস ট্র্যাক করুন'
+            : 'Track subscription services',
+        desc: isBangla
+            ? 'অব্যবহৃত সাবস্ক্রিপশন শনাক্ত করে খরচ সাশ্রয় করতে রিকারিং ট্যাব চেক করুন।'
+            : 'Check your recurring tab to detect unused subscriptions and save up to 15% in costs.',
+        color: AppColors.primary,
+      ));
+    }
+
     final isWide = MediaQuery.of(context).size.width > 1000;
 
     if (isWide) {
-      final profile = ref.watch(userProfileProvider);
-      final fullName = (profile['fullName'] ?? '').trim();
-
-      // Calculate this month's stats
-      final savingsAmount = (summary.totalIncome - summary.totalExpense)
-          .clamp(0.0, double.infinity);
-      final savingsRate = summary.totalIncome > 0
-          ? (savingsAmount / summary.totalIncome * 100)
-          : 0.0;
-
-      // Budget stats
-      final totalBudget = budgets.fold<double>(0, (sum, b) => sum + b.amount);
-      final totalBudgetSpent =
-          budgets.fold<double>(0, (sum, b) => sum + b.getSpent(allTransactions));
-      final remainingBudget =
-          (totalBudget - totalBudgetSpent).clamp(0.0, double.infinity);
-      final budgetProgress =
-          totalBudget > 0 ? (totalBudgetSpent / totalBudget) : 0.0;
-
-      // allTransactions already defined above
-      final categories = ref.watch(categoriesProvider);
-      final goals = ref.watch(goalsProvider);
-
-      final health = DashboardHealthEvaluator.evaluate(
-        summary: summary,
-        budgets: budgets,
-        debts: debts,
-        transactions: allTransactions,
-      );
-      final healthScore = health.score;
-      final healthTrendText = health.statusText;
-      final healthDetailText = health.detailText;
-
-      // 2. Generate dynamic AI Insights
-      String aiInsightText =
-          'I will analyze your spending patterns here. Try adding some transactions to get your first insight!';
-      if (allTransactions.isNotEmpty) {
-        final categoryMap = {for (final c in categories) c.id: c.name};
-
-        // Budget overrun check
-        BudgetModel? worstOverrun;
-        int maxOverrun = 0;
-        for (final b in budgets) {
-          if (b.getSpent(allTransactions) > b.amount) {
-            final overrun = b.getSpent(allTransactions) - b.amount;
-            if (overrun > maxOverrun) {
-              maxOverrun = overrun;
-              worstOverrun = b;
-            }
-          }
-        }
-
-        if (worstOverrun != null) {
-          final catName =
-              categoryMap[worstOverrun.categoryId] ?? 'this category';
-          aiInsightText =
-              'Your spending in "$catName" has exceeded your budget by $currency${maxOverrun.toStringAsFixed(0)}. Consider limiting purchases in "$catName" for the rest of the month.';
-        } else {
-          // High spending category check
-          final recentExpenses = allTransactions
-              .where((t) => t.type == TransactionType.expense && !t.isDeleted)
-              .toList();
-          if (recentExpenses.isNotEmpty) {
-            final Map<String, double> categorySums = {};
-            double totalRecentExpense = 0;
-            for (final tx in recentExpenses) {
-              categorySums[tx.categoryId] =
-                  (categorySums[tx.categoryId] ?? 0) + tx.amount;
-              totalRecentExpense += tx.amount;
-            }
-
-            String? highestCatId;
-            double highestCatSum = 0;
-            categorySums.forEach((catId, sum) {
-              if (sum > highestCatSum) {
-                highestCatSum = sum;
-                highestCatId = catId;
-              }
-            });
-
-            if (highestCatId != null && totalRecentExpense > 0) {
-              final ratio = (highestCatSum / totalRecentExpense) * 100;
-              final catName = categoryMap[highestCatId] ?? 'Miscellaneous';
-              if (ratio > 30) {
-                aiInsightText =
-                    '"$catName" accounts for ${ratio.toStringAsFixed(0)}% of your total expenses ($currency${highestCatSum.toStringAsFixed(0)}). Finding cheaper alternatives or buying in bulk could help you save.';
-              } else if (summary.totalIncome > 0) {
-                final sRate = ((summary.totalIncome - summary.totalExpense) /
-                        summary.totalIncome) *
-                    100;
-                if (sRate > 20) {
-                  aiInsightText =
-                      'Amazing! Your savings rate is at ${sRate.toStringAsFixed(0)}% this month. Keep it up to build your wealth/emergency fund faster.';
-                } else if (sRate >= 0) {
-                  aiInsightText =
-                      'You are currently saving ${sRate.toStringAsFixed(0)}% of your income. Try automating a portion of your savings to build consistent habits.';
-                } else {
-                  aiInsightText =
-                      'Your expenses are higher than your income by $currency${(summary.totalExpense - summary.totalIncome).toStringAsFixed(0)}. Let\'s identify non-essential subscriptions or lifestyle costs to cut back.';
-                }
-              } else {
-                aiInsightText =
-                    'Tracking looks good so far! Try setting budgets for categories like Food, Utilities, and Transport to build a complete dashboard.';
-              }
-            }
-          }
-        }
-      }
-
-      // 3. Compute dynamic Weekly Spending Streak
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      final currentMonday = today.subtract(Duration(days: now.weekday - 1));
-
-      final dailyBudgetLimit = totalBudget > 0 ? (totalBudget / 30.0) : 100000.0;
-      final List<bool> dailyStatus = List.generate(7, (index) {
-        final dayDate = currentMonday.add(Duration(days: index));
-        if (dayDate.isAfter(today)) {
-          return false;
-        }
-        final dayExpense = allTransactions.where((t) {
-          if (t.type != TransactionType.expense || t.isDeleted) return false;
-          final txDay = DateTime(t.date.year, t.date.month, t.date.day);
-          return txDay.isAtSameMomentAs(dayDate);
-        }).fold<int>(0, (sum, t) => sum + t.amount);
-        return dayExpense <= dailyBudgetLimit;
-      });
-      final streakDays = dailyStatus.where((status) => status).length;
-
-      // 4. Retrieve and sort real upcoming bills
-      final List<UpcomingBillItem> upcomingBills = [];
-      final todayNormalized = DateTime(now.year, now.month, now.day);
-      final thirtyDaysAhead = todayNormalized.add(const Duration(days: 30));
-
-      DateTime advanceDate(DateTime date, RecurringType type, int anchorDay) {
-        switch (type) {
-          case RecurringType.daily:
-            return date.add(const Duration(days: 1));
-          case RecurringType.weekly:
-            return date.add(const Duration(days: 7));
-          case RecurringType.monthly:
-            final nextMonth = DateTime(date.year, date.month + 1, 1);
-            final maxDay = DateTime(nextMonth.year, nextMonth.month + 1, 0).day;
-            final safeDay = anchorDay <= maxDay ? anchorDay : maxDay;
-            return DateTime(nextMonth.year, nextMonth.month, safeDay);
-          case RecurringType.yearly:
-            final nextYear = DateTime(date.year + 1, date.month, 1);
-            final maxDay = DateTime(nextYear.year, nextYear.month + 1, 0).day;
-            final safeDay = anchorDay <= maxDay ? anchorDay : maxDay;
-            return DateTime(nextYear.year, nextYear.month, safeDay);
-        }
-      }
-
-      final recurringTxs = allTransactions.where(
-          (t) => t.isRecurring && t.recurringType != null && !t.isDeleted);
-      for (final tx in recurringTxs) {
-        var currentOccur = DateTime(tx.date.year, tx.date.month, tx.date.day);
-        while (currentOccur.isBefore(todayNormalized)) {
-          currentOccur =
-              advanceDate(currentOccur, tx.recurringType!, tx.date.day);
-        }
-        if (currentOccur.isBefore(thirtyDaysAhead) ||
-            currentOccur.isAtSameMomentAs(thirtyDaysAhead)) {
-          final diffDays = currentOccur.difference(todayNormalized).inDays;
-          String dueMsg = '';
-          Color bColor = AppColors.primary;
-          if (diffDays == 0) {
-            dueMsg = 'Due today';
-            bColor = AppColors.error;
-          } else if (diffDays == 1) {
-            dueMsg = 'Due tomorrow';
-            bColor = AppColors.error;
-          } else if (diffDays <= 3) {
-            dueMsg = 'Due in $diffDays days';
-            bColor = AppColors.warning;
-          } else {
-            dueMsg = 'Due in $diffDays days';
-            bColor = AppColors.success;
-          }
-
-          final categoryMap = {for (final c in categories) c.id: c.name};
-          final nameLabel = tx.note?.isNotEmpty == true
-              ? tx.note!
-              : (categoryMap[tx.categoryId] ?? 'Recurring Bill');
-
-          upcomingBills.add(UpcomingBillItem(
-            name: nameLabel,
-            amount: formatAmount(currency, tx.amount),
-            dueDate: dueMsg,
-            color: bColor,
-          ));
-        }
-      }
-
-      final detectedSubs =
-          SubscriptionDetectorService().detectSubscriptions(allTransactions);
-      for (final sub in detectedSubs) {
-        final alreadyAdded = upcomingBills
-            .any((b) => b.name.toLowerCase() == sub.merchantName.toLowerCase());
-        if (alreadyAdded) continue;
-
-        final nextDate = DateTime(sub.nextExpectedDate.year,
-            sub.nextExpectedDate.month, sub.nextExpectedDate.day);
-        if (nextDate
-                .isAfter(todayNormalized.subtract(const Duration(days: 1))) &&
-            nextDate.isBefore(thirtyDaysAhead.add(const Duration(days: 1)))) {
-          final diffDays = nextDate.difference(todayNormalized).inDays;
-          String dueMsg = '';
-          Color bColor = AppColors.primary;
-          if (diffDays == 0) {
-            dueMsg = 'Due today';
-            bColor = AppColors.error;
-          } else if (diffDays == 1) {
-            dueMsg = 'Due tomorrow';
-            bColor = AppColors.error;
-          } else if (diffDays <= 3) {
-            dueMsg = 'Due in $diffDays days';
-            bColor = AppColors.warning;
-          } else {
-            dueMsg = 'Due in $diffDays days';
-            bColor = AppColors.success;
-          }
-
-          upcomingBills.add(UpcomingBillItem(
-            name: sub.merchantName,
-            amount: formatAmount(currency, sub.amount),
-            dueDate: dueMsg,
-            color: bColor,
-          ));
-        }
-      }
-
-      int getDays(String msg) {
-        if (msg.contains('today')) return 0;
-        if (msg.contains('tomorrow')) return 1;
-        final reg = RegExp(r'\d+');
-        final match = reg.firstMatch(msg);
-        if (match != null) {
-          return int.parse(match.group(0)!);
-        }
-        return 99;
-      }
-
-      upcomingBills
-          .sort((a, b) => getDays(a.dueDate).compareTo(getDays(b.dueDate)));
-
-      // 5. Compute real spending intensity heatmap data
-      final startMonday = currentMonday.subtract(const Duration(days: 21));
-      double maxDailySpend = 0.0;
-      final List<double> dailySpends = List.generate(28, (index) {
-        final dayDate = startMonday.add(Duration(days: index));
-        final dayExpense = allTransactions.where((t) {
-          if (t.type != TransactionType.expense || t.isDeleted) return false;
-          final txDay = DateTime(t.date.year, t.date.month, t.date.day);
-          return txDay.isAtSameMomentAs(dayDate);
-        }).fold<double>(0, (sum, t) => sum + t.amount);
-
-        if (dayExpense > maxDailySpend) {
-          maxDailySpend = dayExpense;
-        }
-        return dayExpense;
-      });
-
-      final List<int> heatmapData = dailySpends.map((spend) {
-        if (spend == 0) return 0;
-        if (maxDailySpend == 0) return 0;
-        final ratio = spend / maxDailySpend;
-        if (ratio <= 0.33) return 1;
-        if (ratio <= 0.66) return 2;
-        return 3;
-      }).toList();
-
-      // 6. Generate dynamic Smart Recommendations
-      final List<SmartRecommendationItem> recommendations = [];
-
-      if (budgets.isEmpty) {
-        recommendations.add(SmartRecommendationItem(
-          icon: Icons.pie_chart_rounded,
-          title: 'Create a monthly budget',
-          desc:
-              'You haven\'t set any budgets for this month. Setting limits is key to saving.',
-          color: AppColors.primary,
-        ));
-      }
-
-      final hasEmergencyGoal =
-          goals.any((g) => g.name.toLowerCase().contains('emergency'));
-      if (!hasEmergencyGoal) {
-        final recommendedAmount =
-            summary.totalIncome > 0 ? (summary.totalIncome * 0.15) : 3000.0;
-        recommendations.add(SmartRecommendationItem(
-          icon: Icons.savings_rounded,
-          title: 'Start a goal for Emergency Fund',
-          desc:
-              'Based on your profile, saving $currency${recommendedAmount.toStringAsFixed(0)} monthly is recommended.',
-          color: AppColors.success,
-        ));
-      }
-
-      if (totalBudget > 0 && (totalBudgetSpent / totalBudget) >= 0.85) {
-        recommendations.add(SmartRecommendationItem(
-          icon: Icons.warning_amber_rounded,
-          title: 'Review category spending',
-          desc:
-              'You have utilized over 85% of your total budget. Trim down on leisure categories.',
-          color: AppColors.warning,
-        ));
-      }
-
-      final hasBorrowedDebt =
-          debts.any((d) => d.type == DebtType.borrowed && !d.isSettled);
-      if (hasBorrowedDebt) {
-        recommendations.add(SmartRecommendationItem(
-          icon: Icons.payment_rounded,
-          title: 'Clear outstanding debts',
-          desc:
-              'You have active borrowed debts. Paying them off will improve your trust score.',
-          color: AppColors.error,
-        ));
-      }
-
-      if (recommendations.length < 2) {
-        recommendations.add(SmartRecommendationItem(
-          icon: Icons.security_rounded,
-          title: 'Track subscription services',
-          desc:
-              'Check your recurring tab to detect unused subscriptions and save up to 15% in costs.',
-          color: AppColors.primary,
-        ));
-      }
-
       return Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: SafeArea(
@@ -496,10 +529,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             },
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
+              padding: const EdgeInsets.fromLTRB(28, 24, 28, 40),
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1400),
+                  constraints: const BoxConstraints(maxWidth: 1360),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -508,7 +541,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                         index: 0,
                         child: _webWelcomeHeader(context, fullName, alertCount),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
 
                       // 1. Top Stats Row (4 Cards)
                       _anim(
@@ -527,23 +560,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                           isDark,
                         ),
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 24),
 
                       // 2. Core Layout (Two Columns)
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Left Column (flex 5): Chart + Transactions
+                          // Main workspace: insights and transaction activity.
                           Expanded(
-                            flex: 5,
+                            flex: 7,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 _anim(
                                   index: 2,
-                                  child: const ExpenseChartDynamic(
+                                  child: ExpenseChartDynamic(
                                     compact: false,
                                     showLegend: true,
+                                    margin: EdgeInsets.zero,
+                                    hideAmounts: effectiveHide,
                                   ),
                                 ),
                                 const SizedBox(height: 24),
@@ -553,16 +588,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                                     transactions: summary.recentTransactions,
                                     currency: currency,
                                     hideAmounts: effectiveHide,
+                                    margin: EdgeInsets.zero,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(width: 24),
+                          const SizedBox(width: 20),
 
-                          // Right Column (flex 3): Budget & Financial Widgets
+                          // Compact planning panel.
                           Expanded(
-                            flex: 3,
+                            flex: 4,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -616,6 +652,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                                   child: SpendingHeatmap(
                                       simulatedData: heatmapData),
                                 ),
+                                if (upcomingBills.isNotEmpty) ...[
+                                  const SizedBox(height: 20),
+                                  _anim(
+                                    index: 9,
+                                    child: UpcomingBillsTimeline(bills: upcomingBills),
+                                  ),
+                                ],
+                                if (recommendations.isNotEmpty) ...[
+                                  const SizedBox(height: 20),
+                                  _anim(
+                                    index: 10,
+                                    child: SmartRecommendations(
+                                        recommendations: recommendations),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -658,20 +709,93 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                         effectiveHide, toggleReveal, primary, isDark)),
               ),
               SliverToBoxAdapter(
+                child: DailyBudgetTrackerCard(settings: settings, currency: currency),
+              ),
+              SliverToBoxAdapter(
                 child: _anim(
                     index: 2,
                     child: _accountsDebtRow(context, accounts, debts, currency,
                         effectiveHide, toggleReveal, isDark, primary)),
               ),
               SliverToBoxAdapter(
-                child: _anim(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                  child: _anim(
                     index: 3,
-                    child: const ExpenseChartDynamic(
-                        compact: true, showLegend: true)),
+                    child: FinancialHealthScore(
+                      score: healthScore,
+                      statusText: healthTrendText,
+                      detailText: healthDetailText,
+                    ),
+                  ),
+                ),
+              ),
+              if (_showAiInsight)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                    child: _anim(
+                      index: 4,
+                      child: AiFinancialInsightsCard(
+                        insightText: aiInsightText,
+                        onSetLimit: () => context.go('/budget'),
+                        onDismiss: () =>
+                            setState(() => _showAiInsight = false),
+                      ),
+                    ),
+                  ),
+                ),
+              SliverToBoxAdapter(
+                child: _anim(
+                    index: 5,
+                    child: ExpenseChartDynamic(
+                        compact: true, showLegend: true, hideAmounts: effectiveHide)),
+              ),
+              if (upcomingBills.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                    child: _anim(
+                      index: 6,
+                      child: UpcomingBillsTimeline(bills: upcomingBills),
+                    ),
+                  ),
+                ),
+              if (recommendations.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                    child: _anim(
+                      index: 7,
+                      child: SmartRecommendations(
+                          recommendations: recommendations),
+                    ),
+                  ),
+                ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                  child: _anim(
+                    index: 8,
+                    child: WeeklySpendingStreak(
+                      streakDays: streakDays,
+                      dailyStatus: dailyStatus,
+                    ),
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                  child: _anim(
+                    index: 9,
+                    child: SpendingHeatmap(simulatedData: heatmapData),
+                  ),
+                ),
               ),
               SliverToBoxAdapter(
                 child: _anim(
-                    index: 4,
+                    index: 10,
                     child: TransactionListDynamic(
                       transactions: summary.recentTransactions,
                       currency: currency,
@@ -859,11 +983,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       VoidCallback toggleReveal,
       Color primary,
       bool isDark) {
-    final savingsRate = summary.totalIncome > 0
-        ? ((summary.totalIncome - summary.totalExpense) /
-                summary.totalIncome *
-                100)
-            .clamp(0.0, 100.0)
+    final hasMonthlyData =
+        summary.monthIncome > 0 || summary.monthExpense > 0;
+    final heroIncome =
+        hasMonthlyData ? summary.monthIncome : summary.totalIncome;
+    final heroExpense =
+        hasMonthlyData ? summary.monthExpense : summary.totalExpense;
+    final savingsRate = heroIncome > 0
+        ? ((heroIncome - heroExpense) / heroIncome * 100).clamp(0.0, 100.0)
         : 0.0;
 
     return Container(
@@ -984,7 +1111,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               Expanded(
                   child: _heroStat(
                       context.t('income'),
-                      summary.totalIncome,
+                      heroIncome,
                       Icons.arrow_downward_rounded,
                       Colors.greenAccent.shade100,
                       currency,
@@ -998,7 +1125,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               Expanded(
                   child: _heroStat(
                       context.t('expense'),
-                      summary.totalExpense,
+                      heroExpense,
                       Icons.arrow_upward_rounded,
                       Colors.red.shade100,
                       currency,
@@ -1882,99 +2009,105 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 12,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).dividerColor,
-                    borderRadius: BorderRadius.circular(2),
+      builder: (ctx) => SafeArea(
+        child: StatefulBuilder(
+          builder: (ctx, setModalState) => Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+              maxWidth: 560,
+            ),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 12,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).dividerColor,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  Text(context.t('transfer_funds'), style: AppTextStyles.h5),
+                  const SizedBox(height: 16),
+                  // From account
+                  Text(context.t('from_account'),
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.45))),
+                  const SizedBox(height: 8),
+                  _buildAccountChips(
+                      ctx,
+                      accounts,
+                      fromAccount,
+                      currency,
+                      (a) => setModalState(() {
+                            fromAccount = a;
+                            if (toAccount == a) toAccount = null;
+                          })),
+                  const SizedBox(height: 14),
+                  // To account
+                  Text(context.t('to_account'),
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.45))),
+                  const SizedBox(height: 8),
+                  _buildAccountChips(
+                      ctx,
+                      accounts.where((a) => a != fromAccount).toList(),
+                      toAccount,
+                      currency,
+                      (a) => setModalState(() => toAccount = a)),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: fromAccount != null && toAccount != null
+                          ? () {
+                              Navigator.pop(ctx);
+                              _showTransfer(fromAccount!, toAccount!, currency);
+                            }
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(context.t('continue_action')),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.arrow_forward_rounded, size: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              Text(context.t('transfer_funds'), style: AppTextStyles.h5),
-              const SizedBox(height: 16),
-              // From account
-              Text('From',
-                  style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.45))),
-              const SizedBox(height: 8),
-              _buildAccountChips(
-                  ctx,
-                  accounts,
-                  fromAccount,
-                  currency,
-                  (a) => setModalState(() {
-                        fromAccount = a;
-                        if (toAccount == a) toAccount = null;
-                      })),
-              const SizedBox(height: 14),
-              // To account
-              Text('To',
-                  style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.45))),
-              const SizedBox(height: 8),
-              _buildAccountChips(
-                  ctx,
-                  accounts.where((a) => a != fromAccount).toList(),
-                  toAccount,
-                  currency,
-                  (a) => setModalState(() => toAccount = a)),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: fromAccount != null && toAccount != null
-                      ? () {
-                          Navigator.pop(ctx);
-                          _showTransfer(fromAccount!, toAccount!, currency);
-                        }
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.swap_horiz_rounded, size: 18),
-                      const SizedBox(width: 8),
-                      Text(fromAccount != null && toAccount != null
-                          ? '${fromAccount!.name}  →  ${toAccount!.name}'
-                          : context.t('select')),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -2037,7 +2170,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '$currency${a.balance.toStringAsFixed(0)}',
+                  formatAmount(currency, a.balance),
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -2082,13 +2215,37 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       BuildContext context, String fullName, int alertCount) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final primary = theme.colorScheme.primary;
     final greetingPrefix = _greeting(context);
     final greetingName = fullName.isNotEmpty ? fullName : 'User';
     final dateStr = DateFormat('EEEE, MMMM dd').format(DateTime.now());
 
-    return Row(
-      children: [
-        Column(
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark
+              ? AppColors.darkBorder.withValues(alpha: 0.55)
+              : AppColors.lightBorder.withValues(alpha: 0.8),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: primary.withValues(alpha: isDark ? 0.18 : 0.10),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(Icons.waving_hand_rounded, color: primary, size: 21),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -2097,7 +2254,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 color: theme.colorScheme.onSurface,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 5),
             Row(
               children: [
                 Icon(Icons.calendar_today_rounded,
@@ -2114,35 +2271,37 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                         : AppColors.lightTextTertiary,
                   ),
                 ),
-                const SizedBox(width: 16),
-                if (alertCount > 0)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.error.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.info_outline_rounded,
-                            size: 12, color: AppColors.error),
-                        const SizedBox(width: 6),
-                        Text(
-                          '$alertCount active alerts',
-                          style: AppTextStyles.caption.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.error,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
               ],
             ),
           ],
-        ),
-      ],
+            ),
+          ),
+          if (alertCount > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: isDark ? 0.16 : 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.notifications_active_outlined,
+                      size: 15, color: AppColors.error),
+                  const SizedBox(width: 7),
+                  Text(
+                    Localizations.localeOf(context).languageCode == 'bn'
+                        ? '$alertCount টি সতর্কতা'
+                        : '$alertCount alerts',
+                    style: AppTextStyles.caption.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.error,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -2159,6 +2318,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     Color primary,
     bool isDark,
   ) {
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
     return Row(
       children: [
         Expanded(
@@ -2170,7 +2330,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             hideAmounts: hideAmounts,
             icon: Icons.account_balance_wallet_rounded,
             iconColor: primary,
-            trendLabel: 'Balance',
+            trendLabel: isBangla ? 'ব্যালেন্স' : 'Balance',
             trendColor: primary,
             onTap: toggleReveal,
           ),
@@ -2185,7 +2345,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             hideAmounts: hideAmounts,
             icon: Icons.arrow_downward_rounded,
             iconColor: AppColors.success,
-            trendLabel: 'Income',
+            trendLabel: isBangla ? 'আয়' : 'Income',
             trendColor: AppColors.success,
           ),
         ),
@@ -2199,7 +2359,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             hideAmounts: hideAmounts,
             icon: Icons.arrow_upward_rounded,
             iconColor: AppColors.error,
-            trendLabel: 'Expense',
+            trendLabel: isBangla ? 'ব্যয়' : 'Expense',
             trendColor: AppColors.error,
           ),
         ),
@@ -2207,13 +2367,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         Expanded(
           child: _webStatCard(
             context,
-            title: 'Net Savings',
+            title: isBangla ? 'নেট সঞ্চয়' : 'Net Savings',
             value: savings,
             currency: currency,
             hideAmounts: hideAmounts,
             icon: Icons.savings_rounded,
             iconColor: Colors.purple,
-            trendLabel: '${savingsRate.toStringAsFixed(0)}% saved',
+            trendLabel: isBangla
+                ? '${savingsRate.toStringAsFixed(0)}% সঞ্চিত'
+                : '${savingsRate.toStringAsFixed(0)}% saved',
             trendColor: Colors.purple,
           ),
         ),
@@ -2235,10 +2397,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: isDark
               ? AppColors.darkBorder.withValues(alpha: 0.5)
@@ -2277,10 +2439,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           Text(
-            title.toUpperCase(),
-            style: AppTextStyles.overline.copyWith(
+            title,
+            style: AppTextStyles.bodySm.copyWith(
+              fontWeight: FontWeight.w600,
               color: isDark
                   ? AppColors.darkTextTertiary
                   : AppColors.lightTextTertiary,
@@ -2293,6 +2456,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             child: Text(
               formatAmount(currency, value, decimals: 0, hide: hideAmounts),
               style: AppTextStyles.amountMedium.copyWith(
+                fontSize: 26,
                 color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
@@ -2314,12 +2478,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     bool isDark,
     Color primary,
   ) {
+    final isBangla = Localizations.localeOf(context).languageCode == 'bn';
     final percentage = (budgetProgress * 100).toStringAsFixed(0);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isDark
               ? AppColors.darkBorder.withValues(alpha: 0.5)
@@ -2334,7 +2499,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Monthly Budget Status',
+                isBangla ? 'বাজেট ওভারভিউ' : 'Budget overview',
                 style: AppTextStyles.headingSm.copyWith(
                   color: Theme.of(context).colorScheme.onSurface,
                 ),
@@ -2405,7 +2570,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               Expanded(
                 child: _webBudgetMiniStat(
                   context,
-                  'Total Limit',
+                  isBangla ? 'মোট বাজেট' : 'Total Limit',
                   formatAmount(currency, totalBudget, hide: hideAmounts),
                   isDark ? Colors.white38 : Colors.black38,
                 ),
@@ -2418,7 +2583,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               Expanded(
                 child: _webBudgetMiniStat(
                   context,
-                  'Total Spent',
+                  isBangla ? 'মোট ব্যয়' : 'Total Spent',
                   formatAmount(currency, totalBudgetSpent, hide: hideAmounts),
                   budgetProgress > 0.9 ? AppColors.error : primary,
                 ),
@@ -2571,83 +2736,116 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  void _showTransfer(dynamic from, dynamic to, String currency) {
+  void _showTransfer(AccountModel from, AccountModel to, String currency) {
     final ctrl = TextEditingController();
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(24))),
-        padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-            top: 12),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                  color: Theme.of(context).dividerColor,
-                  borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 16),
-          Text(context.t('transfer_funds'), style: AppTextStyles.h5),
-          const SizedBox(height: 4),
-          Text(
-            '${from.nickname?.isNotEmpty == true ? from.nickname! : from.name}${from.accountNumber?.isNotEmpty == true ? " (${from.accountNumber!.length > 4 ? from.accountNumber!.substring(from.accountNumber!.length - 4) : from.accountNumber})" : ""}  →  ${to.nickname?.isNotEmpty == true ? to.nickname! : to.name}${to.accountNumber?.isNotEmpty == true ? " (${to.accountNumber!.length > 4 ? to.accountNumber!.substring(to.accountNumber!.length - 4) : to.accountNumber})" : ""}',
-            style: AppTextStyles.body2.copyWith(
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.5)),
+      builder: (ctx) => SafeArea(
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+            maxWidth: 560,
           ),
-          const SizedBox(height: 16),
-          TextField(
-              controller: ctrl,
-              autofocus: true,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                  labelText: context.t('amount'),
-                  prefixText: '$currency ',
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14)))),
-          const SizedBox(height: 14),
-          SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () async {
-                  final amount = double.tryParse(ctrl.text.trim()) ?? 0;
-                  if (amount <= 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(context.t('enter_valid_amount'))));
-                    return;
-                  }
-                  if (amount > from.balance) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(context.t('insufficient_balance'))));
-                    return;
-                  }
-                  await ref
-                      .read(accountsProvider.notifier)
-                      .updateBalance(from.id, from.balance - amount);
-                  await ref
-                      .read(accountsProvider.notifier)
-                      .updateBalance(to.id, to.balance + amount);
-                  if (!mounted || !ctx.mounted) return;
-                  Navigator.pop(ctx);
-                },
-                style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14))),
-                child: Text(context.t('confirm_transfer')),
-              )),
-        ]),
+          decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(24))),
+          padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              top: 12),
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                      color: Theme.of(context).dividerColor,
+                      borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 16),
+              Text(context.t('transfer_funds'), style: AppTextStyles.h5),
+              const SizedBox(height: 4),
+              Text(
+                '${from.nickname?.isNotEmpty == true ? from.nickname! : from.name}${from.accountNumber?.isNotEmpty == true ? " (${from.accountNumber!.length > 4 ? from.accountNumber!.substring(from.accountNumber!.length - 4) : from.accountNumber})" : ""}  →  ${to.nickname?.isNotEmpty == true ? to.nickname! : to.name}${to.accountNumber?.isNotEmpty == true ? " (${to.accountNumber!.length > 4 ? to.accountNumber!.substring(to.accountNumber!.length - 4) : to.accountNumber})" : ""}',
+                style: AppTextStyles.body2.copyWith(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.5)),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                  controller: ctrl,
+                  autofocus: true,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                      labelText: context.t('amount'),
+                      prefixText: '$currency ',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14)))),
+              const SizedBox(height: 14),
+              SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final enteredAmount = double.tryParse(ctrl.text.trim()) ?? 0;
+                      final amountInPaisa = (enteredAmount * 100).round();
+                      if (enteredAmount <= 0 || amountInPaisa <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(context.t('enter_valid_amount'))));
+                        return;
+                      }
+                      if (amountInPaisa > from.balance) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(context.t('insufficient_balance'))));
+                        return;
+                      }
+                      await ref
+                          .read(accountsProvider.notifier)
+                          .updateBalance(from.id, from.balance - amountInPaisa);
+                      await ref
+                          .read(accountsProvider.notifier)
+                          .updateBalance(to.id, to.balance + amountInPaisa);
+
+                      final fromName = from.nickname?.isNotEmpty == true
+                          ? from.nickname!
+                          : from.name;
+                      final toName = to.nickname?.isNotEmpty == true
+                          ? to.nickname!
+                          : to.name;
+                      final now = DateTime.now();
+                      final tx = TransactionModel(
+                        id: now.millisecondsSinceEpoch.toString(),
+                        type: TransactionType.transfer,
+                        amount: amountInPaisa,
+                        categoryId: '',
+                        accountId: from.id,
+                        toAccountId: to.id,
+                        date: now,
+                        note: 'Transfer: $fromName → $toName',
+                        createdAt: now,
+                        updatedAt: now,
+                      );
+                      await ref
+                          .read(transactionsProvider.notifier)
+                          .addTransaction(tx);
+
+                      if (!mounted || !ctx.mounted) return;
+                      Navigator.pop(ctx);
+                    },
+                    style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14))),
+                    child: Text(context.t('confirm_transfer')),
+                  )),
+            ]),
+          ),
+        ),
       ),
     );
   }

@@ -513,92 +513,113 @@ class AccountsScreen extends ConsumerWidget {
   ) {
     showModalBottomSheet<void>(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              account.nickname?.isNotEmpty == true
-                  ? account.nickname!
-                  : account.name,
-              style: AppTextStyles.h2,
-            ),
-            if (account.nickname?.isNotEmpty == true)
-              Text(
-                account.name,
-                style: AppTextStyles.caption.copyWith(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.5),
-                ),
-              ),
-            const SizedBox(height: 8),
-            Text(
-              '${context.t('balance')}: $currency${account.balance.toStringAsFixed(2)}',
-              style: AppTextStyles.h3.copyWith(color: AppColors.primary),
-            ),
-            if (_accountDetailRows(account).isNotEmpty) ...[
-              const SizedBox(height: 16),
-              ..._accountDetailRows(account).map(
-                (row) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          row.label,
-                          style: AppTextStyles.caption.copyWith(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.55),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Flexible(
-                        child: Text(
-                          row.value,
-                          textAlign: TextAlign.end,
-                          style: AppTextStyles.body2.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 24),
-            Row(
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => SafeArea(
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+            maxWidth: 560,
+          ),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(sheetContext);
-                      _showEditAccountDialog(context, ref, account);
-                    },
-                    icon: const Icon(Icons.edit),
-                    label: Text(context.t('edit')),
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).dividerColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(sheetContext),
-                    child: Text(context.t('close')),
+                const SizedBox(height: 16),
+                Text(
+                  account.nickname?.isNotEmpty == true
+                      ? account.nickname!
+                      : account.name,
+                  style: AppTextStyles.h2,
+                ),
+                if (account.nickname?.isNotEmpty == true)
+                  Text(
+                    account.name,
+                    style: AppTextStyles.caption.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.5),
+                    ),
                   ),
+                const SizedBox(height: 8),
+                Text(
+                  '${context.t('balance')}: $currency${account.balance.toStringAsFixed(2)}',
+                  style: AppTextStyles.h3.copyWith(color: AppColors.primary),
+                ),
+                if (_accountDetailRows(account).isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  ..._accountDetailRows(account).map(
+                    (row) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              row.label,
+                              style: AppTextStyles.caption.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.55),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Flexible(
+                            child: Text(
+                              row.value,
+                              textAlign: TextAlign.end,
+                              style: AppTextStyles.body2.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(sheetContext);
+                          _showEditAccountDialog(context, ref, account);
+                        },
+                        icon: const Icon(Icons.edit),
+                        label: Text(context.t('edit')),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(sheetContext),
+                        child: Text(context.t('close')),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );

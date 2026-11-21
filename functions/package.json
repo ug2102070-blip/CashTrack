@@ -9,7 +9,8 @@
     "serve": "firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
     "lint": "node --check src/index.js",
-    "audit": "npm audit --omit=dev --audit-level=high"
+    "audit": "npm audit --omit=dev --audit-level=high",
+    "test": "node --test"
   },
   "dependencies": {
     "firebase-admin": "^14.2.0",

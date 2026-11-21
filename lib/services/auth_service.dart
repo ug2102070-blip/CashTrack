@@ -229,8 +229,8 @@ class AuthService {
       // On web, Google Sign-In errors come as generic exceptions
       final msg = '$e'.toLowerCase();
       // User cancelled the popup — not an error, just return
-      if (msg.contains('popup_closed') || 
-          msg.contains('unknown_reason') || 
+      if (msg.contains('popup_closed') ||
+          msg.contains('unknown_reason') ||
           msg.contains('sign_in_canceled') ||
           msg.contains('sign_in_failed')) {
         return;
@@ -243,7 +243,8 @@ class AuthService {
   GoogleSignIn _createGoogleSignIn() {
     const webClientId = String.fromEnvironment(
       'GOOGLE_WEB_CLIENT_ID',
-      defaultValue: '68532369864-2dq9itj0j9chhigl0sll7pcvnocbsj6q.apps.googleusercontent.com',
+      defaultValue:
+          '68532369864-2dq9itj0j9chhigl0sll7pcvnocbsj6q.apps.googleusercontent.com',
     );
 
     if (kIsWeb) {
@@ -300,6 +301,41 @@ class AuthService {
   // ── Password Reset ─────────────────────────────────────────────────────
   Future<void> resetPassword(String email) async {
     await _auth.sendPasswordResetEmail(email: email);
+  }
+
+  // ── Re-authentication (required before destructive account actions) ────
+
+  /// Whether the signed-in user has an email/password credential.
+  bool get hasPasswordProvider =>
+      currentUser?.providerData.any((p) => p.providerId == 'password') ?? false;
+
+  /// Re-verifies an email/password user. Throws [FirebaseAuthException]
+  /// (e.g. `wrong-password`, `invalid-credential`, `too-many-requests`).
+  Future<void> reauthenticateWithPassword(String password) async {
+    final user = _auth.currentUser;
+    final email = user?.email;
+    if (user == null || email == null || email.isEmpty) {
+      throw FirebaseAuthException(code: 'no-current-user');
+    }
+    await user.reauthenticateWithCredential(
+      EmailAuthProvider.credential(email: email, password: password),
+    );
+  }
+
+  /// Re-verifies a Google user. Returns false if the user cancelled.
+  Future<bool> reauthenticateWithGoogle() async {
+    final user = _auth.currentUser;
+    if (user == null) throw FirebaseAuthException(code: 'no-current-user');
+    final googleUser = await _createGoogleSignIn().signIn();
+    if (googleUser == null) return false;
+    final googleAuth = await googleUser.authentication;
+    await user.reauthenticateWithCredential(
+      GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      ),
+    );
+    return true;
   }
 
   // ── Sign Out ───────────────────────────────────────────────────────────

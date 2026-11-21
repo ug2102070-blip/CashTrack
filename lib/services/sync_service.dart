@@ -8,6 +8,7 @@ import '../core/utils/logger.dart';
 import '../data/repositories/hive_box_recovery.dart';
 import '../data/repositories/sync_tombstone_repository.dart';
 import 'auth_service.dart';
+import 'local_user_data_service.dart';
 import 'sync_conflict_resolver.dart';
 
 /// Version 2 sync stores each record as its own document. This avoids the
@@ -16,6 +17,15 @@ class SyncService {
   SyncService._internal();
   static final SyncService _instance = SyncService._internal();
   factory SyncService() => _instance;
+
+  /// Result messages returned by [syncData] / [restoreLatestBackupFromCloud].
+  /// UI code should compare against these instead of literal strings.
+  static const String syncCompleteMessage = 'Sync complete';
+  static const String syncSkippedSignInMessage =
+      'Sync skipped: sign in required';
+  static const String restoreCompleteMessage = 'Restore complete';
+  static const String restoreSkippedSignInMessage =
+      'Restore skipped: sign in required';
 
   static const _schemaVersion = 2;
   static const _collections = <String>[
@@ -30,6 +40,10 @@ class SyncService {
     'split_groups',
     'split_expenses',
   ];
+
+  /// Per-user Firestore collections written by sync (`users/{uid}/<name>`).
+  static List<String> get syncedCollections => List.unmodifiable(_collections);
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
@@ -46,14 +60,17 @@ class SyncService {
   Future<String> syncData() async {
     final userId = AuthService().currentUser?.uid;
     if (userId == null || userId.isEmpty) {
-      return 'Sync skipped: sign in required';
+      return syncSkippedSignInMessage;
     }
     try {
+      // Never push one account's local data into another account's cloud.
+      await LocalUserDataService.instance.prepareForSync(userId);
       await _migrateLegacySnapshot(userId);
       // Pull first so a fresh device never mistakes remote data for local deletes.
       await _pullRemote(userId);
       await _pushLocal(userId);
-      return 'Sync complete';
+      LocalUserDataService.instance.notifyChanged();
+      return syncCompleteMessage;
     } catch (error, stackTrace) {
       AppLogger.e('Sync failed: $error\n$stackTrace');
       return 'Sync failed: $error';
@@ -64,12 +81,14 @@ class SyncService {
   Future<String> restoreLatestBackupFromCloud() async {
     final userId = AuthService().currentUser?.uid;
     if (userId == null || userId.isEmpty) {
-      return 'Restore skipped: sign in required';
+      return restoreSkippedSignInMessage;
     }
     try {
+      await LocalUserDataService.instance.prepareForSync(userId);
       await _migrateLegacySnapshot(userId);
       await _pullRemote(userId);
-      return 'Restore complete';
+      LocalUserDataService.instance.notifyChanged();
+      return restoreCompleteMessage;
     } catch (error) {
       return 'Restore failed: $error';
     }

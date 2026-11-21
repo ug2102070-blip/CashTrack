@@ -25,6 +25,7 @@ import '../../data/models/investment_model.dart';
 import '../../data/models/split_expense_model.dart';
 import '../../core/utils/logger.dart';
 import '../../services/auth_service.dart';
+import '../../services/local_user_data_service.dart';
 import 'auth_providers.dart';
 
 // ==========================================
@@ -383,7 +384,6 @@ class BudgetsNotifier extends StateNotifier<List<BudgetModel>> {
     loadBudgets();
   }
 
-
   Future<void> deleteBudget(String id) async {
     await _repository.deleteBudget(id);
     loadBudgets();
@@ -428,16 +428,19 @@ class BudgetsNotifier extends StateNotifier<List<BudgetModel>> {
 
     final previousBudgets = getBudgetsForMonth(previousMonth);
     final previousStart = DateTime(previousMonth.year, previousMonth.month, 1);
-    final previousEnd = DateTime(previousMonth.year, previousMonth.month + 1, 0, 23, 59, 59);
-    final previousTransactions = _transactionRepository.getTransactionsByDateRange(previousStart, previousEnd);
+    final previousEnd =
+        DateTime(previousMonth.year, previousMonth.month + 1, 0, 23, 59, 59);
+    final previousTransactions = _transactionRepository
+        .getTransactionsByDateRange(previousStart, previousEnd);
 
     for (final previous in previousBudgets) {
       final spent = previousTransactions
-          .where((t) => t.type == TransactionType.expense && t.categoryId == previous.categoryId)
+          .where((t) =>
+              t.type == TransactionType.expense &&
+              t.categoryId == previous.categoryId)
           .fold<int>(0, (sum, t) => sum + t.amount);
 
-      final carryAmount =
-          (previous.amount - spent).clamp(0, previous.amount);
+      final carryAmount = (previous.amount - spent).clamp(0, previous.amount);
       if (carryAmount <= 0) continue;
 
       final current = getBudgetByCategory(previous.categoryId, month);
@@ -461,7 +464,8 @@ class BudgetsNotifier extends StateNotifier<List<BudgetModel>> {
       final delta = carryAmount - current.rolledAmount;
       if (delta == 0) continue;
 
-      final nextAmount = (current.amount + delta).toInt().clamp(0, 9223372036854775807);
+      int nextAmount = (current.amount + delta).toInt();
+      if (nextAmount < 0) nextAmount = 0;
       await updateBudget(
         current.copyWith(
           amount: nextAmount,
@@ -765,11 +769,27 @@ final dashboardSummaryProvider = Provider<DashboardSummary>((ref) {
   final sortedTransactions = [...transactions]
     ..sort((a, b) => b.date.compareTo(a.date));
 
-  final totalIncome = transactions
+  final now = DateTime.now();
+  final startOfMonth = DateTime(now.year, now.month, 1);
+  final endOfMonth = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+
+  final monthTransactions = transactions.where((t) =>
+      !t.isDeleted &&
+      !t.date.isBefore(startOfMonth) &&
+      !t.date.isAfter(endOfMonth));
+
+  final monthIncome = monthTransactions
       .where((t) => t.type == TransactionType.income)
       .fold<int>(0, (sum, t) => sum + t.amount);
-  final totalExpense = transactions
+  final monthExpense = monthTransactions
       .where((t) => t.type == TransactionType.expense)
+      .fold<int>(0, (sum, t) => sum + t.amount);
+
+  final totalIncome = transactions
+      .where((t) => t.type == TransactionType.income && !t.isDeleted)
+      .fold<int>(0, (sum, t) => sum + t.amount);
+  final totalExpense = transactions
+      .where((t) => t.type == TransactionType.expense && !t.isDeleted)
       .fold<int>(0, (sum, t) => sum + t.amount);
   final totalBalance =
       accounts.fold<int>(0, (sum, account) => sum + account.balance);
@@ -778,7 +798,9 @@ final dashboardSummaryProvider = Provider<DashboardSummary>((ref) {
     totalBalance: totalBalance,
     totalIncome: totalIncome,
     totalExpense: totalExpense,
-    recentTransactions: sortedTransactions.take(5).toList(),
+    monthIncome: monthIncome,
+    monthExpense: monthExpense,
+    recentTransactions: sortedTransactions.take(10).toList(),
   );
 });
 
@@ -787,28 +809,40 @@ class DashboardSummary {
   final int totalBalance;
   final int totalIncome;
   final int totalExpense;
+  final int monthIncome;
+  final int monthExpense;
   final List<TransactionModel> recentTransactions;
 
   DashboardSummary({
     required this.totalBalance,
     required this.totalIncome,
     required this.totalExpense,
+    this.monthIncome = 0,
+    this.monthExpense = 0,
     required this.recentTransactions,
   });
 
   /// Net savings this month
-  int get netSavings => totalIncome - totalExpense;
+  int get netSavings => (monthIncome > 0 || monthExpense > 0)
+      ? (monthIncome - monthExpense)
+      : (totalIncome - totalExpense);
 
   /// Expense percentage
   double get expensePercentage {
-    if (totalIncome == 0) return 0;
-    return (totalExpense / totalIncome) * 100;
+    final inc =
+        (monthIncome > 0 || monthExpense > 0) ? monthIncome : totalIncome;
+    final exp =
+        (monthIncome > 0 || monthExpense > 0) ? monthExpense : totalExpense;
+    if (inc == 0) return 0;
+    return (exp / inc) * 100;
   }
 
   /// Savings rate
   double get savingsRate {
-    if (totalIncome == 0) return 0;
-    return (netSavings / totalIncome) * 100;
+    final inc =
+        (monthIncome > 0 || monthExpense > 0) ? monthIncome : totalIncome;
+    if (inc == 0) return 0;
+    return (netSavings / inc) * 100;
   }
 }
 
@@ -819,16 +853,25 @@ class DashboardSummary {
 
 /// Monthly Analytics Provider
 final monthlyAnalyticsProvider =
-    Provider.family<MonthlyAnalytics, DateTime>((ref, month) {
+    Provider.family<MonthlyAnalytics, DateTime>((ref, rawMonth) {
   final transactionRepo = ref.watch(transactionRepositoryProvider);
   ref.watch(
       transactionsProvider); // ensure analytics rebuilds when transactions change
 
+  final month = DateTime(rawMonth.year, rawMonth.month, 1);
   final startOfMonth = DateTime(month.year, month.month, 1);
   final endOfMonth = DateTime(month.year, month.month + 1, 0);
 
   final transactions =
       transactionRepo.getTransactionsByDateRange(startOfMonth, endOfMonth);
+
+  final prevMonthDate = DateTime(month.year, month.month - 1, 1);
+  final prevStart = DateTime(prevMonthDate.year, prevMonthDate.month, 1);
+  final prevEnd = DateTime(prevMonthDate.year, prevMonthDate.month + 1, 0);
+  final prevIncome =
+      transactionRepo.getTotalIncome(start: prevStart, end: prevEnd);
+  final prevExpense =
+      transactionRepo.getTotalExpense(start: prevStart, end: prevEnd);
 
   return MonthlyAnalytics(
     month: month,
@@ -837,6 +880,8 @@ final monthlyAnalyticsProvider =
         transactionRepo.getTotalIncome(start: startOfMonth, end: endOfMonth),
     totalExpense:
         transactionRepo.getTotalExpense(start: startOfMonth, end: endOfMonth),
+    previousIncome: prevIncome,
+    previousExpense: prevExpense,
   );
 });
 
@@ -846,23 +891,57 @@ class MonthlyAnalytics {
   final List<TransactionModel> transactions;
   final int totalIncome;
   final int totalExpense;
+  final int previousIncome;
+  final int previousExpense;
 
   MonthlyAnalytics({
     required this.month,
     required this.transactions,
     required this.totalIncome,
     required this.totalExpense,
+    this.previousIncome = 0,
+    this.previousExpense = 0,
   });
 
   int get netSavings => totalIncome - totalExpense;
 
-  /// Group transactions by category
+  double get savingsRate =>
+      totalIncome > 0 ? (netSavings / totalIncome * 100) : 0.0;
+
+  /// Percentage change in expense compared to previous month:
+  /// negative means spending decreased (good!), positive means spending increased.
+  double? get expenseChangePercentage {
+    if (previousExpense <= 0) return null;
+    return ((totalExpense - previousExpense) / previousExpense) * 100;
+  }
+
+  /// Percentage change in income compared to previous month
+  double? get incomeChangePercentage {
+    if (previousIncome <= 0) return null;
+    return ((totalIncome - previousIncome) / previousIncome) * 100;
+  }
+
+  /// Group transactions by category (excludes deleted)
   Map<String, int> getCategoryBreakdown(TransactionType type) {
     final Map<String, int> breakdown = {};
 
-    for (var transaction in transactions.where((t) => t.type == type)) {
+    for (var transaction
+        in transactions.where((t) => t.type == type && !t.isDeleted)) {
       breakdown[transaction.categoryId] =
           (breakdown[transaction.categoryId] ?? 0) + transaction.amount;
+    }
+
+    return breakdown;
+  }
+
+  /// Group transactions by account (excludes deleted)
+  Map<String, int> getAccountBreakdown(TransactionType type) {
+    final Map<String, int> breakdown = {};
+
+    for (var transaction
+        in transactions.where((t) => t.type == type && !t.isDeleted)) {
+      breakdown[transaction.accountId] =
+          (breakdown[transaction.accountId] ?? 0) + transaction.amount;
     }
 
     return breakdown;
@@ -909,6 +988,7 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
           'dailyBudgetStartDate': null,
           'pinnedAccounts': <String>[],
           'pinnedCategories': <String>[],
+          'lastCloudBackupAt': null,
         }) {
     if (Hive.isBoxOpen('settingsBox')) {
       _loadSettingsSync();
@@ -928,8 +1008,8 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
     final box = Hive.box('settingsBox');
     state = {
       'darkMode': box.get('darkMode', defaultValue: false),
-      'currency': _normalizeCurrency(
-          box.get('currency', defaultValue: '৳') as String?),
+      'currency':
+          _normalizeCurrency(box.get('currency', defaultValue: '৳') as String?),
       'smsTrack': box.get('smsTrack', defaultValue: false),
       'smsPermissionDialogShown':
           box.get('smsPermissionDialogShown', defaultValue: false),
@@ -956,10 +1036,12 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
       'defaultRecurring': box.get('defaultRecurring', defaultValue: false),
       'defaultRecurringType':
           box.get('defaultRecurringType', defaultValue: 'monthly'),
-      'dailyBudgetLimit': (box.get('dailyBudgetLimit', defaultValue: 0) as num).toInt(),
+      'dailyBudgetLimit':
+          (box.get('dailyBudgetLimit', defaultValue: 0) as num).toInt(),
       'dailyBudgetRollover':
           box.get('dailyBudgetRollover', defaultValue: false),
       'dailyBudgetStartDate': box.get('dailyBudgetStartDate'),
+      'lastCloudBackupAt': box.get('lastCloudBackupAt') as String?,
       'pinnedAccounts':
           (box.get('pinnedAccounts', defaultValue: <String>[]) as List<dynamic>)
               .cast<String>(),
@@ -974,8 +1056,8 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
     final box = await _getBox();
     state = {
       'darkMode': box.get('darkMode', defaultValue: false),
-      'currency': _normalizeCurrency(
-          box.get('currency', defaultValue: '৳') as String?),
+      'currency':
+          _normalizeCurrency(box.get('currency', defaultValue: '৳') as String?),
       'smsTrack': box.get('smsTrack', defaultValue: false),
       'smsPermissionDialogShown':
           box.get('smsPermissionDialogShown', defaultValue: false),
@@ -1003,10 +1085,12 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
       'defaultRecurring': box.get('defaultRecurring', defaultValue: false),
       'defaultRecurringType':
           box.get('defaultRecurringType', defaultValue: 'monthly'),
-      'dailyBudgetLimit': (box.get('dailyBudgetLimit', defaultValue: 0) as num).toInt(),
+      'dailyBudgetLimit':
+          (box.get('dailyBudgetLimit', defaultValue: 0) as num).toInt(),
       'dailyBudgetRollover':
           box.get('dailyBudgetRollover', defaultValue: false),
       'dailyBudgetStartDate': box.get('dailyBudgetStartDate'),
+      'lastCloudBackupAt': box.get('lastCloudBackupAt') as String?,
       'pinnedAccounts':
           (box.get('pinnedAccounts', defaultValue: <String>[]) as List<dynamic>)
               .cast<String>(),
@@ -1115,6 +1199,9 @@ class SettingsNotifier extends StateNotifier<Map<String, dynamic>> {
     await box.put(key, value);
     state = {...state, key: value};
   }
+
+  /// Re-reads every setting from Hive (after user data was erased/replaced).
+  Future<void> reload() => _loadSettings();
 
   Future<void> updatePinnedCategories(List<String> pinnedIds) async {
     final box = await _getBox();
@@ -1250,3 +1337,27 @@ class UserProfileNotifier extends StateNotifier<Map<String, String>> {
     await _loadProfile();
   }
 }
+
+// ==========================================
+// LOCAL DATA RELOAD
+// ==========================================
+
+/// Keeps in-memory providers in step with Hive when local data is replaced
+/// wholesale (account switch erase, cloud pull, restore). Watched once from
+/// the app root; has no state of its own.
+final localDataReloadProvider = Provider<void>((ref) {
+  final sub = LocalUserDataService.instance.changes.listen((_) {
+    ref.read(transactionsProvider.notifier).loadTransactions();
+    ref.read(categoriesProvider.notifier).loadCategories();
+    ref.read(accountsProvider.notifier).loadAccounts();
+    ref.read(splitGroupsProvider.notifier).loadGroups();
+    ref.read(budgetsProvider.notifier).loadBudgets();
+    ref.read(goalsProvider.notifier).loadGoals();
+    ref.read(debtsProvider.notifier).loadDebts();
+    ref.read(assetsProvider.notifier).loadAssets();
+    ref.read(investmentsProvider.notifier).loadInvestments();
+    ref.read(settingsProvider.notifier).reload();
+    ref.read(userProfileProvider.notifier).reloadProfile();
+  });
+  ref.onDispose(sub.cancel);
+});
